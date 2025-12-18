@@ -13,6 +13,7 @@ import {
 } from "cc";
 import { GameManager } from "../game/GameManager";
 import { GameConfig } from "../data/GameConfig";
+import { AudioManager } from "../utils/AudioManager";
 const { ccclass, property } = _decorator;
 
 @ccclass("SpinButtonController")
@@ -252,8 +253,6 @@ export class SpinButtonController extends Component {
     if (gameManager) {
       gameManager.startSpin();
     }
-
-    console.log("[SpinButton] Spin clicked");
   }
 
   /**

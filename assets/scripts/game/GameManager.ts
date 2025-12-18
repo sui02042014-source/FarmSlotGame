@@ -56,7 +56,6 @@ export class GameManager extends Component {
       return;
     }
     GameManager.instance = this;
-    if (this.debugLogs) console.log("[GameManager] Initialized");
   }
 
   protected onDestroy(): void {
@@ -103,8 +102,6 @@ export class GameManager extends Component {
     }
 
     this.setState(GameConfig.GAME_STATES.IDLE);
-
-    if (this.debugLogs) console.log("[GameManager] Game initialized");
   }
 
   private savePlayerData(): void {
@@ -125,11 +122,19 @@ export class GameManager extends Component {
   }
 
   public setState(state: GameState): void {
-    if (this.debugLogs) {
-      console.log(
-        `[GameManager] State changed: ${this.currentState} -> ${state}`
-      );
+    const audioManager = AudioManager.getInstance();
+    const wasSpinning = this.currentState === GameConfig.GAME_STATES.SPINNING;
+    const isSpinning = state === GameConfig.GAME_STATES.SPINNING;
+
+    if (wasSpinning && !isSpinning) {
+      audioManager?.stopSpinSound();
     }
+
+    if (!wasSpinning && isSpinning) {
+      const soundPath = `sounds/${GameConfig.SOUNDS.SPIN}`;
+      audioManager?.playSpinSound(soundPath);
+    }
+
     this.currentState = state;
 
     let enabled = this.currentState === GameConfig.GAME_STATES.IDLE;
@@ -153,7 +158,6 @@ export class GameManager extends Component {
   }
 
   public increaseBet(): void {
-    if (this.debugLogs) console.log(`[GameManager] Increase bet`);
     if (this.currentState !== GameConfig.GAME_STATES.IDLE) return;
     if (this.currentBetIndex >= GameConfig.BET_STEPS.length - 1) return;
 
@@ -161,12 +165,9 @@ export class GameManager extends Component {
     this.currentBet = GameConfig.BET_STEPS[this.currentBetIndex];
     if (this.betLabel) this.betLabel.string = this.currentBet.toFixed(2);
     this.savePlayerData();
-    if (this.debugLogs)
-      console.log(`[GameManager] Bet increased to: ${this.currentBet}`);
   }
 
   public decreaseBet(): void {
-    if (this.debugLogs) console.log(`[GameManager] Decrease bet`);
     if (this.currentState !== GameConfig.GAME_STATES.IDLE) return;
     if (this.currentBetIndex <= 0) return;
 
@@ -174,8 +175,6 @@ export class GameManager extends Component {
     this.currentBet = GameConfig.BET_STEPS[this.currentBetIndex];
     if (this.betLabel) this.betLabel.string = this.currentBet.toFixed(2);
     this.savePlayerData();
-    if (this.debugLogs)
-      console.log(`[GameManager] Bet decreased to: ${this.currentBet}`);
   }
 
   public setMaxBet(): void {
@@ -184,26 +183,19 @@ export class GameManager extends Component {
     this.currentBet = GameConfig.BET_STEPS[this.currentBetIndex];
     if (this.betLabel) this.betLabel.string = this.currentBet.toFixed(2);
     this.savePlayerData();
-    if (this.debugLogs)
-      console.log(`[GameManager] Max bet set: ${this.currentBet}`);
   }
 
   public startSpin(): void {
     const modalManager = ModalManager.getInstance();
     if (modalManager?.isAnyModalActive()) {
-      if (this.debugLogs)
-        console.log("[GameManager] Cannot spin - modal is active");
       return;
     }
 
     if (this.currentState !== GameConfig.GAME_STATES.IDLE) {
-      if (this.debugLogs)
-        console.log("[GameManager] Cannot spin - not in IDLE state");
       return;
     }
 
     if (this.playerCoins < this.currentBet) {
-      console.log("[GameManager] Not enough coins!");
       modalManager?.showNotEnoughCoinsModal(this.currentBet, this.playerCoins);
       return;
     }
@@ -217,17 +209,11 @@ export class GameManager extends Component {
       ? this.slotMachine.getComponent(SlotMachine)
       : null;
     if (!slot) {
-      console.warn("[GameManager] SlotMachine component not found");
       this.setState(GameConfig.GAME_STATES.IDLE);
       return;
     }
 
     slot.spin();
-    if (this.debugLogs) {
-      console.log(
-        `[GameManager] Spin started - Bet: ${this.currentBet}, Remaining coins: ${this.playerCoins}`
-      );
-    }
   }
 
   public onSpinComplete(): void {
@@ -237,7 +223,6 @@ export class GameManager extends Component {
       ? this.slotMachine.getComponent(SlotMachine)
       : null;
     if (!slot) {
-      console.warn("[GameManager] SlotMachine component not found");
       this.setState(GameConfig.GAME_STATES.IDLE);
       return;
     }
@@ -247,35 +232,14 @@ export class GameManager extends Component {
       slot.showWinLines(winResult.winLines);
     }
 
-    if (this.debugLogs) {
-      console.log(
-        `[GameManager] Spin result - Total Win: ${winResult.totalWin.toFixed(
-          2
-        )}, Win Combinations: ${winResult.winLines.length}`
-      );
-    }
-
     if (winResult.totalWin > 0) {
-      console.log(
-        `[GameManager] 🎉 YOU WIN! Amount: ${winResult.totalWin.toFixed(
-          2
-        )} (Bet: ${this.currentBet})`
-      );
-      winResult.winLines.forEach((line) => {
-        const posStr = ` at [${line.positions
-          .map((p) => `${p.col}:${p.row}`)
-          .join(", ")}]`;
-        console.log(
-          `  ✓ ${
-            line.count
-          }x ${line.symbol.toUpperCase()}${posStr} = ${line.win.toFixed(
-            2
-          )} coins`
-        );
-      });
       this.onWin(winResult.totalWin);
     } else {
-      console.log(`[GameManager] ❌ No Win!`);
+      const audioManager = AudioManager.getInstance();
+      if (audioManager) {
+        const soundPath = `sounds/${GameConfig.SOUNDS.LOSE}`;
+        audioManager.playSFX(soundPath);
+      }
       this.setState(GameConfig.GAME_STATES.IDLE);
     }
   }
@@ -292,24 +256,12 @@ export class GameManager extends Component {
 
     const audioManager = AudioManager.getInstance();
     if (audioManager) {
-      let soundKey = GameConfig.SOUNDS.WIN_SMALL;
-      const multiplier = amount / this.currentBet;
-
-      if (multiplier >= 20) {
-        soundKey = GameConfig.SOUNDS.WIN_MEGA;
-      } else if (multiplier >= 5) {
-        soundKey = GameConfig.SOUNDS.WIN_BIG;
-      }
-
-      audioManager.playSFX(`sounds/${soundKey}`);
+      const soundPath = `sounds/${GameConfig.SOUNDS.WIN}`;
+      audioManager.playSFX(soundPath);
     }
 
     this.updateUI();
     this.savePlayerData();
-
-    console.log(
-      `[GameManager] WIN! Amount: ${amount}, Total coins: ${this.playerCoins}`
-    );
 
     if (amount > 0) {
       const modalManager = ModalManager.getInstance();
@@ -327,7 +279,6 @@ export class GameManager extends Component {
 
   public toggleAutoPlay(): void {
     this.isAutoPlay = !this.isAutoPlay;
-    console.log(`[GameManager] Auto play: ${this.isAutoPlay ? "ON" : "OFF"}`);
     if (this.isAutoPlay && this.currentState === GameConfig.GAME_STATES.IDLE) {
       this.startSpin();
     }

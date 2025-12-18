@@ -104,14 +104,9 @@ export class GameConfig {
 
   // ========== AUDIO ==========
   static readonly SOUNDS = {
-    BUTTON_CLICK: "button_click",
-    SPIN_START: "spin_start",
-    REEL_STOP: "reel_stop",
-    WIN_SMALL: "win_small",
-    WIN_BIG: "win_big",
-    WIN_MEGA: "win_mega",
-    BONUS_TRIGGER: "bonus_trigger",
-    COIN_COUNT: "coin_count",
+    SPIN: "spin",
+    WIN: "win",
+    LOSE: "lose",
   };
 
   // ========== ANIMATION DURATIONS ==========
