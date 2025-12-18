@@ -7,26 +7,16 @@ import { SpinButtonController } from "../ui/SpinButtonController";
 import { ModalManager } from "../ui/ModalManager";
 const { ccclass, property } = _decorator;
 
-/**
- * Game Manager - Quản lý toàn bộ game
- * Đặt script này vào Canvas node
- */
 @ccclass("GameManager")
 export class GameManager extends Component {
   @property(Node)
   slotMachine: Node = null!;
 
-  @property(Node)
-  topBar: Node = null!;
-
-  @property(Node)
-  bottomBar: Node = null!;
-
   @property(Label)
   coinLabel: Label = null!;
 
   @property(Node)
-  coinIconNode: Node = null!; // Node icon coin ở TopBar (dùng cho coin fly effect)
+  coinIconNode: Node = null!;
 
   @property(Label)
   betLabel: Label = null!;
@@ -38,12 +28,7 @@ export class GameManager extends Component {
   winLabelNode: Node = null!;
 
   @property([Node])
-  uiButtonsToDisable: Node[] = []; // (Deprecated) Previously used to disable all buttons; kept for compatibility.
-
-  @property([Node])
-  spinButtons: Node[] = []; // Drag ONLY spin button node(s) here (node holding SpinButtonController or its parent)
-
-  // Game State
+  spinButtons: Node[] = [];
   private currentState: GameState = GameConfig.GAME_STATES.IDLE;
   private playerCoins: number = 1000;
   private currentBet: number = 3.5;
@@ -52,9 +37,14 @@ export class GameManager extends Component {
   private isAutoPlay: boolean = false;
 
   private winCounter: NumberCounter = null!;
-  private readonly debugLogs: boolean = false;
 
-  // Singleton
+  private readonly debugLogs: boolean = false;
+  private readonly AUTO_PLAY_DELAY: number = 3.5;
+  private readonly STORAGE_KEYS = {
+    PLAYER_COINS: "playerCoins",
+    CURRENT_BET: "currentBet",
+  } as const;
+
   private static instance: GameManager = null!;
   public static getInstance(): GameManager {
     return this.instance;
@@ -79,29 +69,29 @@ export class GameManager extends Component {
     this.initGame();
   }
 
-  /**
-   * Khởi tạo game
-   */
   private initGame(): void {
-    // Load player data (từ LocalStorage hoặc Server)
-    this.loadPlayerData();
+    const savedCoins = localStorage.getItem(this.STORAGE_KEYS.PLAYER_COINS);
+    if (savedCoins) {
+      const parsed = parseFloat(savedCoins);
+      if (!Number.isNaN(parsed) && parsed > 0) {
+        this.playerCoins = parsed;
+      }
+    }
 
-    // Update UI
+    const savedBet = localStorage.getItem(this.STORAGE_KEYS.CURRENT_BET);
+    if (savedBet) {
+      const parsed = parseFloat(savedBet);
+      if (!Number.isNaN(parsed) && parsed > 0) {
+        const idx = GameConfig.BET_STEPS.indexOf(parsed);
+        if (idx >= 0) {
+          this.currentBet = parsed;
+          this.currentBetIndex = idx;
+        }
+      }
+    }
+
     this.updateUI();
 
-    // Init helpers
-    this.initHelpers();
-
-    // Set initial state
-    this.setState(GameConfig.GAME_STATES.IDLE);
-
-    if (this.debugLogs) console.log("[GameManager] Game initialized");
-  }
-
-  /**
-   * Khởi tạo các helper components (NumberCounter, AudioManager, ...)
-   */
-  private initHelpers(): void {
     if (this.winLabelNode) {
       this.winCounter = this.winLabelNode.getComponent(NumberCounter);
       if (!this.winCounter) {
@@ -111,58 +101,47 @@ export class GameManager extends Component {
       this.winCounter.duration = GameConfig.ANIM.NUMBER_COUNT_DURATION;
       this.winCounter.decimalPlaces = 2;
     }
+
+    this.setState(GameConfig.GAME_STATES.IDLE);
+
+    if (this.debugLogs) console.log("[GameManager] Game initialized");
   }
 
-  /**
-   * Load dữ liệu người chơi
-   */
-  private loadPlayerData(): void {
-    // TODO: Load từ LocalStorage hoặc Server
-    const savedCoins = localStorage.getItem("playerCoins");
-    if (savedCoins) {
-      const parsed = parseFloat(savedCoins);
-      if (!Number.isNaN(parsed)) this.playerCoins = parsed;
-    }
-
-    const savedBet = localStorage.getItem("currentBet");
-    if (savedBet) {
-      const parsed = parseFloat(savedBet);
-      if (!Number.isNaN(parsed)) {
-        this.currentBet = parsed;
-        const idx = GameConfig.BET_STEPS.indexOf(this.currentBet);
-        this.currentBetIndex = idx >= 0 ? idx : 0;
-      }
-    }
-  }
-
-  /**
-   * Save dữ liệu người chơi
-   */
   private savePlayerData(): void {
-    localStorage.setItem("playerCoins", this.playerCoins.toString());
-    localStorage.setItem("currentBet", this.currentBet.toString());
+    localStorage.setItem(
+      this.STORAGE_KEYS.PLAYER_COINS,
+      this.playerCoins.toString()
+    );
+    localStorage.setItem(
+      this.STORAGE_KEYS.CURRENT_BET,
+      this.currentBet.toString()
+    );
   }
 
-  /**
-   * Update tất cả UI
-   */
   private updateUI(): void {
     if (this.coinLabel) {
       this.coinLabel.string = this.playerCoins.toFixed(2);
     }
-
     if (this.betLabel) {
       this.betLabel.string = this.currentBet.toFixed(2);
     }
-
     if (this.winLabel) {
       this.winLabel.string = this.lastWin.toFixed(2);
     }
   }
 
-  /**
-   * Set game state
-   */
+  private updateCoinLabel(): void {
+    if (this.coinLabel) {
+      this.coinLabel.string = this.playerCoins.toFixed(2);
+    }
+  }
+
+  private updateBetLabel(): void {
+    if (this.betLabel) {
+      this.betLabel.string = this.currentBet.toFixed(2);
+    }
+  }
+
   public setState(state: GameState): void {
     if (this.debugLogs) {
       console.log(
@@ -170,136 +149,104 @@ export class GameManager extends Component {
       );
     }
     this.currentState = state;
-    this.syncSpinButtonsForState();
+
+    let enabled = this.isIdleState();
+    if (!enabled && this.currentState === GameConfig.GAME_STATES.WIN_SHOW) {
+      const modalManager = ModalManager.getInstance();
+      enabled = !modalManager || !modalManager.isAnyModalActive();
+    }
+
+    if (this.spinButtons?.length) {
+      this.spinButtons.forEach((node) => {
+        if (!node?.isValid) return;
+        const spinBtns = node.getComponentsInChildren(SpinButtonController);
+        spinBtns.forEach((c) => c?.setEnabled(enabled));
+      });
+    }
   }
 
-  /**
-   * Get current state
-   */
   public getState(): GameState {
     return this.currentState;
   }
 
-  private syncSpinButtonsForState(): void {
-    const enabled = this.currentState === GameConfig.GAME_STATES.IDLE;
-    this.setSpinButtonsEnabled(enabled);
+  private isIdleState(): boolean {
+    return this.currentState === GameConfig.GAME_STATES.IDLE;
   }
 
-  private setSpinButtonsEnabled(enabled: boolean): void {
-    const roots = this.spinButtons?.length
-      ? this.spinButtons
-      : this.uiButtonsToDisable;
-    if (!roots?.length) return;
-
-    roots.forEach((node) => {
-      if (!node?.isValid) return;
-      // Enable/disable ONLY SpinButtonController(s)
-      const spinBtns = node.getComponentsInChildren(SpinButtonController);
-      spinBtns.forEach((c) => c?.setEnabled(enabled));
-    });
-  }
-
-  /**
-   * Tăng bet
-   */
   public increaseBet(): void {
     if (this.debugLogs) console.log(`[GameManager] Increase bet`);
-    if (this.currentState !== GameConfig.GAME_STATES.IDLE) return;
+    if (!this.isIdleState()) return;
 
     if (this.currentBetIndex < GameConfig.BET_STEPS.length - 1) {
-      this.currentBetIndex++;
-      this.currentBet = GameConfig.BET_STEPS[this.currentBetIndex];
-      this.updateUI();
-      this.savePlayerData();
+      this.setBetByIndex(this.currentBetIndex + 1);
       if (this.debugLogs) {
         console.log(`[GameManager] Bet increased to: ${this.currentBet}`);
       }
     }
   }
 
-  /**
-   * Giảm bet
-   */
   public decreaseBet(): void {
     if (this.debugLogs) console.log(`[GameManager] Decrease bet`);
-    if (this.currentState !== GameConfig.GAME_STATES.IDLE) return;
+    if (!this.isIdleState()) return;
 
     if (this.currentBetIndex > 0) {
-      this.currentBetIndex--;
-      this.currentBet = GameConfig.BET_STEPS[this.currentBetIndex];
-      this.updateUI();
-      this.savePlayerData();
+      this.setBetByIndex(this.currentBetIndex - 1);
       if (this.debugLogs) {
         console.log(`[GameManager] Bet decreased to: ${this.currentBet}`);
       }
     }
   }
 
-  /**
-   * Set max bet
-   */
   public setMaxBet(): void {
-    if (this.currentState !== GameConfig.GAME_STATES.IDLE) return;
-
-    this.currentBetIndex = GameConfig.BET_STEPS.length - 1;
-    this.currentBet = GameConfig.BET_STEPS[this.currentBetIndex];
-    this.updateUI();
-    this.savePlayerData();
+    if (!this.isIdleState()) return;
+    this.setBetByIndex(GameConfig.BET_STEPS.length - 1);
     if (this.debugLogs)
       console.log(`[GameManager] Max bet set: ${this.currentBet}`);
   }
 
-  private getSlotMachine(): SlotMachine | null {
-    if (!this.slotMachine?.isValid) return null;
-    return this.slotMachine.getComponent(SlotMachine);
+  private setBetByIndex(index: number): void {
+    if (index < 0 || index >= GameConfig.BET_STEPS.length) return;
+    this.currentBetIndex = index;
+    this.currentBet = GameConfig.BET_STEPS[index];
+    this.updateBetLabel();
+    this.savePlayerData();
   }
 
-  /**
-   * Start spin
-   */
   public startSpin(): void {
-    // Block spinning while any modal is visible (e.g. WinModal)
     const modalManager = ModalManager.getInstance();
-    if (modalManager && modalManager.isAnyModalActive()) {
+    if (modalManager?.isAnyModalActive()) {
       if (this.debugLogs) {
         console.log("[GameManager] Cannot spin - modal is active");
       }
       return;
     }
 
-    if (this.currentState !== GameConfig.GAME_STATES.IDLE) {
+    if (!this.isIdleState()) {
       if (this.debugLogs) {
         console.log("[GameManager] Cannot spin - not in IDLE state");
       }
       return;
     }
 
-    // Check đủ tiền không
     if (this.playerCoins < this.currentBet) {
       console.log("[GameManager] Not enough coins!");
-      // Show not enough coins modal
       const modalManager = ModalManager.getInstance();
-      if (modalManager) {
-        modalManager.showNotEnoughCoinsModal(this.currentBet, this.playerCoins);
-      }
+      modalManager?.showNotEnoughCoinsModal(this.currentBet, this.playerCoins);
       return;
     }
 
-    // Trừ tiền
     this.playerCoins -= this.currentBet;
     this.lastWin = 0;
     this.updateUI();
-
-    // Change state
     this.setState(GameConfig.GAME_STATES.SPINNING);
 
-    // Gọi SlotMachine để spin
     const slot = this.getSlotMachine();
     if (!slot) {
       console.warn("[GameManager] SlotMachine component not found");
       this.setState(GameConfig.GAME_STATES.IDLE);
       return;
     }
+
     slot.spin();
 
     if (this.debugLogs) {
@@ -309,14 +256,26 @@ export class GameManager extends Component {
     }
   }
 
-  /**
-   * On spin complete (được gọi từ SlotMachine)
-   */
-  public onSpinComplete(symbols: string[][]): void {
+  private getSlotMachine(): SlotMachine | null {
+    if (!this.slotMachine?.isValid) return null;
+    return this.slotMachine.getComponent(SlotMachine);
+  }
+
+  public onSpinComplete(): void {
     this.setState(GameConfig.GAME_STATES.STOPPING);
 
-    // Check win
-    const winResult = this.checkWin(symbols);
+    const slotMachineComp = this.getSlotMachine();
+    if (!slotMachineComp) {
+      console.warn("[GameManager] SlotMachine component not found");
+      this.setState(GameConfig.GAME_STATES.IDLE);
+      return;
+    }
+
+    const winResult = slotMachineComp.checkWin();
+
+    if (winResult.totalWin > 0 && winResult.winLines.length > 0) {
+      slotMachineComp.showWinLines(winResult.winLines);
+    }
 
     if (this.debugLogs) {
       console.log(
@@ -332,6 +291,7 @@ export class GameManager extends Component {
           2
         )} (Bet: ${this.currentBet})`
       );
+
       winResult.winLines.forEach((line) => {
         const posStr = ` at [${line.positions
           .map((p) => `${p.col}:${p.row}`)
@@ -344,52 +304,38 @@ export class GameManager extends Component {
           )} coins`
         );
       });
+
       this.onWin(winResult.totalWin);
     } else {
-      console.log(
-        `[GameManager] ❌ No Win - Need 3 matching symbols horizontally or vertically!`
-      );
-      // No win
+      console.log(`[GameManager] ❌ No Win!`);
       this.setState(GameConfig.GAME_STATES.IDLE);
     }
   }
 
-  /**
-   * Check win combinations
-   */
-  private checkWin(symbols: string[][]): { totalWin: number; winLines: any[] } {
-    const slotMachineComp = this.getSlotMachine();
-    if (!slotMachineComp) {
-      console.warn("[GameManager] SlotMachine component not found");
-      return { totalWin: 0, winLines: [] };
-    }
-
-    // Sử dụng logic tính thưởng đã được hiện thực trong SlotMachine
-    const result = slotMachineComp.checkWin();
-
-    // Hiển thị các dòng thắng trên slot machine
-    if (result.totalWin > 0 && result.winLines.length > 0) {
-      slotMachineComp.showWinLines(result.winLines);
-    }
-
-    return {
-      totalWin: result.totalWin,
-      winLines: result.winLines,
-    };
-  }
-
-  /**
-   * On win
-   */
   private onWin(amount: number): void {
     this.setState(GameConfig.GAME_STATES.WIN_SHOW);
     this.lastWin = amount;
     this.playerCoins += amount;
 
-    // Animate win
-    this.animateWin(amount);
+    if (this.winCounter) {
+      this.winCounter.setValue(0);
+      this.winCounter.countTo(amount, GameConfig.ANIM.NUMBER_COUNT_DURATION);
+    }
 
-    // Update UI
+    const audioManager = AudioManager.getInstance();
+    if (audioManager) {
+      let soundKey = GameConfig.SOUNDS.WIN_SMALL;
+      const multiplier = amount / this.currentBet;
+
+      if (multiplier >= 20) {
+        soundKey = GameConfig.SOUNDS.WIN_MEGA;
+      } else if (multiplier >= 5) {
+        soundKey = GameConfig.SOUNDS.WIN_BIG;
+      }
+
+      audioManager.playSFX(`sounds/${soundKey}`);
+    }
+
     this.updateUI();
     this.savePlayerData();
 
@@ -397,94 +343,40 @@ export class GameManager extends Component {
       `[GameManager] WIN! Amount: ${amount}, Total coins: ${this.playerCoins}`
     );
 
-    // Show win modal khi thắng (bất kể số tiền)
     if (amount > 0) {
       const modalManager = ModalManager.getInstance();
-      if (modalManager) {
-        modalManager.showWinModal(amount, this.currentBet);
-      }
+      modalManager?.showWinModal(amount, this.currentBet);
     }
 
-    // Return to idle after animation
-    this.scheduleOnce(() => {
-      // Keep game in WIN_SHOW while modal is visible to prevent auto-spins and re-enabling spin button.
-      const resume = (): void => {
-        const modalManager = ModalManager.getInstance();
-        if (modalManager && modalManager.isAnyModalActive()) {
-          this.scheduleOnce(resume, 0.1);
-          return;
-        }
+    this.setState(GameConfig.GAME_STATES.IDLE);
 
-        this.setState(GameConfig.GAME_STATES.IDLE);
-
-        // Auto play next spin (only after modal is closed)
-        if (this.isAutoPlay) {
-          this.startSpin();
-        }
-      };
-
-      resume();
-    }, GameConfig.ANIM.WIN_POPUP_DELAY + 2.0);
-  }
-
-  /**
-   * Animate win amount counting up
-   */
-  private animateWin(amount: number): void {
-    // Hiệu ứng đếm số từ 0 lên amount trên winLabel
-    if (this.winCounter) {
-      this.winCounter.setValue(0);
-      this.winCounter.countTo(amount, GameConfig.ANIM.NUMBER_COUNT_DURATION);
-    }
-
-    // Play sound theo mức win
-    const audioManager = AudioManager.getInstance();
-    if (audioManager) {
-      let soundKey = GameConfig.SOUNDS.WIN_SMALL;
-      if (amount >= this.currentBet * 20) {
-        soundKey = GameConfig.SOUNDS.WIN_MEGA;
-      } else if (amount >= this.currentBet * 5) {
-        soundKey = GameConfig.SOUNDS.WIN_BIG;
-      }
-
-      audioManager.playSFX(`sounds/${soundKey}`);
+    if (this.isAutoPlay) {
+      this.scheduleOnce(() => {
+        this.startSpin();
+      }, this.AUTO_PLAY_DELAY);
     }
   }
 
-  /**
-   * Toggle auto play
-   */
   public toggleAutoPlay(): void {
     this.isAutoPlay = !this.isAutoPlay;
     console.log(`[GameManager] Auto play: ${this.isAutoPlay ? "ON" : "OFF"}`);
 
-    if (this.isAutoPlay && this.currentState === GameConfig.GAME_STATES.IDLE) {
+    if (this.isAutoPlay && this.isIdleState()) {
       this.startSpin();
     }
   }
 
-  /**
-   * Add coins (từ purchase hoặc reward)
-   */
   public addCoins(amount: number): void {
+    if (amount <= 0) return;
     this.playerCoins += amount;
-    this.updateUI();
+    this.updateCoinLabel();
     this.savePlayerData();
-    console.log(
-      `[GameManager] Coins added: ${amount}, Total: ${this.playerCoins}`
-    );
   }
 
-  /**
-   * Get current bet
-   */
   public getCurrentBet(): number {
     return this.currentBet;
   }
 
-  /**
-   * Get player coins
-   */
   public getPlayerCoins(): number {
     return this.playerCoins;
   }

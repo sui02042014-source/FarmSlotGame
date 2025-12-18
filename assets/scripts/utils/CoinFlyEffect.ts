@@ -144,10 +144,18 @@ export class CoinFlyEffect {
       const endScale = coinScale * math.randomRange(0.45, 0.75);
       const delay = i * stagger;
 
+      const liftUp = new Vec3(start.x, start.y + 100, 0);
+      const liftDuration = scatterDuration * 0.3;
+
       tween(coin)
         .delay(delay)
         .to(
-          scatterDuration,
+          liftDuration,
+          { position: liftUp, scale: new Vec3(midScale, midScale, 1) },
+          { easing: "quadOut" }
+        )
+        .to(
+          scatterDuration - liftDuration,
           { position: scatter, scale: new Vec3(midScale, midScale, 1) },
           { easing: "quadOut" }
         )

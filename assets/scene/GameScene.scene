@@ -6316,12 +6316,6 @@
     "slotMachine": {
       "__id__": 61
     },
-    "topBar": {
-      "__id__": 7
-    },
-    "bottomBar": {
-      "__id__": 110
-    },
     "coinLabel": {
       "__id__": 26
     },
@@ -6335,7 +6329,6 @@
       "__id__": 146
     },
     "winLabelNode": null,
-    "uiButtonsToDisable": [],
     "spinButtons": [],
     "_id": "85hYY01BFMVJQC3VjthzBu"
   },

@@ -191,7 +191,7 @@ export class SlotMachine extends Component {
     // Notify GameManager
     const gameManager = GameManager.getInstance();
     if (gameManager) {
-      gameManager.onSpinComplete(this.currentSymbols);
+      gameManager.onSpinComplete();
     }
   }
 
