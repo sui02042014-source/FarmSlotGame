@@ -5,7 +5,6 @@ const { ccclass, property } = _decorator;
 
 @ccclass("ReelController")
 export class ReelController extends Component {
-  @property reelIndex: number = 0;
   @property(Node) reelContainerNode: Node = null!;
 
   private reelContainer: ReelContainer = null!;

@@ -119,27 +119,9 @@ export class GameManager extends Component {
   }
 
   private updateUI(): void {
-    if (this.coinLabel) {
-      this.coinLabel.string = this.playerCoins.toFixed(2);
-    }
-    if (this.betLabel) {
-      this.betLabel.string = this.currentBet.toFixed(2);
-    }
-    if (this.winLabel) {
-      this.winLabel.string = this.lastWin.toFixed(2);
-    }
-  }
-
-  private updateCoinLabel(): void {
-    if (this.coinLabel) {
-      this.coinLabel.string = this.playerCoins.toFixed(2);
-    }
-  }
-
-  private updateBetLabel(): void {
-    if (this.betLabel) {
-      this.betLabel.string = this.currentBet.toFixed(2);
-    }
+    if (this.coinLabel) this.coinLabel.string = this.playerCoins.toFixed(2);
+    if (this.betLabel) this.betLabel.string = this.currentBet.toFixed(2);
+    if (this.winLabel) this.winLabel.string = this.lastWin.toFixed(2);
   }
 
   public setState(state: GameState): void {
@@ -150,7 +132,7 @@ export class GameManager extends Component {
     }
     this.currentState = state;
 
-    let enabled = this.isIdleState();
+    let enabled = this.currentState === GameConfig.GAME_STATES.IDLE;
     if (!enabled && this.currentState === GameConfig.GAME_STATES.WIN_SHOW) {
       const modalManager = ModalManager.getInstance();
       enabled = !modalManager || !modalManager.isAnyModalActive();
@@ -159,8 +141,9 @@ export class GameManager extends Component {
     if (this.spinButtons?.length) {
       this.spinButtons.forEach((node) => {
         if (!node?.isValid) return;
-        const spinBtns = node.getComponentsInChildren(SpinButtonController);
-        spinBtns.forEach((c) => c?.setEnabled(enabled));
+        node
+          .getComponentsInChildren(SpinButtonController)
+          .forEach((c) => c?.setEnabled(enabled));
       });
     }
   }
@@ -169,68 +152,58 @@ export class GameManager extends Component {
     return this.currentState;
   }
 
-  private isIdleState(): boolean {
-    return this.currentState === GameConfig.GAME_STATES.IDLE;
-  }
-
   public increaseBet(): void {
     if (this.debugLogs) console.log(`[GameManager] Increase bet`);
-    if (!this.isIdleState()) return;
+    if (this.currentState !== GameConfig.GAME_STATES.IDLE) return;
+    if (this.currentBetIndex >= GameConfig.BET_STEPS.length - 1) return;
 
-    if (this.currentBetIndex < GameConfig.BET_STEPS.length - 1) {
-      this.setBetByIndex(this.currentBetIndex + 1);
-      if (this.debugLogs) {
-        console.log(`[GameManager] Bet increased to: ${this.currentBet}`);
-      }
-    }
+    this.currentBetIndex++;
+    this.currentBet = GameConfig.BET_STEPS[this.currentBetIndex];
+    if (this.betLabel) this.betLabel.string = this.currentBet.toFixed(2);
+    this.savePlayerData();
+    if (this.debugLogs)
+      console.log(`[GameManager] Bet increased to: ${this.currentBet}`);
   }
 
   public decreaseBet(): void {
     if (this.debugLogs) console.log(`[GameManager] Decrease bet`);
-    if (!this.isIdleState()) return;
+    if (this.currentState !== GameConfig.GAME_STATES.IDLE) return;
+    if (this.currentBetIndex <= 0) return;
 
-    if (this.currentBetIndex > 0) {
-      this.setBetByIndex(this.currentBetIndex - 1);
-      if (this.debugLogs) {
-        console.log(`[GameManager] Bet decreased to: ${this.currentBet}`);
-      }
-    }
+    this.currentBetIndex--;
+    this.currentBet = GameConfig.BET_STEPS[this.currentBetIndex];
+    if (this.betLabel) this.betLabel.string = this.currentBet.toFixed(2);
+    this.savePlayerData();
+    if (this.debugLogs)
+      console.log(`[GameManager] Bet decreased to: ${this.currentBet}`);
   }
 
   public setMaxBet(): void {
-    if (!this.isIdleState()) return;
-    this.setBetByIndex(GameConfig.BET_STEPS.length - 1);
+    if (this.currentState !== GameConfig.GAME_STATES.IDLE) return;
+    this.currentBetIndex = GameConfig.BET_STEPS.length - 1;
+    this.currentBet = GameConfig.BET_STEPS[this.currentBetIndex];
+    if (this.betLabel) this.betLabel.string = this.currentBet.toFixed(2);
+    this.savePlayerData();
     if (this.debugLogs)
       console.log(`[GameManager] Max bet set: ${this.currentBet}`);
-  }
-
-  private setBetByIndex(index: number): void {
-    if (index < 0 || index >= GameConfig.BET_STEPS.length) return;
-    this.currentBetIndex = index;
-    this.currentBet = GameConfig.BET_STEPS[index];
-    this.updateBetLabel();
-    this.savePlayerData();
   }
 
   public startSpin(): void {
     const modalManager = ModalManager.getInstance();
     if (modalManager?.isAnyModalActive()) {
-      if (this.debugLogs) {
+      if (this.debugLogs)
         console.log("[GameManager] Cannot spin - modal is active");
-      }
       return;
     }
 
-    if (!this.isIdleState()) {
-      if (this.debugLogs) {
+    if (this.currentState !== GameConfig.GAME_STATES.IDLE) {
+      if (this.debugLogs)
         console.log("[GameManager] Cannot spin - not in IDLE state");
-      }
       return;
     }
 
     if (this.playerCoins < this.currentBet) {
       console.log("[GameManager] Not enough coins!");
-      const modalManager = ModalManager.getInstance();
       modalManager?.showNotEnoughCoinsModal(this.currentBet, this.playerCoins);
       return;
     }
@@ -240,7 +213,9 @@ export class GameManager extends Component {
     this.updateUI();
     this.setState(GameConfig.GAME_STATES.SPINNING);
 
-    const slot = this.getSlotMachine();
+    const slot = this.slotMachine?.isValid
+      ? this.slotMachine.getComponent(SlotMachine)
+      : null;
     if (!slot) {
       console.warn("[GameManager] SlotMachine component not found");
       this.setState(GameConfig.GAME_STATES.IDLE);
@@ -248,7 +223,6 @@ export class GameManager extends Component {
     }
 
     slot.spin();
-
     if (this.debugLogs) {
       console.log(
         `[GameManager] Spin started - Bet: ${this.currentBet}, Remaining coins: ${this.playerCoins}`
@@ -256,25 +230,21 @@ export class GameManager extends Component {
     }
   }
 
-  private getSlotMachine(): SlotMachine | null {
-    if (!this.slotMachine?.isValid) return null;
-    return this.slotMachine.getComponent(SlotMachine);
-  }
-
   public onSpinComplete(): void {
     this.setState(GameConfig.GAME_STATES.STOPPING);
 
-    const slotMachineComp = this.getSlotMachine();
-    if (!slotMachineComp) {
+    const slot = this.slotMachine?.isValid
+      ? this.slotMachine.getComponent(SlotMachine)
+      : null;
+    if (!slot) {
       console.warn("[GameManager] SlotMachine component not found");
       this.setState(GameConfig.GAME_STATES.IDLE);
       return;
     }
 
-    const winResult = slotMachineComp.checkWin();
-
+    const winResult = slot.checkWin();
     if (winResult.totalWin > 0 && winResult.winLines.length > 0) {
-      slotMachineComp.showWinLines(winResult.winLines);
+      slot.showWinLines(winResult.winLines);
     }
 
     if (this.debugLogs) {
@@ -291,7 +261,6 @@ export class GameManager extends Component {
           2
         )} (Bet: ${this.currentBet})`
       );
-
       winResult.winLines.forEach((line) => {
         const posStr = ` at [${line.positions
           .map((p) => `${p.col}:${p.row}`)
@@ -304,7 +273,6 @@ export class GameManager extends Component {
           )} coins`
         );
       });
-
       this.onWin(winResult.totalWin);
     } else {
       console.log(`[GameManager] ❌ No Win!`);
@@ -360,8 +328,7 @@ export class GameManager extends Component {
   public toggleAutoPlay(): void {
     this.isAutoPlay = !this.isAutoPlay;
     console.log(`[GameManager] Auto play: ${this.isAutoPlay ? "ON" : "OFF"}`);
-
-    if (this.isAutoPlay && this.isIdleState()) {
+    if (this.isAutoPlay && this.currentState === GameConfig.GAME_STATES.IDLE) {
       this.startSpin();
     }
   }
@@ -369,7 +336,7 @@ export class GameManager extends Component {
   public addCoins(amount: number): void {
     if (amount <= 0) return;
     this.playerCoins += amount;
-    this.updateCoinLabel();
+    if (this.coinLabel) this.coinLabel.string = this.playerCoins.toFixed(2);
     this.savePlayerData();
   }
 

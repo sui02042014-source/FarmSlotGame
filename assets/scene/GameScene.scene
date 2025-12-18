@@ -2637,7 +2637,6 @@
     },
     "_enabled": true,
     "__prefab": null,
-    "reelIndex": 0,
     "reelContainerNode": {
       "__id__": 64
     },
@@ -2871,7 +2870,6 @@
     },
     "_enabled": true,
     "__prefab": null,
-    "reelIndex": 0,
     "reelContainerNode": {
       "__id__": 72
     },
@@ -3105,7 +3103,6 @@
     },
     "_enabled": true,
     "__prefab": null,
-    "reelIndex": 0,
     "reelContainerNode": {
       "__id__": 80
     },
@@ -3339,7 +3336,6 @@
     },
     "_enabled": true,
     "__prefab": null,
-    "reelIndex": 0,
     "reelContainerNode": {
       "__id__": 88
     },
@@ -3573,7 +3569,6 @@
     },
     "_enabled": true,
     "__prefab": null,
-    "reelIndex": 0,
     "reelContainerNode": {
       "__id__": 96
     },

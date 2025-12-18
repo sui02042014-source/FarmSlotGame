@@ -9,7 +9,7 @@ import {
   UITransform,
 } from "cc";
 import { GameConfig } from "../data/GameConfig";
-import { ISymbolData, SymbolData } from "../data/SymbolData";
+import { SymbolData } from "../data/SymbolData";
 const { ccclass } = _decorator;
 
 @ccclass("ReelContainer")
@@ -34,76 +34,45 @@ export class ReelContainer extends Component {
   private readonly debugLogs: boolean = false;
 
   protected onDestroy(): void {
-    this.clearSymbols();
+    this.symbolNodes.forEach((node) => {
+      if (node?.isValid) node.destroy();
+    });
+    this.symbolNodes = [];
     this.spriteFrameCache.clear();
     this.spriteFrameLoading.clear();
   }
 
   public init(): void {
-    if (this.isInitialized) {
-      return;
-    }
+    if (this.isInitialized) return;
 
-    this.clearSymbols();
-    this.createSymbols();
-    this.initializeSymbolPositions();
-    this.isInitialized = true;
-  }
-
-  private clearSymbols(): void {
     this.symbolNodes.forEach((node) => {
-      if (node?.isValid) {
-        node.destroy();
-      }
+      if (node?.isValid) node.destroy();
     });
     this.symbolNodes = [];
-  }
 
-  private static shuffleInPlace<T>(arr: T[]): void {
-    for (let i = arr.length - 1; i > 0; i--) {
+    const allSymbols = SymbolData.getAllSymbols();
+    for (let i = allSymbols.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [arr[i], arr[j]] = [arr[j], arr[i]];
+      [allSymbols[i], allSymbols[j]] = [allSymbols[j], allSymbols[i]];
     }
-  }
 
-  private createSymbols(): void {
-    const randomSymbols = this.getRandomSymbols();
-    this.symbolNodes = randomSymbols.map((symbol) =>
-      this.createSymbolNode(symbol.id)
-    );
-  }
+    const centerIndex = Math.floor(allSymbols.length / 2);
+    this.symbolNodes = allSymbols.map((symbol, index) => {
+      const node = new Node(`${ReelContainer.SYMBOL_NAME_PREFIX}${symbol.id}`);
+      const uiTransform = node.addComponent(UITransform);
+      uiTransform.setContentSize(this.symbolSize);
+      uiTransform.setAnchorPoint(0.5, 0.5);
+      const sprite = node.addComponent(Sprite);
+      sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+      node.name = `${ReelContainer.SYMBOL_NAME_PREFIX}${symbol.id}`;
+      this.loadSpriteFrame(node, symbol.id);
+      node.setParent(this.node);
+      const yPosition = (centerIndex - index) * this.symbolSpacing;
+      node.setPosition(node.position.x, yPosition, node.position.z);
+      return node;
+    });
 
-  private getRandomSymbols(): ISymbolData[] {
-    const shuffled = [...SymbolData.getAllSymbols()];
-    ReelContainer.shuffleInPlace(shuffled);
-    return shuffled;
-  }
-
-  private createSymbolNode(symbolId: string): Node {
-    const symbolNode = new Node(
-      `${ReelContainer.SYMBOL_NAME_PREFIX}${symbolId}`
-    );
-
-    const uiTransform = symbolNode.addComponent(UITransform);
-    uiTransform.setContentSize(this.symbolSize);
-    uiTransform.setAnchorPoint(0.5, 0.5);
-
-    const sprite = symbolNode.addComponent(Sprite);
-    sprite.sizeMode = Sprite.SizeMode.CUSTOM;
-    this.setSymbolOnNode(symbolNode, symbolId);
-
-    symbolNode.setParent(this.node);
-    return symbolNode;
-  }
-
-  private parseSymbolIdFromNodeName(nodeName: string): string {
-    if (!nodeName.startsWith(ReelContainer.SYMBOL_NAME_PREFIX)) return "";
-    return nodeName.slice(ReelContainer.SYMBOL_NAME_PREFIX.length);
-  }
-
-  private setSymbolOnNode(node: Node, symbolId: string): void {
-    node.name = `${ReelContainer.SYMBOL_NAME_PREFIX}${symbolId}`;
-    this.loadSpriteFrame(node, symbolId);
+    this.isInitialized = true;
   }
 
   private loadSpriteFrame(node: Node, symbolId: string): void {
@@ -136,7 +105,6 @@ export class ReelContainer extends Component {
 
     if (!existing) {
       this.spriteFrameLoading.set(symbolId, loader);
-      // Cleanup (without Promise.finally for older TS target)
       loader.then(
         () => this.spriteFrameLoading.delete(symbolId),
         () => this.spriteFrameLoading.delete(symbolId)
@@ -152,29 +120,19 @@ export class ReelContainer extends Component {
     });
   }
 
-  private initializeSymbolPositions(): void {
-    const centerIndex = Math.floor(this.symbolNodes.length / 2);
-    this.symbolNodes.forEach((node, index) => {
-      const yPosition = (centerIndex - index) * this.symbolSpacing;
-      const currentPos = node.position;
-      node.setPosition(currentPos.x, yPosition, currentPos.z);
-    });
-  }
+  public getVisibleSymbolNodes(): Node[] {
+    const nodes = this.symbolNodes.filter((n) => n?.isValid);
+    if (!nodes.length) return [];
 
-  private getTargetVisibleYs(): number[] {
     const visibleCount = GameConfig.SYMBOL_PER_REEL;
     const half = (visibleCount - 1) / 2;
-    const ys: number[] = [];
+    const targetYs: number[] = [];
     for (let row = 0; row < visibleCount; row++) {
-      ys.push((half - row) * this.symbolSpacing);
+      targetYs.push((half - row) * this.symbolSpacing);
     }
-    return ys;
-  }
 
-  private pickClosestNodesByY(nodes: Node[], targetYs: number[]): Node[] {
     const remaining = [...nodes];
     const picked: Node[] = [];
-
     targetYs.forEach((targetY) => {
       if (!remaining.length) return;
       let bestIdx = 0;
@@ -186,26 +144,19 @@ export class ReelContainer extends Component {
           bestIdx = i;
         }
       }
-      const [best] = remaining.splice(bestIdx, 1);
-      picked.push(best);
+      picked.push(remaining.splice(bestIdx, 1)[0]);
     });
 
-    // Ensure ordering top->bottom by Y (descending)
     return picked.sort((a, b) => b.position.y - a.position.y);
-  }
-
-  public getVisibleSymbolNodes(): Node[] {
-    const nodes = this.symbolNodes.filter((n) => n?.isValid);
-    if (!nodes.length) return [];
-    return this.pickClosestNodesByY(nodes, this.getTargetVisibleYs());
   }
 
   public getVisibleSymbols(): string[] {
     const visibleNodes = this.getVisibleSymbolNodes();
     if (!visibleNodes.length) return [];
-
     return visibleNodes.map((node) => {
-      return this.parseSymbolIdFromNodeName(node.name);
+      const name = node.name;
+      if (!name.startsWith(ReelContainer.SYMBOL_NAME_PREFIX)) return "";
+      return name.slice(ReelContainer.SYMBOL_NAME_PREFIX.length);
     });
   }
 
@@ -215,25 +166,20 @@ export class ReelContainer extends Component {
 
   public reset(): void {
     this.isInitialized = false;
-    this.clearSymbols();
+    this.symbolNodes.forEach((node) => {
+      if (node?.isValid) node.destroy();
+    });
+    this.symbolNodes = [];
   }
 
   public setVisibleSymbols(symbols: string[]): void {
     if (!this.symbolNodes.length || symbols.length === 0) return;
     const visibleNodes = this.getVisibleSymbolNodes();
-
     symbols.forEach((symbolId, index) => {
-      if (index < visibleNodes.length) {
-        const node = visibleNodes[index];
-        if (node?.isValid) {
-          const oldName = node.name;
-          this.setSymbolOnNode(node, symbolId);
-          if (this.debugLogs) {
-            console.log(
-              `[ReelContainer] Updated node ${index}: ${oldName} -> ${node.name}`
-            );
-          }
-        }
+      const node = visibleNodes[index];
+      if (node?.isValid && index < visibleNodes.length) {
+        node.name = `${ReelContainer.SYMBOL_NAME_PREFIX}${symbolId}`;
+        this.loadSpriteFrame(node, symbolId);
       }
     });
   }
