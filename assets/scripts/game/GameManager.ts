@@ -4,6 +4,7 @@ import { SlotMachine } from "./SlotMachine";
 import { NumberCounter } from "../utils/NumberCounter";
 import { AudioManager } from "../utils/AudioManager";
 import { SpinButtonController } from "../ui/SpinButtonController";
+import { ModalManager } from "../ui/ModalManager";
 const { ccclass, property } = _decorator;
 
 /**
@@ -264,7 +265,11 @@ export class GameManager extends Component {
     // Check đủ tiền không
     if (this.playerCoins < this.currentBet) {
       console.log("[GameManager] Not enough coins!");
-      // TODO: Show popup "Not enough coins"
+      // Show not enough coins modal
+      const modalManager = ModalManager.getInstance();
+      if (modalManager) {
+        modalManager.showNotEnoughCoinsModal(this.currentBet, this.playerCoins);
+      }
       return;
     }
 
@@ -379,6 +384,14 @@ export class GameManager extends Component {
     console.log(
       `[GameManager] WIN! Amount: ${amount}, Total coins: ${this.playerCoins}`
     );
+
+    // Show win modal khi thắng (bất kể số tiền)
+    if (amount > 0) {
+      const modalManager = ModalManager.getInstance();
+      if (modalManager) {
+        modalManager.showWinModal(amount, this.currentBet);
+      }
+    }
 
     // Return to idle after animation
     this.scheduleOnce(() => {
