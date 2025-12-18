@@ -25,6 +25,9 @@ export class GameManager extends Component {
   @property(Label)
   coinLabel: Label = null!;
 
+  @property(Node)
+  coinIconNode: Node = null!; // Node icon coin ở TopBar (dùng cho coin fly effect)
+
   @property(Label)
   betLabel: Label = null!;
 
@@ -255,6 +258,15 @@ export class GameManager extends Component {
    * Start spin
    */
   public startSpin(): void {
+    // Block spinning while any modal is visible (e.g. WinModal)
+    const modalManager = ModalManager.getInstance();
+    if (modalManager && modalManager.isAnyModalActive()) {
+      if (this.debugLogs) {
+        console.log("[GameManager] Cannot spin - modal is active");
+      }
+      return;
+    }
+
     if (this.currentState !== GameConfig.GAME_STATES.IDLE) {
       if (this.debugLogs) {
         console.log("[GameManager] Cannot spin - not in IDLE state");
@@ -395,12 +407,23 @@ export class GameManager extends Component {
 
     // Return to idle after animation
     this.scheduleOnce(() => {
-      this.setState(GameConfig.GAME_STATES.IDLE);
+      // Keep game in WIN_SHOW while modal is visible to prevent auto-spins and re-enabling spin button.
+      const resume = (): void => {
+        const modalManager = ModalManager.getInstance();
+        if (modalManager && modalManager.isAnyModalActive()) {
+          this.scheduleOnce(resume, 0.1);
+          return;
+        }
 
-      // Auto play next spin
-      if (this.isAutoPlay) {
-        this.startSpin();
-      }
+        this.setState(GameConfig.GAME_STATES.IDLE);
+
+        // Auto play next spin (only after modal is closed)
+        if (this.isAutoPlay) {
+          this.startSpin();
+        }
+      };
+
+      resume();
     }, GameConfig.ANIM.WIN_POPUP_DELAY + 2.0);
   }
 

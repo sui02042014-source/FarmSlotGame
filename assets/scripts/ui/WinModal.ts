@@ -1,6 +1,8 @@
 import { _decorator, Label, tween, Vec3 } from "cc";
 import { BaseModal } from "./BaseModal";
 import { NumberCounter } from "../utils/NumberCounter";
+import { CoinFlyEffect } from "../utils/CoinFlyEffect";
+import { GameManager } from "../game/GameManager";
 const { ccclass, property } = _decorator;
 
 @ccclass("WinModal")
@@ -62,6 +64,9 @@ export class WinModal extends BaseModal {
       this.playPulseAnimation(this.winAmountLabel.node);
     }
 
+    // Coin burst + fly into TopBar coin amount
+    this.playCoinBurstToTopBar();
+
     // Tự động đóng modal sau vài giây (và sẽ được unschedule khi modal đóng sớm)
     this.scheduleOnce(this.autoCloseCb, this.autoCloseDelaySec);
   }
@@ -120,5 +125,45 @@ export class WinModal extends BaseModal {
    */
   public onCollectButtonClick(): void {
     this.hide();
+  }
+
+  private playCoinBurstToTopBar(): void {
+    const gm = GameManager.getInstance();
+    const target = gm?.coinIconNode?.isValid
+      ? gm.coinIconNode
+      : gm?.coinLabel?.node;
+    const from = this.winAmountLabel?.node ?? this.modalContent ?? this.node;
+    const parent = this.node.parent ?? this.node;
+    if (
+      !target ||
+      !target.isValid ||
+      !from ||
+      !from.isValid ||
+      !parent.isValid
+    ) {
+      return;
+    }
+
+    CoinFlyEffect.play({
+      parent,
+      fromNode: from,
+      toNode: target,
+      coinCount: 22,
+      scatterRadius: 220,
+      scatterDuration: 0.22,
+      flyDuration: 0.65,
+      stagger: 0.02,
+      coinSize: 42,
+      coinScale: 0.75,
+      spriteFramePath: "win/coin_icon/spriteFrame",
+      onAllArrive: () => {
+        // Small "impact" pulse on the coin label when coins arrive
+        const s0 = target.scale.clone();
+        tween(target)
+          .to(0.08, { scale: new Vec3(s0.x * 1.12, s0.y * 1.12, 1) })
+          .to(0.12, { scale: s0 })
+          .start();
+      },
+    });
   }
 }

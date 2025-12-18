@@ -6325,6 +6325,9 @@
     "coinLabel": {
       "__id__": 26
     },
+    "coinIconNode": {
+      "__id__": 28
+    },
     "betLabel": {
       "__id__": 127
     },
