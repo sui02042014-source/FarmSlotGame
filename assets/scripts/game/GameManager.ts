@@ -38,7 +38,6 @@ export class GameManager extends Component {
 
   private winCounter: NumberCounter = null!;
 
-  private readonly debugLogs: boolean = false;
   private readonly AUTO_PLAY_DELAY: number = 3.5;
   private readonly STORAGE_KEYS = {
     PLAYER_COINS: "playerCoins",
@@ -235,12 +234,7 @@ export class GameManager extends Component {
     if (winResult.totalWin > 0) {
       this.onWin(winResult.totalWin);
     } else {
-      const audioManager = AudioManager.getInstance();
-      if (audioManager) {
-        const soundPath = `sounds/${GameConfig.SOUNDS.LOSE}`;
-        audioManager.playSFX(soundPath);
-      }
-      this.setState(GameConfig.GAME_STATES.IDLE);
+      this.onLose();
     }
   }
 
@@ -256,24 +250,32 @@ export class GameManager extends Component {
 
     const audioManager = AudioManager.getInstance();
     if (audioManager) {
-      const soundPath = `sounds/${GameConfig.SOUNDS.WIN}`;
-      audioManager.playSFX(soundPath);
+      audioManager.playSFX(`sounds/${GameConfig.SOUNDS.WIN}`);
     }
 
     this.updateUI();
     this.savePlayerData();
 
     if (amount > 0) {
-      const modalManager = ModalManager.getInstance();
-      modalManager?.showWinModal(amount, this.currentBet);
+      ModalManager.getInstance()?.showWinModal(amount, this.currentBet);
     }
 
     this.setState(GameConfig.GAME_STATES.IDLE);
+    this.continueAutoPlay();
+  }
 
+  private onLose(): void {
+    const audioManager = AudioManager.getInstance();
+    if (audioManager) {
+      audioManager.playSFX(`sounds/${GameConfig.SOUNDS.LOSE}`);
+    }
+    this.setState(GameConfig.GAME_STATES.IDLE);
+    this.continueAutoPlay();
+  }
+
+  private continueAutoPlay(): void {
     if (this.isAutoPlay) {
-      this.scheduleOnce(() => {
-        this.startSpin();
-      }, this.AUTO_PLAY_DELAY);
+      this.scheduleOnce(() => this.startSpin(), this.AUTO_PLAY_DELAY);
     }
   }
 
@@ -282,6 +284,10 @@ export class GameManager extends Component {
     if (this.isAutoPlay && this.currentState === GameConfig.GAME_STATES.IDLE) {
       this.startSpin();
     }
+  }
+
+  public isAutoPlayActive(): boolean {
+    return this.isAutoPlay;
   }
 
   public addCoins(amount: number): void {

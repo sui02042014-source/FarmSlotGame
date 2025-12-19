@@ -1,10 +1,6 @@
 import { _decorator, Component, Label, tween, Tween } from "cc";
 const { ccclass, property } = _decorator;
 
-/**
- * Number Counter - Hiệu ứng đếm số từ A đến B
- * Dùng cho win amount, coin count, etc.
- */
 @ccclass("NumberCounter")
 export class NumberCounter extends Component {
   @property(Label)
@@ -33,6 +29,7 @@ export class NumberCounter extends Component {
     return new Promise((resolve) => {
       this.targetValue = target;
       const animDuration = duration !== undefined ? duration : this.duration;
+      const startValue = this.currentValue;
 
       if (this.isAnimating) {
         Tween.stopAllByTarget(this);
@@ -40,12 +37,15 @@ export class NumberCounter extends Component {
 
       this.isAnimating = true;
 
-      tween(this)
+      const progress = { value: 0 };
+      tween(progress)
         .to(
           animDuration,
-          { currentValue: target },
+          { value: 1 },
           {
             onUpdate: () => {
+              this.currentValue =
+                startValue + (target - startValue) * progress.value;
               this.updateLabel();
             },
           }

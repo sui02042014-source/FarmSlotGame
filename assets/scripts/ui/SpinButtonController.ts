@@ -56,6 +56,7 @@ export class SpinButtonController extends Component {
 
   private isHolding: boolean = false;
   private holdTime: number = 0;
+  private autoPlayActivated: boolean = false;
   private originalScale: Vec3 = new Vec3(1, 1, 1);
   private isEnabled: boolean = true;
   private isHovering: boolean = false;
@@ -129,8 +130,8 @@ export class SpinButtonController extends Component {
         1
       );
 
-      // Check if held long enough for auto play
-      if (this.holdTime >= this.holdDuration) {
+      // Check if held long enough for auto play (only activate once)
+      if (this.holdTime >= this.holdDuration && !this.autoPlayActivated) {
         this.onAutoPlayActivated();
       }
     }
@@ -152,6 +153,7 @@ export class SpinButtonController extends Component {
     this.isHolding = true;
     this.isHovering = false;
     this.holdTime = 0;
+    this.autoPlayActivated = false;
 
     // Stop breathing animation
     Tween.stopAllByTarget(this.node);
@@ -164,17 +166,14 @@ export class SpinButtonController extends Component {
   private onTouchEnd(event: EventTouch): void {
     if (!this.isHolding) return;
 
-    this.isHolding = false;
+    const wasAutoPlayActivated = this.autoPlayActivated;
+    this.resetHoldState();
 
-    // Reset scale
-    this.node.setScale(this.originalScale);
-
-    // If held < threshold, it's a normal spin
-    if (this.holdTime < this.holdDuration) {
+    // Normal spin only if held briefly and auto play wasn't activated
+    if (this.holdTime < this.holdDuration && !wasAutoPlayActivated) {
       this.onSpinClick();
     }
 
-    // Resume breathing animation
     this.updateVisualState();
     if (this.isEnabled) this.playBreathingAnimation();
   }
@@ -183,8 +182,7 @@ export class SpinButtonController extends Component {
    * On touch cancel
    */
   private onTouchCancel(event: EventTouch): void {
-    this.isHolding = false;
-    this.node.setScale(this.originalScale);
+    this.resetHoldState();
     this.updateVisualState();
     if (this.isEnabled) this.playBreathingAnimation();
   }
@@ -224,47 +222,56 @@ export class SpinButtonController extends Component {
 
   private updateVisualState(): void {
     if (!this.useStateSprites) return;
-    if (!this.targetSprite || !this.targetSprite.isValid) {
-      // Lazy re-resolve in case Sprite was added later or is on a child.
+
+    if (!this.targetSprite?.isValid) {
       this.targetSprite =
         this.node.getComponent(Sprite) ??
         this.node.getComponentInChildren(Sprite) ??
         null!;
     }
-    if (!this.targetSprite || !this.targetSprite.isValid) return;
+    if (!this.targetSprite?.isValid) return;
 
-    // Priority: disabled > pressed(holding) > hover > normal
-    let frame: SpriteFrame | null = null;
-    if (!this.isEnabled) frame = this.disabledSprite;
-    else if (this.isHolding) frame = this.pressedSprite;
-    else if (this.isHovering) frame = this.hoverSprite;
-    else frame = this.normalSprite;
+    const frame =
+      (!this.isEnabled && this.disabledSprite) ||
+      (this.isHolding && this.pressedSprite) ||
+      (this.isHovering && this.hoverSprite) ||
+      this.normalSprite;
 
-    // Fallbacks
-    if (!frame) frame = this.normalSprite;
     if (frame) this.targetSprite.spriteFrame = frame;
+  }
+
+  /**
+   * Reset hold state
+   */
+  private resetHoldState(): void {
+    this.isHolding = false;
+    this.autoPlayActivated = false;
+    this.node.setScale(this.originalScale);
   }
 
   /**
    * On spin click (normal spin)
    */
   private onSpinClick(): void {
-    const gameManager = GameManager.getInstance();
-    if (gameManager) {
-      gameManager.startSpin();
-    }
+    GameManager.getInstance()?.startSpin();
   }
 
   /**
    * On auto play activated
    */
   private onAutoPlayActivated(): void {
-    this.isHolding = false;
-    this.node.setScale(this.originalScale);
+    if (this.autoPlayActivated) return;
+    this.autoPlayActivated = true;
 
     const gameManager = GameManager.getInstance();
-    if (gameManager) {
+    if (!gameManager) return;
+
+    if (!gameManager.isAutoPlayActive()) {
       gameManager.toggleAutoPlay();
+    }
+
+    if (gameManager.getState() === GameConfig.GAME_STATES.IDLE) {
+      gameManager.startSpin();
     }
 
     console.log("[SpinButton] Auto play activated");
@@ -322,14 +329,11 @@ export class SpinButtonController extends Component {
       this.node.getComponent(UIOpacity) ?? this.node.addComponent(UIOpacity);
     uiOpacity.opacity = opacity;
 
-    // Khi disabled thì dừng mọi tween và reset scale
     if (!enabled) {
       Tween.stopAllByTarget(this.node);
-      this.isHolding = false;
       this.isHovering = false;
-      this.node.setScale(this.originalScale);
+      this.resetHoldState();
     } else {
-      // Khi enable lại thì chơi lại breathing animation
       this.playBreathingAnimation();
     }
 
