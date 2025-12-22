@@ -40,6 +40,7 @@ export class GameManager extends Component {
   private winCounter: NumberCounter = null!;
 
   private readonly AUTO_PLAY_DELAY: number = 3.5;
+  private readonly BIG_WIN_THRESHOLD: number = 400;
   private readonly STORAGE_KEYS = {
     PLAYER_COINS: "playerCoins",
     CURRENT_BET: "currentBet",
@@ -219,21 +220,32 @@ export class GameManager extends Component {
   public onSpinComplete(): void {
     this.setState(GameConfig.GAME_STATES.STOPPING);
 
-    const slot = this.slotMachine?.isValid
-      ? this.slotMachine.getComponent(SlotMachine)
-      : null;
+    const slot = this.getSlotMachine();
     if (!slot) {
       this.setState(GameConfig.GAME_STATES.IDLE);
       return;
     }
 
     const winResult = slot.checkWin();
-    if (winResult.totalWin > 0 && winResult.winLines.length > 0) {
-      slot.showWinLines(winResult.winLines);
+    this.handleWinResult(slot, winResult.totalWin, winResult.winLines);
+  }
+
+  private getSlotMachine(): SlotMachine | null {
+    if (!this.slotMachine?.isValid) return null;
+    return this.slotMachine.getComponent(SlotMachine);
+  }
+
+  private handleWinResult(
+    slot: SlotMachine,
+    totalWin: number,
+    winLines: ReturnType<SlotMachine["checkWin"]>["winLines"]
+  ): void {
+    if (totalWin > 0 && winLines.length > 0) {
+      slot.showWinLines(winLines);
     }
 
-    if (winResult.totalWin > 0) {
-      this.onWin(winResult.totalWin);
+    if (totalWin > 0) {
+      this.onWin(totalWin);
     } else {
       this.onLose();
     }
@@ -257,24 +269,56 @@ export class GameManager extends Component {
     this.updateUI();
     this.savePlayerData();
 
-    this.playCoinFlyEffect();
+    this.handleWinPresentation(amount);
 
     this.setState(GameConfig.GAME_STATES.IDLE);
     this.continueAutoPlay();
   }
 
-  private playCoinFlyEffect(): void {
-    let parent: Node | null =
+  private shouldShowWinModal(amount: number): boolean {
+    return amount >= this.BIG_WIN_THRESHOLD;
+  }
+
+  private handleWinPresentation(amount: number): void {
+    const modalManager = ModalManager.getInstance();
+    if (this.shouldShowWinModal(amount) && modalManager) {
+      modalManager.showWinModal(amount, this.currentBet);
+      return;
+    }
+
+    this.playCoinFlyEffect();
+  }
+
+  private getCoinEffectParent(): Node | null {
+    const modalManager = ModalManager.getInstance();
+    if (modalManager?.getOverlayContainer?.()) {
+      const overlay = modalManager.getOverlayContainer();
+      if (overlay?.isValid) return overlay;
+    }
+
+    return (
       this.coinIconNode?.parent ??
       this.coinLabel?.node?.parent ??
       this.node.scene?.getChildByName("Canvas") ??
       this.node.parent ??
-      this.node;
+      this.node
+    );
+  }
 
-    const from = this.winLabelNode ?? this.winLabel?.node ?? this.node;
-    const target = this.coinIconNode?.isValid
-      ? this.coinIconNode
-      : this.coinLabel?.node;
+  private getCoinEffectFromNode(): Node | null {
+    return this.winLabelNode ?? this.winLabel?.node ?? this.node;
+  }
+
+  private getCoinEffectTargetNode(): Node | null {
+    if (this.coinIconNode?.isValid) return this.coinIconNode;
+    if (this.coinLabel?.node?.isValid) return this.coinLabel.node;
+    return null;
+  }
+
+  private playCoinFlyEffect(): void {
+    const parent = this.getCoinEffectParent();
+    const from = this.getCoinEffectFromNode();
+    const target = this.getCoinEffectTargetNode();
 
     if (!parent?.isValid || !from?.isValid || !target?.isValid) {
       return;

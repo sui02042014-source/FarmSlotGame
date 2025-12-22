@@ -117,6 +117,13 @@ export class CoinFlyEffect {
       coin.setParent(parent);
       coin.setPosition(start);
       coin.setScale(new Vec3(coinScale, coinScale, 1));
+      const maxSiblingIndex =
+        parent.children.length > 0
+          ? Math.max(
+              ...parent.children.map((child, idx) => child.getSiblingIndex())
+            )
+          : -1;
+      coin.setSiblingIndex(maxSiblingIndex + 1);
 
       const angle = math.randomRange(0, Math.PI * 2);
       const dist = math.randomRange(scatterRadius * 0.35, scatterRadius);
