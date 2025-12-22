@@ -2,16 +2,11 @@ import { _decorator, Component, Button } from "cc";
 import { ModalManager } from "./ModalManager";
 const { ccclass, property } = _decorator;
 
-/**
- * Modal Button - Helper component để mở modal từ button
- * Đặt script này vào button và chọn modal muốn mở
- */
 @ccclass("ModalButton")
 export class ModalButton extends Component {
   @property({
     type: String,
-    tooltip:
-      "Name of the modal to open (WinModal, NotEnoughCoinsModal, SettingsModal, etc.)",
+    tooltip: "Name of the modal to open (WinModal, NotEnoughCoinsModal, SettingsModal, etc.)",
   })
   modalName: string = "";
 
@@ -37,10 +32,7 @@ export class ModalButton extends Component {
       this.node.off(Button.EventType.CLICK, this.onButtonClick, this);
     }
   }
-
-  /**
-   * Called when button is clicked
-   */
+  
   private onButtonClick(): void {
     if (!this.modalName) {
       console.warn("[ModalButton] No modal name specified!");
@@ -53,7 +45,6 @@ export class ModalButton extends Component {
       return;
     }
 
-    // Parse custom data
     let data = {};
     try {
       data = JSON.parse(this.customData);
@@ -61,13 +52,9 @@ export class ModalButton extends Component {
       console.warn("[ModalButton] Invalid custom data JSON:", error);
     }
 
-    // Show the modal
     modalManager.showModal(this.modalName, data);
   }
-
-  /**
-   * Programmatically trigger button to show modal
-   */
+  
   public showModal(): void {
     this.onButtonClick();
   }

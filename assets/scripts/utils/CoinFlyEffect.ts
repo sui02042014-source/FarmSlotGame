@@ -1,14 +1,5 @@
-import {
-  Node,
-  Sprite,
-  SpriteFrame,
-  UITransform,
-  Vec3,
-  tween,
-  resources,
-  math,
-  Size,
-} from "cc";
+import { Node, Sprite, UITransform, Vec3, tween, math, Size, Tween } from "cc";
+import { SpriteFrameCache } from "./SpriteFrameCache";
 
 export type CoinFlyEffectOptions = {
   parent: Node;
@@ -25,9 +16,63 @@ export type CoinFlyEffectOptions = {
   onAllArrive?: () => void;
 };
 
+class CoinPool {
+  private pool: Node[] = [];
+  private active: Set<Node> = new Set();
+  private readonly maxPoolSize: number = 50;
+
+  public get(parent: Node, coinSize: number): Node {
+    let coin: Node;
+    if (this.pool.length > 0) {
+      coin = this.pool.pop()!;
+      coin.setParent(parent);
+    } else {
+      coin = new Node("Coin");
+      const ui = coin.addComponent(UITransform);
+      ui.setContentSize(new Size(coinSize, coinSize));
+      const sprite = coin.addComponent(Sprite);
+      sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+    }
+    this.active.add(coin);
+    return coin;
+  }
+
+  public release(coin: Node): void {
+    if (!coin?.isValid) return;
+    Tween.stopAllByTarget(coin);
+    coin.setParent(null);
+    coin.setPosition(Vec3.ZERO);
+    coin.setScale(Vec3.ONE);
+    this.active.delete(coin);
+    if (this.pool.length < this.maxPoolSize) {
+      this.pool.push(coin);
+    } else {
+      coin.destroy();
+    }
+  }
+
+  public releaseAll(): void {
+    this.active.forEach((coin) => {
+      if (coin?.isValid) {
+        Tween.stopAllByTarget(coin);
+        coin.setParent(null);
+        this.pool.push(coin);
+      }
+    });
+    this.active.clear();
+  }
+
+  public clear(): void {
+    this.releaseAll();
+    this.pool.forEach((coin) => {
+      if (coin?.isValid) coin.destroy();
+    });
+    this.pool = [];
+  }
+}
+
 export class CoinFlyEffect {
-  private static cached: Map<string, SpriteFrame> = new Map();
-  private static loading: Map<string, Promise<SpriteFrame | null>> = new Map();
+  private static coinPool: CoinPool = new CoinPool();
 
   private static getWorldPos(node: Node): Vec3 {
     const ui = node.getComponent(UITransform);
@@ -39,37 +84,6 @@ export class CoinFlyEffect {
     const ui = parent.getComponent(UITransform);
     if (ui) return ui.convertToNodeSpaceAR(world);
     return parent.inverseTransformPoint(new Vec3(), world);
-  }
-
-  private static async loadSpriteFrame(
-    path: string
-  ): Promise<SpriteFrame | null> {
-    const cached = this.cached.get(path);
-    if (cached) return cached;
-
-    const existing = this.loading.get(path);
-    if (existing) return existing;
-
-    const loader = new Promise<SpriteFrame | null>((resolve) => {
-      resources.load(path, SpriteFrame, (err, sf) => {
-        if (err || !sf) {
-          resolve(null);
-          return;
-        }
-        resolve(sf);
-      });
-    });
-
-    this.loading.set(path, loader);
-    loader.then(
-      (sf) => {
-        this.loading.delete(path);
-        if (sf) this.cached.set(path, sf);
-      },
-      () => this.loading.delete(path)
-    );
-
-    return loader;
   }
 
   public static async play(opts: CoinFlyEffectOptions): Promise<void> {
@@ -90,7 +104,8 @@ export class CoinFlyEffect {
 
     if (!parent?.isValid || !fromNode?.isValid || !toNode?.isValid) return;
 
-    const sf = await this.loadSpriteFrame(spriteFramePath);
+    const cache = SpriteFrameCache.getInstance();
+    const sf = await cache.getSpriteFrame(spriteFramePath);
     if (!sf || !parent?.isValid || !fromNode?.isValid || !toNode?.isValid)
       return;
 
@@ -103,25 +118,26 @@ export class CoinFlyEffect {
     const total = Math.max(0, coinCount | 0);
     if (!total) return;
 
+    const coins: Node[] = [];
     for (let i = 0; i < total; i++) {
       if (!parent?.isValid) break;
+      const coin = this.coinPool.get(parent, coinSize);
+      const sprite = coin.getComponent(Sprite);
+      if (sprite) {
+        sprite.spriteFrame = sf;
+      }
+      coins.push(coin);
+    }
 
-      const coin = new Node(`Coin_${i}`);
-      const ui = coin.addComponent(UITransform);
-      ui.setContentSize(new Size(coinSize, coinSize));
+    for (let i = 0; i < coins.length; i++) {
+      const coin = coins[i];
+      if (!coin?.isValid || !parent?.isValid) continue;
 
-      const sprite = coin.addComponent(Sprite);
-      sprite.spriteFrame = sf;
-      sprite.sizeMode = Sprite.SizeMode.CUSTOM;
-
-      coin.setParent(parent);
       coin.setPosition(start);
       coin.setScale(new Vec3(coinScale, coinScale, 1));
       const maxSiblingIndex =
         parent.children.length > 0
-          ? Math.max(
-              ...parent.children.map((child, idx) => child.getSiblingIndex())
-            )
+          ? Math.max(...parent.children.map((child) => child.getSiblingIndex()))
           : -1;
       coin.setSiblingIndex(maxSiblingIndex + 1);
 
@@ -158,7 +174,7 @@ export class CoinFlyEffect {
           { easing: "quadIn" }
         )
         .call(() => {
-          if (coin?.isValid) coin.destroy();
+          this.coinPool.release(coin);
           arrived++;
           if (arrived >= total) {
             if (onAllArrive) onAllArrive();
@@ -166,5 +182,9 @@ export class CoinFlyEffect {
         })
         .start();
     }
+  }
+
+  public static clearPool(): void {
+    this.coinPool.clear();
   }
 }

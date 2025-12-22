@@ -1,15 +1,7 @@
-import {
-  _decorator,
-  Component,
-  Node,
-  resources,
-  Size,
-  Sprite,
-  SpriteFrame,
-  UITransform,
-} from "cc";
+import { _decorator, Component, Node, Size, Sprite, UITransform } from "cc";
 import { GameConfig } from "../data/GameConfig";
 import { SymbolData } from "../data/SymbolData";
+import { SpriteFrameCache } from "../utils/SpriteFrameCache";
 const { ccclass } = _decorator;
 
 @ccclass("ReelContainer")
@@ -27,19 +19,13 @@ export class ReelContainer extends Component {
   private symbolNodes: Node[] = [];
   private isInitialized: boolean = false;
 
-  private readonly spriteFrameCache = new Map<string, SpriteFrame>();
-  private readonly spriteFrameLoading = new Map<
-    string,
-    Promise<SpriteFrame | null>
-  >();
+  private readonly spriteFrameCache = SpriteFrameCache.getInstance();
 
   protected onDestroy(): void {
     this.symbolNodes.forEach((node) => {
       if (node?.isValid) node.destroy();
     });
     this.symbolNodes = [];
-    this.spriteFrameCache.clear();
-    this.spriteFrameLoading.clear();
   }
 
   public init(): void {
@@ -81,49 +67,18 @@ export class ReelContainer extends Component {
     this.isInitialized = true;
   }
 
-  private loadSpriteFrame(node: Node, symbolId: string): void {
+  private async loadSpriteFrame(node: Node, symbolId: string): Promise<void> {
     const sprite = node.getComponent(Sprite);
     const symbolData = SymbolData.getSymbol(symbolId);
     if (!sprite || !symbolData) return;
 
-    const cached = this.spriteFrameCache.get(symbolId);
-    if (cached) {
-      sprite.spriteFrame = cached;
-      return;
+    const spriteFrame = await this.spriteFrameCache.getSpriteFrame(
+      `${symbolData.spritePath}/spriteFrame`
+    );
+
+    if (spriteFrame && node?.isValid && sprite?.isValid) {
+      sprite.spriteFrame = spriteFrame;
     }
-
-    const existing = this.spriteFrameLoading.get(symbolId);
-    const loader =
-      existing ??
-      new Promise<SpriteFrame | null>((resolve) => {
-        resources.load(
-          `${symbolData.spritePath}/spriteFrame`,
-          SpriteFrame,
-          (err, spriteFrame) => {
-            if (err || !spriteFrame) {
-              resolve(null);
-              return;
-            }
-            resolve(spriteFrame);
-          }
-        );
-      });
-
-    if (!existing) {
-      this.spriteFrameLoading.set(symbolId, loader);
-      loader.then(
-        () => this.spriteFrameLoading.delete(symbolId),
-        () => this.spriteFrameLoading.delete(symbolId)
-      );
-    }
-
-    loader.then((spriteFrame) => {
-      if (!spriteFrame) return;
-      this.spriteFrameCache.set(symbolId, spriteFrame);
-      if (node?.isValid && sprite?.isValid) {
-        sprite.spriteFrame = spriteFrame;
-      }
-    });
   }
 
   public getVisibleSymbolNodes(): Node[] {

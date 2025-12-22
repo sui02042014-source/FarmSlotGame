@@ -3,9 +3,6 @@ import { BaseModal } from "./BaseModal";
 import { GameManager } from "../game/GameManager";
 const { ccclass, property } = _decorator;
 
-/**
- * Not Enough Coins Modal - Hiển thị khi người chơi không đủ tiền
- */
 @ccclass("NotEnoughCoinsModal")
 export class NotEnoughCoinsModal extends BaseModal {
   @property(Label)
@@ -29,7 +26,6 @@ export class NotEnoughCoinsModal extends BaseModal {
   protected onLoad(): void {
     super.onLoad();
 
-    // Setup button listeners
     if (this.buyCoinsButton) {
       this.buyCoinsButton.node.on(
         Button.EventType.CLICK,
@@ -95,13 +91,8 @@ export class NotEnoughCoinsModal extends BaseModal {
     }
   }
 
-  /**
-   * Called when Buy Coins button is clicked
-   */
   private onBuyCoinsClick(): void {
     console.log("[NotEnoughCoinsModal] Buy Coins clicked");
-    // TODO: Implement IAP (In-App Purchase) logic
-    // For now, just give some coins for testing
     const gameManager = GameManager.getInstance();
     if (gameManager) {
       gameManager.addCoins(100);
@@ -109,13 +100,8 @@ export class NotEnoughCoinsModal extends BaseModal {
     this.hide();
   }
 
-  /**
-   * Called when Watch Ad button is clicked
-   */
   private onWatchAdClick(): void {
     console.log("[NotEnoughCoinsModal] Watch Ad clicked");
-    // TODO: Implement Rewarded Ad logic
-    // For now, just give some coins for testing
     const gameManager = GameManager.getInstance();
     if (gameManager) {
       gameManager.addCoins(25);
@@ -123,16 +109,10 @@ export class NotEnoughCoinsModal extends BaseModal {
     this.hide();
   }
 
-  /**
-   * Called when Close button is clicked
-   */
   public onLowerBetClick(): void {
     console.log("[NotEnoughCoinsModal] Lower Bet clicked");
-    // Automatically lower the bet to an affordable amount
     const gameManager = GameManager.getInstance();
     if (gameManager) {
-      // Try to find an affordable bet
-      // This is just a simple implementation
       while (gameManager.getCurrentBet() > gameManager.getPlayerCoins()) {
         gameManager.decreaseBet();
       }

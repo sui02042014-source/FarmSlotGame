@@ -6,6 +6,8 @@ import { AudioManager } from "../utils/AudioManager";
 import { SpinButtonController } from "../ui/SpinButtonController";
 import { ModalManager } from "../ui/ModalManager";
 import { CoinFlyEffect } from "../utils/CoinFlyEffect";
+import { SpriteFrameCache } from "../utils/SpriteFrameCache";
+import { SymbolData } from "../data/SymbolData";
 const { ccclass, property } = _decorator;
 
 @ccclass("GameManager")
@@ -63,6 +65,7 @@ export class GameManager extends Component {
     if (GameManager.instance === this) {
       GameManager.instance = null!;
     }
+    CoinFlyEffect.clearPool();
   }
 
   protected start(): void {
@@ -90,6 +93,8 @@ export class GameManager extends Component {
       }
     }
 
+    this.preloadSpriteFrames();
+
     this.updateUI();
 
     if (this.winLabelNode) {
@@ -103,6 +108,22 @@ export class GameManager extends Component {
     }
 
     this.setState(GameConfig.GAME_STATES.IDLE);
+  }
+
+  private preloadSpriteFrames(): void {
+    const cache = SpriteFrameCache.getInstance();
+    const spritePaths: string[] = [];
+
+    const allSymbols = SymbolData.getAllSymbols();
+    allSymbols.forEach((symbol) => {
+      spritePaths.push(`${symbol.spritePath}/spriteFrame`);
+    });
+
+    spritePaths.push("win/coin_icon/spriteFrame");
+
+    cache.preloadSpriteFrames(spritePaths).catch((err) => {
+      console.warn("[GameManager] Failed to preload some sprite frames:", err);
+    });
   }
 
   private savePlayerData(): void {

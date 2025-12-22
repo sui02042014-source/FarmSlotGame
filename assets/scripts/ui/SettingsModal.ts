@@ -3,9 +3,6 @@ import { BaseModal } from "./BaseModal";
 import { AudioManager } from "../utils/AudioManager";
 const { ccclass, property } = _decorator;
 
-/**
- * Settings Modal - Hiển thị cài đặt game
- */
 @ccclass("SettingsModal")
 export class SettingsModal extends BaseModal {
   @property(Toggle)
@@ -26,7 +23,6 @@ export class SettingsModal extends BaseModal {
   protected onLoad(): void {
     super.onLoad();
 
-    // Setup toggle listeners
     if (this.soundToggle) {
       this.soundToggle.node.on("toggle", this.onSoundToggle, this);
     }
@@ -35,7 +31,6 @@ export class SettingsModal extends BaseModal {
       this.musicToggle.node.on("toggle", this.onMusicToggle, this);
     }
 
-    // Setup slider listeners
     if (this.soundVolumeSlider) {
       this.soundVolumeSlider.node.on("slide", this.onSoundVolumeChange, this);
     }
@@ -69,15 +64,11 @@ export class SettingsModal extends BaseModal {
     super.onBeforeShow();
     this.loadSettings();
   }
-
-  /**
-   * Load current settings
-   */
+  
   private loadSettings(): void {
     const audioManager = AudioManager.getInstance();
     if (!audioManager) return;
 
-    // Load sound settings
     if (this.soundToggle) {
       const soundEnabled = localStorage.getItem("soundEnabled") !== "false";
       this.soundToggle.isChecked = soundEnabled;
@@ -102,78 +93,57 @@ export class SettingsModal extends BaseModal {
       this.musicVolumeSlider.progress = musicVolume;
     }
 
-    // Set version
     if (this.versionLabel) {
       this.versionLabel.string = "Version 1.0.0";
     }
   }
-
-  /**
-   * Called when sound toggle changes
-   */
+  
   private onSoundToggle(toggle: Toggle): void {
     const enabled = toggle.isChecked;
     localStorage.setItem("soundEnabled", enabled.toString());
 
     const audioManager = AudioManager.getInstance();
     if (audioManager) {
-      // audioManager.setSoundEnabled(enabled);
     }
 
     console.log(`[SettingsModal] Sound ${enabled ? "enabled" : "disabled"}`);
   }
 
-  /**
-   * Called when music toggle changes
-   */
   private onMusicToggle(toggle: Toggle): void {
     const enabled = toggle.isChecked;
     localStorage.setItem("musicEnabled", enabled.toString());
 
     const audioManager = AudioManager.getInstance();
     if (audioManager) {
-      // audioManager.setMusicEnabled(enabled);
     }
 
     console.log(`[SettingsModal] Music ${enabled ? "enabled" : "disabled"}`);
   }
 
-  /**
-   * Called when sound volume slider changes
-   */
   private onSoundVolumeChange(slider: Slider): void {
     const volume = slider.progress;
     localStorage.setItem("soundVolume", volume.toString());
 
     const audioManager = AudioManager.getInstance();
     if (audioManager) {
-      // audioManager.setSoundVolume(volume);
     }
 
     console.log(`[SettingsModal] Sound volume: ${volume.toFixed(2)}`);
   }
 
-  /**
-   * Called when music volume slider changes
-   */
   private onMusicVolumeChange(slider: Slider): void {
     const volume = slider.progress;
     localStorage.setItem("musicVolume", volume.toString());
 
     const audioManager = AudioManager.getInstance();
     if (audioManager) {
-      // audioManager.setMusicVolume(volume);
     }
 
     console.log(`[SettingsModal] Music volume: ${volume.toFixed(2)}`);
   }
 
-  /**
-   * Called when Reset button is clicked
-   */
   public onResetClick(): void {
     console.log("[SettingsModal] Reset clicked");
-    // Reset to defaults
     localStorage.removeItem("soundEnabled");
     localStorage.removeItem("musicEnabled");
     localStorage.removeItem("soundVolume");
@@ -181,19 +151,11 @@ export class SettingsModal extends BaseModal {
     this.loadSettings();
   }
 
-  /**
-   * Called when Privacy Policy button is clicked
-   */
   public onPrivacyPolicyClick(): void {
     console.log("[SettingsModal] Privacy Policy clicked");
-    // TODO: Open privacy policy URL
   }
-
-  /**
-   * Called when Terms button is clicked
-   */
+  
   public onTermsClick(): void {
     console.log("[SettingsModal] Terms clicked");
-    // TODO: Open terms URL
   }
 }
