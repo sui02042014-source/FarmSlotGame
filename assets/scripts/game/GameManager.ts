@@ -1,13 +1,14 @@
-import { _decorator, Component, Node, Label } from "cc";
+import { _decorator, Component, Label, Node } from "cc";
 import { GameConfig, GameState } from "../data/GameConfig";
-import { SlotMachine } from "./SlotMachine";
-import { NumberCounter } from "../utils/NumberCounter";
-import { AudioManager } from "../utils/AudioManager";
-import { SpinButtonController } from "../ui/SpinButtonController";
 import { ModalManager } from "../ui/ModalManager";
+import { SpinButtonController } from "../ui/SpinButtonController";
+import { AudioManager } from "../utils/AudioManager";
 import { CoinFlyEffect } from "../utils/CoinFlyEffect";
-import { SpriteFrameCache } from "../utils/SpriteFrameCache";
-import { SymbolData } from "../data/SymbolData";
+import { NumberCounter } from "../utils/NumberCounter";
+import { PlayerDataStorage } from "../utils/PlayerDataStorage";
+import { SymbolPreloader } from "../utils/SymbolPreloader";
+import { SlotMachine } from "./SlotMachine";
+
 const { ccclass, property } = _decorator;
 
 @ccclass("GameManager")
@@ -32,6 +33,7 @@ export class GameManager extends Component {
 
   @property([Node])
   spinButtons: Node[] = [];
+
   private currentState: GameState = GameConfig.GAME_STATES.IDLE;
   private playerCoins: number = 1000;
   private currentBet: number = 3.5;
@@ -43,12 +45,9 @@ export class GameManager extends Component {
 
   private readonly AUTO_PLAY_DELAY: number = 3.5;
   private readonly BIG_WIN_THRESHOLD: number = 400;
-  private readonly STORAGE_KEYS = {
-    PLAYER_COINS: "playerCoins",
-    CURRENT_BET: "currentBet",
-  } as const;
 
   private static instance: GameManager = null!;
+
   public static getInstance(): GameManager {
     return this.instance;
   }
@@ -73,68 +72,33 @@ export class GameManager extends Component {
   }
 
   private initGame(): void {
-    const savedCoins = localStorage.getItem(this.STORAGE_KEYS.PLAYER_COINS);
-    if (savedCoins) {
-      const parsed = parseFloat(savedCoins);
-      if (!Number.isNaN(parsed) && parsed > 0) {
-        this.playerCoins = parsed;
-      }
-    }
+    const loaded = PlayerDataStorage.load(this.playerCoins, this.currentBet);
+    this.playerCoins = loaded.coins;
+    this.currentBet = loaded.bet;
+    this.currentBetIndex = loaded.betIndex;
 
-    const savedBet = localStorage.getItem(this.STORAGE_KEYS.CURRENT_BET);
-    if (savedBet) {
-      const parsed = parseFloat(savedBet);
-      if (!Number.isNaN(parsed) && parsed > 0) {
-        const idx = GameConfig.BET_STEPS.indexOf(parsed);
-        if (idx >= 0) {
-          this.currentBet = parsed;
-          this.currentBetIndex = idx;
-        }
-      }
-    }
-
-    this.preloadSpriteFrames();
-
+    SymbolPreloader.preloadAll().catch((err) => {
+      console.warn("[GameManager] Failed to preload some sprite frames:", err);
+    });
+    this.setupWinCounter();
     this.updateUI();
-
-    if (this.winLabelNode) {
-      this.winCounter = this.winLabelNode.getComponent(NumberCounter);
-      if (!this.winCounter) {
-        this.winCounter = this.winLabelNode.addComponent(NumberCounter);
-      }
-      this.winCounter.label = this.winLabel;
-      this.winCounter.duration = GameConfig.ANIM.NUMBER_COUNT_DURATION;
-      this.winCounter.decimalPlaces = 2;
-    }
-
     this.setState(GameConfig.GAME_STATES.IDLE);
   }
 
-  private preloadSpriteFrames(): void {
-    const cache = SpriteFrameCache.getInstance();
-    const spritePaths: string[] = [];
+  private setupWinCounter(): void {
+    if (!this.winLabelNode) return;
 
-    const allSymbols = SymbolData.getAllSymbols();
-    allSymbols.forEach((symbol) => {
-      spritePaths.push(`${symbol.spritePath}/spriteFrame`);
-    });
-
-    spritePaths.push("win/coin_icon/spriteFrame");
-
-    cache.preloadSpriteFrames(spritePaths).catch((err) => {
-      console.warn("[GameManager] Failed to preload some sprite frames:", err);
-    });
+    this.winCounter = this.winLabelNode.getComponent(NumberCounter);
+    if (!this.winCounter) {
+      this.winCounter = this.winLabelNode.addComponent(NumberCounter);
+    }
+    this.winCounter.label = this.winLabel;
+    this.winCounter.duration = GameConfig.ANIM.NUMBER_COUNT_DURATION;
+    this.winCounter.decimalPlaces = 2;
   }
 
   private savePlayerData(): void {
-    localStorage.setItem(
-      this.STORAGE_KEYS.PLAYER_COINS,
-      this.playerCoins.toString()
-    );
-    localStorage.setItem(
-      this.STORAGE_KEYS.CURRENT_BET,
-      this.currentBet.toString()
-    );
+    PlayerDataStorage.save(this.playerCoins, this.currentBet);
   }
 
   private updateUI(): void {
@@ -142,6 +106,10 @@ export class GameManager extends Component {
     if (this.betLabel) this.betLabel.string = this.currentBet.toFixed(2);
     if (this.winLabel) this.winLabel.string = this.lastWin.toFixed(2);
   }
+
+  // ---------------------------------------------------------------------------
+  // State & accessors
+  // ---------------------------------------------------------------------------
 
   public setState(state: GameState): void {
     const audioManager = AudioManager.getInstance();
@@ -158,54 +126,70 @@ export class GameManager extends Component {
     }
 
     this.currentState = state;
-
-    let enabled = this.currentState === GameConfig.GAME_STATES.IDLE;
-    if (!enabled && this.currentState === GameConfig.GAME_STATES.WIN_SHOW) {
-      const modalManager = ModalManager.getInstance();
-      enabled = !modalManager || !modalManager.isAnyModalActive();
-    }
-
-    if (this.spinButtons?.length) {
-      this.spinButtons.forEach((node) => {
-        if (!node?.isValid) return;
-        node
-          .getComponentsInChildren(SpinButtonController)
-          .forEach((c) => c?.setEnabled(enabled));
-      });
-    }
+    this.updateSpinButtonsInteractable();
   }
 
   public getState(): GameState {
     return this.currentState;
   }
 
+  private isIdle(): boolean {
+    return this.currentState === GameConfig.GAME_STATES.IDLE;
+  }
+
+  private updateSpinButtonsInteractable(): void {
+    let enabled = this.isIdle();
+
+    if (!enabled && this.currentState === GameConfig.GAME_STATES.WIN_SHOW) {
+      const modalManager = ModalManager.getInstance();
+      enabled = !modalManager || !modalManager.isAnyModalActive();
+    }
+
+    if (!this.spinButtons?.length) return;
+
+    this.spinButtons.forEach((node) => {
+      if (!node?.isValid) return;
+      node
+        .getComponentsInChildren(SpinButtonController)
+        .forEach((c) => c?.setEnabled(enabled));
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Bet controls
+  // ---------------------------------------------------------------------------
+
   public increaseBet(): void {
-    if (this.currentState !== GameConfig.GAME_STATES.IDLE) return;
+    if (!this.isIdle()) return;
     if (this.currentBetIndex >= GameConfig.BET_STEPS.length - 1) return;
 
-    this.currentBetIndex++;
-    this.currentBet = GameConfig.BET_STEPS[this.currentBetIndex];
-    if (this.betLabel) this.betLabel.string = this.currentBet.toFixed(2);
-    this.savePlayerData();
+    this.setBetByIndex(this.currentBetIndex + 1);
   }
 
   public decreaseBet(): void {
-    if (this.currentState !== GameConfig.GAME_STATES.IDLE) return;
+    if (!this.isIdle()) return;
     if (this.currentBetIndex <= 0) return;
 
-    this.currentBetIndex--;
-    this.currentBet = GameConfig.BET_STEPS[this.currentBetIndex];
-    if (this.betLabel) this.betLabel.string = this.currentBet.toFixed(2);
-    this.savePlayerData();
+    this.setBetByIndex(this.currentBetIndex - 1);
   }
 
   public setMaxBet(): void {
-    if (this.currentState !== GameConfig.GAME_STATES.IDLE) return;
-    this.currentBetIndex = GameConfig.BET_STEPS.length - 1;
+    if (!this.isIdle()) return;
+    this.setBetByIndex(GameConfig.BET_STEPS.length - 1);
+  }
+
+  private setBetByIndex(index: number): void {
+    this.currentBetIndex = index;
     this.currentBet = GameConfig.BET_STEPS[this.currentBetIndex];
-    if (this.betLabel) this.betLabel.string = this.currentBet.toFixed(2);
+    if (this.betLabel) {
+      this.betLabel.string = this.currentBet.toFixed(2);
+    }
     this.savePlayerData();
   }
+
+  // ---------------------------------------------------------------------------
+  // Spin flow
+  // ---------------------------------------------------------------------------
 
   public startSpin(): void {
     const modalManager = ModalManager.getInstance();
@@ -213,7 +197,7 @@ export class GameManager extends Component {
       return;
     }
 
-    if (this.currentState !== GameConfig.GAME_STATES.IDLE) {
+    if (!this.isIdle()) {
       return;
     }
 
@@ -227,9 +211,7 @@ export class GameManager extends Component {
     this.updateUI();
     this.setState(GameConfig.GAME_STATES.SPINNING);
 
-    const slot = this.slotMachine?.isValid
-      ? this.slotMachine.getComponent(SlotMachine)
-      : null;
+    const slot = this.getSlotMachine();
     if (!slot) {
       this.setState(GameConfig.GAME_STATES.IDLE);
       return;
@@ -255,6 +237,10 @@ export class GameManager extends Component {
     if (!this.slotMachine?.isValid) return null;
     return this.slotMachine.getComponent(SlotMachine);
   }
+
+  // ---------------------------------------------------------------------------
+  // Win / Lose handling
+  // ---------------------------------------------------------------------------
 
   private handleWinResult(
     slot: SlotMachine,
@@ -310,6 +296,19 @@ export class GameManager extends Component {
     this.playCoinFlyEffect();
   }
 
+  private onLose(): void {
+    const audioManager = AudioManager.getInstance();
+    if (audioManager) {
+      audioManager.playSFX(`sounds/${GameConfig.SOUNDS.LOSE}`);
+    }
+    this.setState(GameConfig.GAME_STATES.IDLE);
+    this.continueAutoPlay();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Coin fly effect
+  // ---------------------------------------------------------------------------
+
   private getCoinEffectParent(): Node | null {
     const modalManager = ModalManager.getInstance();
     if (modalManager?.getOverlayContainer?.()) {
@@ -360,14 +359,9 @@ export class GameManager extends Component {
     });
   }
 
-  private onLose(): void {
-    const audioManager = AudioManager.getInstance();
-    if (audioManager) {
-      audioManager.playSFX(`sounds/${GameConfig.SOUNDS.LOSE}`);
-    }
-    this.setState(GameConfig.GAME_STATES.IDLE);
-    this.continueAutoPlay();
-  }
+  // ---------------------------------------------------------------------------
+  // Auto play
+  // ---------------------------------------------------------------------------
 
   private continueAutoPlay(): void {
     if (this.isAutoPlay) {
@@ -377,7 +371,7 @@ export class GameManager extends Component {
 
   public toggleAutoPlay(): void {
     this.isAutoPlay = !this.isAutoPlay;
-    if (this.isAutoPlay && this.currentState === GameConfig.GAME_STATES.IDLE) {
+    if (this.isAutoPlay && this.isIdle()) {
       this.startSpin();
     }
   }
@@ -385,6 +379,10 @@ export class GameManager extends Component {
   public isAutoPlayActive(): boolean {
     return this.isAutoPlay;
   }
+
+  // ---------------------------------------------------------------------------
+  // External helpers
+  // ---------------------------------------------------------------------------
 
   public addCoins(amount: number): void {
     if (amount <= 0) return;

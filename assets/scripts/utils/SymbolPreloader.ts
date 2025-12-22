@@ -1,0 +1,18 @@
+import { SpriteFrameCache } from "./SpriteFrameCache";
+import { SymbolData } from "../data/SymbolData";
+
+export class SymbolPreloader {
+  public static async preloadAll(): Promise<void> {
+    const cache = SpriteFrameCache.getInstance();
+    const spritePaths: string[] = [];
+
+    const allSymbols = SymbolData.getAllSymbols();
+    allSymbols.forEach((symbol) => {
+      spritePaths.push(`${symbol.spritePath}/spriteFrame`);
+    });
+
+    spritePaths.push("win/coin_icon/spriteFrame");
+
+    await cache.preloadSpriteFrames(spritePaths);
+  }
+}
