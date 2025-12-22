@@ -19,10 +19,10 @@ const { ccclass, property } = _decorator;
 @ccclass("SpinButtonController")
 export class SpinButtonController extends Component {
   @property
-  holdDuration: number = 1.0; // Giữ 1 giây để auto play
+  holdDuration: number = 1.0;
 
   @property
-  useStateSprites: boolean = true; // Mỗi trạng thái 1 hình (SpriteFrame)
+  useStateSprites: boolean = true;
 
   @property(Sprite)
   targetSprite: Sprite = null!;
@@ -40,7 +40,7 @@ export class SpinButtonController extends Component {
   disabledSprite: SpriteFrame = null!;
 
   @property
-  enableHover: boolean = true; // Hover chỉ hoạt động trên desktop/web
+  enableHover: boolean = true;
 
   @property
   hoverScale: number = 1.05;
@@ -49,7 +49,7 @@ export class SpinButtonController extends Component {
   disabledOpacity: number = 120;
 
   @property
-  hideWhenDisabled: boolean = false; // bật nếu muốn giữ behavior cũ (ẩn khi disabled)
+  hideWhenDisabled: boolean = false;
 
   @property
   enableBreathing: boolean = true;
@@ -67,8 +67,6 @@ export class SpinButtonController extends Component {
 
     this.button = this.node.getComponent(Button);
 
-    // If this node uses the built-in Button transition, it can override spriteFrame changes.
-    // When we use custom state sprites, disable Button's transition to avoid conflicts.
     if (
       this.useStateSprites &&
       this.button &&
@@ -76,13 +74,10 @@ export class SpinButtonController extends Component {
     ) {
       try {
         (this.button as any).transition = (Button as any).Transition?.NONE ?? 0;
-      } catch {
-        // ignore
-      }
+      } catch {}
     }
 
     if (!this.targetSprite) {
-      // Common setup: the Sprite is on a child node, so try children as well.
       const btnTarget: Node | null = (this.button as any)?.target?.isValid
         ? (this.button as any).target
         : null;
@@ -95,7 +90,6 @@ export class SpinButtonController extends Component {
         null!;
     }
 
-    // Register touch events
     this.node.on(Node.EventType.TOUCH_START, this.onTouchStart, this);
     this.node.on(Node.EventType.TOUCH_END, this.onTouchEnd, this);
     this.node.on(Node.EventType.TOUCH_CANCEL, this.onTouchCancel, this);
@@ -105,7 +99,6 @@ export class SpinButtonController extends Component {
       this.node.on(Node.EventType.MOUSE_LEAVE, this.onMouseLeave, this);
     }
 
-    // Start breathing animation
     this.updateVisualState();
     this.playBreathingAnimation();
   }
@@ -122,7 +115,6 @@ export class SpinButtonController extends Component {
     if (this.isHolding) {
       this.holdTime += dt;
 
-      // Scale button based on hold time
       const scale = 1 + (this.holdTime / this.holdDuration) * 0.1;
       this.node.setScale(
         this.originalScale.x * scale,
@@ -130,22 +122,17 @@ export class SpinButtonController extends Component {
         1
       );
 
-      // Check if held long enough for auto play (only activate once)
       if (this.holdTime >= this.holdDuration && !this.autoPlayActivated) {
         this.onAutoPlayActivated();
       }
     }
   }
 
-  /**
-   * On touch start
-   */
   private onTouchStart(event: EventTouch): void {
     if (!this.isEnabled) return;
     const gameManager = GameManager.getInstance();
     if (!gameManager) return;
 
-    // Check if can spin
     if (gameManager.getState() !== GameConfig.GAME_STATES.IDLE) {
       return;
     }
@@ -155,21 +142,16 @@ export class SpinButtonController extends Component {
     this.holdTime = 0;
     this.autoPlayActivated = false;
 
-    // Stop breathing animation
     Tween.stopAllByTarget(this.node);
     this.updateVisualState();
   }
 
-  /**
-   * On touch end (click)
-   */
   private onTouchEnd(event: EventTouch): void {
     if (!this.isHolding) return;
 
     const wasAutoPlayActivated = this.autoPlayActivated;
     this.resetHoldState();
 
-    // Normal spin only if held briefly and auto play wasn't activated
     if (this.holdTime < this.holdDuration && !wasAutoPlayActivated) {
       this.onSpinClick();
     }
@@ -178,9 +160,6 @@ export class SpinButtonController extends Component {
     if (this.isEnabled) this.playBreathingAnimation();
   }
 
-  /**
-   * On touch cancel
-   */
   private onTouchCancel(event: EventTouch): void {
     this.resetHoldState();
     this.updateVisualState();
@@ -240,25 +219,16 @@ export class SpinButtonController extends Component {
     if (frame) this.targetSprite.spriteFrame = frame;
   }
 
-  /**
-   * Reset hold state
-   */
   private resetHoldState(): void {
     this.isHolding = false;
     this.autoPlayActivated = false;
     this.node.setScale(this.originalScale);
   }
 
-  /**
-   * On spin click (normal spin)
-   */
   private onSpinClick(): void {
     GameManager.getInstance()?.startSpin();
   }
 
-  /**
-   * On auto play activated
-   */
   private onAutoPlayActivated(): void {
     if (this.autoPlayActivated) return;
     this.autoPlayActivated = true;
@@ -277,9 +247,6 @@ export class SpinButtonController extends Component {
     console.log("[SpinButton] Auto play activated");
   }
 
-  /**
-   * Breathing animation (idle state)
-   */
   private playBreathingAnimation(): void {
     if (!this.isEnabled || this.isHolding || this.isHovering) return;
     if (!this.enableBreathing) return;
@@ -304,14 +271,9 @@ export class SpinButtonController extends Component {
       .start();
   }
 
-  /**
-   * Enable/disable button
-   */
   public setEnabled(enabled: boolean): void {
     this.isEnabled = enabled;
 
-    // If this node also has a Cocos Button component, keep its interactable in sync.
-    // Otherwise the Button's internal state may override spriteFrame changes.
     if (this.button && this.button.isValid) {
       this.button.interactable = enabled;
     }
@@ -323,7 +285,6 @@ export class SpinButtonController extends Component {
       this.node.active = true;
     }
 
-    // Visual feedback: mờ khi disabled
     const opacity = enabled ? 255 : this.disabledOpacity;
     const uiOpacity =
       this.node.getComponent(UIOpacity) ?? this.node.addComponent(UIOpacity);

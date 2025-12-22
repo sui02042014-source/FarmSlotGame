@@ -192,12 +192,9 @@ export class SlotMachine extends Component {
   }
 }
 
-/**
- * Win Line interface - Simplified
- */
 export interface WinLine {
-  symbol: string; // Winning symbol
-  count: number; // Number of matching symbols
-  positions: { col: number; row: number }[]; // Vị trí các symbols thắng
-  win: number; // Win amount
+  symbol: string;
+  count: number;
+  positions: { col: number; row: number }[];
+  win: number;
 }

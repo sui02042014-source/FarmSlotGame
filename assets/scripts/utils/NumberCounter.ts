@@ -22,9 +22,6 @@ export class NumberCounter extends Component {
   private targetValue: number = 0;
   private isAnimating: boolean = false;
 
-  /**
-   * Count from current to target value
-   */
   public countTo(target: number, duration?: number): Promise<void> {
     return new Promise((resolve) => {
       this.targetValue = target;
@@ -60,9 +57,6 @@ export class NumberCounter extends Component {
     });
   }
 
-  /**
-   * Set value immediately (no animation)
-   */
   public setValue(value: number): void {
     if (this.isAnimating) {
       Tween.stopAllByTarget(this);
@@ -74,9 +68,6 @@ export class NumberCounter extends Component {
     this.updateLabel();
   }
 
-  /**
-   * Update label text
-   */
   private updateLabel(): void {
     if (!this.label) return;
 
@@ -84,30 +75,18 @@ export class NumberCounter extends Component {
     this.label.string = `${this.prefix}${formatted}${this.suffix}`;
   }
 
-  /**
-   * Format number với decimal places
-   */
   private formatNumber(value: number): string {
     return value.toFixed(this.decimalPlaces);
   }
 
-  /**
-   * Get current value
-   */
   public getCurrentValue(): number {
     return this.currentValue;
   }
 
-  /**
-   * Add value (animate)
-   */
   public addValue(amount: number, duration?: number): Promise<void> {
     return this.countTo(this.currentValue + amount, duration);
   }
 
-  /**
-   * Subtract value (animate)
-   */
   public subtractValue(amount: number, duration?: number): Promise<void> {
     return this.countTo(this.currentValue - amount, duration);
   }

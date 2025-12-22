@@ -28,7 +28,6 @@ export class WinModal extends BaseModal {
   protected onLoad(): void {
     super.onLoad();
 
-    // Setup number counter for animated counting
     if (this.winAmountLabel) {
       this.numberCounter = this.winAmountLabel.node.getComponent(NumberCounter);
       if (!this.numberCounter) {
@@ -53,35 +52,26 @@ export class WinModal extends BaseModal {
   protected onAfterShow(): void {
     super.onAfterShow();
 
-    // Animate win amount counting up
     if (this.numberCounter) {
       this.numberCounter.setValue(0);
       this.numberCounter.countTo(this.winAmount, 1.5);
     }
 
-    // Pulse animation on win amount
     if (this.winAmountLabel) {
       this.playPulseAnimation(this.winAmountLabel.node);
     }
 
-    // Coin burst + fly into TopBar coin amount
     this.playCoinBurstToTopBar();
 
-    // Tự động đóng modal sau vài giây (và sẽ được unschedule khi modal đóng sớm)
     this.scheduleOnce(this.autoCloseCb, this.autoCloseDelaySec);
   }
 
   protected onBeforeHide(): void {
-    // Nếu user đóng sớm, hủy auto-close để tránh gọi hide() lần 2
     this.unschedule(this.autoCloseCb);
     super.onBeforeHide();
   }
 
-  /**
-   * Update UI with win data
-   */
   private updateUI(): void {
-    // Set title based on win multiplier
     if (this.titleLabel) {
       if (this.winMultiplier >= 20) {
         this.titleLabel.string = "MEGA WIN!";
@@ -94,20 +84,15 @@ export class WinModal extends BaseModal {
       }
     }
 
-    // Set win multiplier
     if (this.winMultiplierLabel) {
       this.winMultiplierLabel.string = `${this.winMultiplier.toFixed(1)}x`;
     }
 
-    // Win amount will be animated by NumberCounter
     if (this.winAmountLabel && !this.numberCounter) {
       this.winAmountLabel.string = this.winAmount.toFixed(2);
     }
   }
 
-  /**
-   * Play pulse animation
-   */
   private playPulseAnimation(node: any): void {
     const originalScale = node.scale.clone();
     const pulseScale = new Vec3(1.2, 1.2, 1);
@@ -120,9 +105,6 @@ export class WinModal extends BaseModal {
       .start();
   }
 
-  /**
-   * Called when Collect button is clicked
-   */
   public onCollectButtonClick(): void {
     this.hide();
   }
@@ -157,7 +139,6 @@ export class WinModal extends BaseModal {
       coinScale: 0.75,
       spriteFramePath: "win/coin_icon/spriteFrame",
       onAllArrive: () => {
-        // Small "impact" pulse on the coin label when coins arrive
         const s0 = target.scale.clone();
         tween(target)
           .to(0.08, { scale: new Vec3(s0.x * 1.12, s0.y * 1.12, 1) })

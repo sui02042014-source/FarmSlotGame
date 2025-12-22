@@ -18,6 +18,7 @@ export class ReelContainer extends Component {
 
   private readonly symbolSpacing =
     GameConfig.SYMBOL_SIZE + GameConfig.SYMBOL_SPACING;
+
   private readonly symbolSize = new Size(
     GameConfig.SYMBOL_SIZE,
     GameConfig.SYMBOL_SIZE
@@ -31,7 +32,6 @@ export class ReelContainer extends Component {
     string,
     Promise<SpriteFrame | null>
   >();
-  private readonly debugLogs: boolean = false;
 
   protected onDestroy(): void {
     this.symbolNodes.forEach((node) => {
@@ -51,6 +51,7 @@ export class ReelContainer extends Component {
     this.symbolNodes = [];
 
     const allSymbols = SymbolData.getAllSymbols();
+
     for (let i = allSymbols.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [allSymbols[i], allSymbols[j]] = [allSymbols[j], allSymbols[i]];
@@ -59,16 +60,21 @@ export class ReelContainer extends Component {
     const centerIndex = Math.floor(allSymbols.length / 2);
     this.symbolNodes = allSymbols.map((symbol, index) => {
       const node = new Node(`${ReelContainer.SYMBOL_NAME_PREFIX}${symbol.id}`);
+
       const uiTransform = node.addComponent(UITransform);
       uiTransform.setContentSize(this.symbolSize);
       uiTransform.setAnchorPoint(0.5, 0.5);
+
       const sprite = node.addComponent(Sprite);
       sprite.sizeMode = Sprite.SizeMode.CUSTOM;
       node.name = `${ReelContainer.SYMBOL_NAME_PREFIX}${symbol.id}`;
+
       this.loadSpriteFrame(node, symbol.id);
+
       node.setParent(this.node);
       const yPosition = (centerIndex - index) * this.symbolSpacing;
       node.setPosition(node.position.x, yPosition, node.position.z);
+
       return node;
     });
 

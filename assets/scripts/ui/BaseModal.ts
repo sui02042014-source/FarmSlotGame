@@ -1,36 +1,35 @@
 import {
   _decorator,
+  Button,
   Component,
   Node,
-  UIOpacity,
   tween,
+  UIOpacity,
   Vec3,
-  Button,
-  UITransform,
 } from "cc";
 const { ccclass, property } = _decorator;
 
 @ccclass("BaseModal")
 export class BaseModal extends Component {
   @property(Node)
-  background: Node = null!; // Background overlay (dimmed)
+  background: Node = null!;
 
   @property(Node)
-  modalContent: Node = null!; // Modal content container
+  modalContent: Node = null!;
 
   @property(Node)
-  closeButton: Node = null!; // Close button (X)
+  closeButton: Node = null!;
 
   @property
-  enableBackgroundClose: boolean = true; // Click background to close
+  enableBackgroundClose: boolean = true;
 
   @property
-  animationDuration: number = 0.3; // Animation duration
+  animationDuration: number = 0.3;
 
   @property
-  enableAnimation: boolean = true; // Enable show/hide animation
+  enableAnimation: boolean = true;
 
-  protected modalData: any = {}; // Data passed to modal
+  protected modalData: any = {};
   protected closeCallback: (() => void) | null = null;
   private readonly debugLogs: boolean = false;
   private isClosing: boolean = false;
@@ -38,7 +37,6 @@ export class BaseModal extends Component {
   private boundBackground: boolean = false;
 
   protected onLoad(): void {
-    // Setup close button
     if (this.closeButton) {
       const button = this.closeButton.getComponent(Button);
       if (button) {
@@ -51,7 +49,6 @@ export class BaseModal extends Component {
       }
     }
 
-    // Setup background click to close
     if (this.background && this.enableBackgroundClose) {
       const button = this.background.getComponent(Button);
       if (!button) {
@@ -61,12 +58,10 @@ export class BaseModal extends Component {
       this.boundBackground = true;
     }
 
-    // Initial state - hidden
     this.node.active = false;
   }
 
   protected onDestroy(): void {
-    // Defensive: during node destruction, event processor may already be disposed.
     try {
       if (this.boundCloseBtn && this.closeButton?.isValid) {
         this.closeButton.off(
@@ -75,9 +70,7 @@ export class BaseModal extends Component {
           this
         );
       }
-    } catch (e) {
-      // ignore
-    }
+    } catch (e) {}
 
     try {
       if (this.boundBackground && this.background?.isValid) {
@@ -87,22 +80,14 @@ export class BaseModal extends Component {
           this
         );
       }
-    } catch (e) {
-      // ignore
-    }
+    } catch (e) {}
   }
 
-  /**
-   * Set modal data
-   */
   public setData(data: any): void {
     this.modalData = data;
     this.onDataSet(data);
   }
 
-  /**
-   * Show modal
-   */
   public show(closeCallback?: () => void): void {
     if (closeCallback) {
       this.closeCallback = closeCallback;
@@ -124,14 +109,10 @@ export class BaseModal extends Component {
       console.log(`[BaseModal] Showing modal: ${this.node.name}`);
   }
 
-  /**
-   * Hide modal
-   */
   public hide(): void {
     if (this.isClosing) return;
     this.isClosing = true;
 
-    // Prevent scheduled callbacks (e.g. WinModal auto-close) from firing again.
     this.unscheduleAllCallbacks();
 
     this.onBeforeHide();
@@ -158,11 +139,7 @@ export class BaseModal extends Component {
       console.log(`[BaseModal] Hiding modal: ${this.node.name}`);
   }
 
-  /**
-   * Play show animation
-   */
   protected playShowAnimation(callback?: () => void): void {
-    // Fade in background
     if (this.background) {
       const bgOpacity = this.background.getComponent(UIOpacity);
       if (!bgOpacity) {
@@ -174,7 +151,6 @@ export class BaseModal extends Component {
       tween(opacity).to(this.animationDuration, { opacity: 200 }).start();
     }
 
-    // Scale up modal content
     if (this.modalContent) {
       this.modalContent.setScale(new Vec3(0.5, 0.5, 1));
 
@@ -193,11 +169,7 @@ export class BaseModal extends Component {
     }
   }
 
-  /**
-   * Play hide animation
-   */
   protected playHideAnimation(callback?: () => void): void {
-    // Fade out background
     if (this.background) {
       const opacity = this.background.getComponent(UIOpacity);
       if (opacity) {
@@ -207,7 +179,6 @@ export class BaseModal extends Component {
       }
     }
 
-    // Scale down modal content
     if (this.modalContent) {
       tween(this.modalContent)
         .to(
@@ -224,40 +195,23 @@ export class BaseModal extends Component {
     }
   }
 
-  /**
-   * Called when close button is clicked
-   */
   protected onCloseButtonClick(): void {
     this.hide();
   }
 
-  /**
-   * Called when background is clicked
-   */
   protected onBackgroundClick(): void {
     if (this.enableBackgroundClose) {
       this.hide();
     }
   }
 
-  // Lifecycle hooks for derived classes
-  protected onDataSet(data: any): void {
-    // Override in derived classes
-  }
+  protected onDataSet(data: any): void {}
 
-  protected onBeforeShow(): void {
-    // Override in derived classes
-  }
+  protected onBeforeShow(): void {}
 
-  protected onAfterShow(): void {
-    // Override in derived classes
-  }
+  protected onAfterShow(): void {}
 
-  protected onBeforeHide(): void {
-    // Override in derived classes
-  }
+  protected onBeforeHide(): void {}
 
-  protected onAfterHide(): void {
-    // Override in derived classes
-  }
+  protected onAfterHide(): void {}
 }

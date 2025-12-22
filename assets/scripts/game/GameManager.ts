@@ -5,6 +5,7 @@ import { NumberCounter } from "../utils/NumberCounter";
 import { AudioManager } from "../utils/AudioManager";
 import { SpinButtonController } from "../ui/SpinButtonController";
 import { ModalManager } from "../ui/ModalManager";
+import { CoinFlyEffect } from "../utils/CoinFlyEffect";
 const { ccclass, property } = _decorator;
 
 @ccclass("GameManager")
@@ -256,12 +257,42 @@ export class GameManager extends Component {
     this.updateUI();
     this.savePlayerData();
 
-    if (amount > 0) {
-      ModalManager.getInstance()?.showWinModal(amount, this.currentBet);
-    }
+    this.playCoinFlyEffect();
 
     this.setState(GameConfig.GAME_STATES.IDLE);
     this.continueAutoPlay();
+  }
+
+  private playCoinFlyEffect(): void {
+    let parent: Node | null =
+      this.coinIconNode?.parent ??
+      this.coinLabel?.node?.parent ??
+      this.node.scene?.getChildByName("Canvas") ??
+      this.node.parent ??
+      this.node;
+
+    const from = this.winLabelNode ?? this.winLabel?.node ?? this.node;
+    const target = this.coinIconNode?.isValid
+      ? this.coinIconNode
+      : this.coinLabel?.node;
+
+    if (!parent?.isValid || !from?.isValid || !target?.isValid) {
+      return;
+    }
+
+    CoinFlyEffect.play({
+      parent,
+      fromNode: from,
+      toNode: target,
+      coinCount: 22,
+      scatterRadius: 220,
+      scatterDuration: 0.22,
+      flyDuration: 0.65,
+      stagger: 0.02,
+      coinSize: 42,
+      coinScale: 0.75,
+      spriteFramePath: "win/coin_icon/spriteFrame",
+    });
   }
 
   private onLose(): void {

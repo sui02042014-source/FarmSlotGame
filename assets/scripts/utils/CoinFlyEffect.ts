@@ -11,29 +11,17 @@ import {
 } from "cc";
 
 export type CoinFlyEffectOptions = {
-  /** Parent node where spawned coin nodes will live (usually Canvas or ModalContainer) */
   parent: Node;
-  /** Start node (coins burst out from here) */
   fromNode: Node;
-  /** Target node (coins fly into here) */
   toNode: Node;
-  /** How many coins to spawn */
   coinCount?: number;
-  /** Scatter radius in pixels */
   scatterRadius?: number;
-  /** Scatter duration in seconds */
   scatterDuration?: number;
-  /** Fly-to-target duration in seconds */
   flyDuration?: number;
-  /** Stagger between coins in seconds */
   stagger?: number;
-  /** Coin visual size (UITransform) */
   coinSize?: number;
-  /** Coin scale */
   coinScale?: number;
-  /** Resource path to spriteFrame (default: win/coin_icon/spriteFrame) */
   spriteFramePath?: string;
-  /** Called when all coins reached the target */
   onAllArrive?: () => void;
 };
 
@@ -44,14 +32,12 @@ export class CoinFlyEffect {
   private static getWorldPos(node: Node): Vec3 {
     const ui = node.getComponent(UITransform);
     if (ui) return ui.convertToWorldSpaceAR(Vec3.ZERO);
-    // Fallback
     return node.worldPosition.clone();
   }
 
   private static worldToLocal(parent: Node, world: Vec3): Vec3 {
     const ui = parent.getComponent(UITransform);
     if (ui) return ui.convertToNodeSpaceAR(world);
-    // Fallback: if no UITransform, use parent's inverse transform (approx)
     return parent.inverseTransformPoint(new Vec3(), world);
   }
 

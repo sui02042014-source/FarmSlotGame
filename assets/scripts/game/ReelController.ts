@@ -46,11 +46,6 @@ export class ReelController extends Component {
 
   private ensureReelContainer(): void {
     if (this.reelContainer) return;
-    if (!this.reelContainerNode?.isValid) {
-      throw new Error(
-        "[ReelController] reelContainerNode is not assigned/valid"
-      );
-    }
     this.reelContainer =
       this.reelContainerNode.getComponent(ReelContainer) ||
       this.reelContainerNode.addComponent(ReelContainer);
@@ -108,6 +103,11 @@ export class ReelController extends Component {
     });
   }
 
+  private beginSpin(): void {
+    this.isStartScheduled = false;
+    this.isSpinning = true;
+  }
+
   public spin(targetSymbols: string[], delay: number = 0): void {
     this.ensureReelContainer();
     if (this.isSpinning || this.isStartScheduled) return;
@@ -118,17 +118,10 @@ export class ReelController extends Component {
       Math.random() * (GameConfig.SPIN_SPEED_MAX - GameConfig.SPIN_SPEED_MIN);
 
     if (delay > 0) {
-      this.unschedule(() => {
-        this.isStartScheduled = false;
-        this.isSpinning = true;
-      });
       this.isStartScheduled = true;
-      this.scheduleOnce(() => {
-        this.isStartScheduled = false;
-        this.isSpinning = true;
-      }, delay);
+      this.scheduleOnce(() => this.beginSpin(), delay);
     } else {
-      this.isSpinning = true;
+      this.beginSpin();
     }
   }
 
