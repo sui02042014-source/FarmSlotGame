@@ -2,25 +2,10 @@ import { _decorator, Component, Node } from "cc";
 import { GameConfig } from "../data/GameConfig";
 import { ReelController } from "./ReelController";
 import { GameManager } from "./GameManager";
+import { SlotLogic, WinLine, SpinResult } from "../logic/SlotLogic";
 const { ccclass, property } = _decorator;
 
-/**
- * Win line direction vectors for pattern matching
- */
-interface WinDirection {
-  colDelta: number;
-  rowDelta: number;
-}
-
-/**
- * Represents a winning line on the slot machine
- */
-export interface WinLine {
-  symbol: string;
-  count: number;
-  positions: { col: number; row: number }[];
-  win: number;
-}
+export type { WinLine };
 
 @ccclass("SlotMachine")
 export class SlotMachine extends Component {
@@ -30,15 +15,8 @@ export class SlotMachine extends Component {
   private reelControllers: Array<ReelController | null> = [];
   private isSpinning: boolean = false;
   private currentSymbols: string[][] = [];
+  private pendingSpinResult: SpinResult | null = null;
   private readonly debugLogs: boolean = false;
-
-  private static readonly MIN_WIN_LENGTH = 3;
-  private static readonly WIN_DIRECTIONS: WinDirection[] = [
-    { colDelta: 1, rowDelta: 0 }, // Horizontal
-    { colDelta: 0, rowDelta: 1 }, // Vertical
-    { colDelta: 1, rowDelta: 1 }, // Diagonal down-right
-    { colDelta: 1, rowDelta: -1 }, // Diagonal up-right
-  ];
 
   // ---------------------------------------------------------------------------
   // Lifecycle
@@ -96,53 +74,19 @@ export class SlotMachine extends Component {
     this.isSpinning = true;
     this.unschedule(() => void this.stopSpin());
 
-    const targetSymbols = this.generateTargetSymbols();
+    const bet = GameManager.getInstance()?.getCurrentBet() || 1;
+    this.pendingSpinResult = SlotLogic.calculateSpinResult(
+      this.getReelCount(),
+      GameConfig.SYMBOL_PER_REEL,
+      bet
+    );
+
+    const targetSymbols = this.pendingSpinResult.symbolGrid;
     this.startReelSpins(targetSymbols);
     this.currentSymbols = targetSymbols;
 
     this.scheduleOnce(() => void this.stopSpin(), GameConfig.SPIN_DURATION);
     if (this.debugLogs) console.log("[SlotMachine] Spin started");
-  }
-
-  private generateTargetSymbols(): string[][] {
-    const cols = this.getReelCount();
-    const targetSymbols: string[][] = [];
-
-    for (let col = 0; col < cols; col++) {
-      const reelSymbols = this.generateReelSymbols();
-      targetSymbols.push(reelSymbols);
-    }
-
-    return targetSymbols;
-  }
-
-  private generateReelSymbols(): string[] {
-    const weights = GameConfig.SYMBOL_WEIGHTS;
-    const symbols = Object.keys(weights);
-    const totalWeight = Object.values(weights).reduce((a, b) => a + b, 0);
-    const reelSymbols: string[] = [];
-
-    for (let row = 0; row < GameConfig.SYMBOL_PER_REEL; row++) {
-      const symbol = this.selectWeightedSymbol(symbols, weights, totalWeight);
-      reelSymbols.push(symbol);
-    }
-
-    return reelSymbols;
-  }
-
-  private selectWeightedSymbol(
-    symbols: string[],
-    weights: Record<string, number>,
-    totalWeight: number
-  ): string {
-    let random = Math.random() * totalWeight;
-    for (const symbol of symbols) {
-      random -= weights[symbol];
-      if (random <= 0) {
-        return symbol;
-      }
-    }
-    return symbols[0];
   }
 
   private startReelSpins(targetSymbols: string[][]): void {
@@ -158,6 +102,9 @@ export class SlotMachine extends Component {
     this.isSpinning = false;
 
     this.currentSymbols = this.buildSymbolGrid();
+    if (this.pendingSpinResult) {
+      this.pendingSpinResult.symbolGrid = this.currentSymbols;
+    }
     GameManager.getInstance()?.onSpinComplete();
   }
 
@@ -205,153 +152,15 @@ export class SlotMachine extends Component {
   // ---------------------------------------------------------------------------
 
   public checkWin(): { totalWin: number; winLines: WinLine[] } {
-    const winLines: WinLine[] = [];
-    const cols = this.getReelCount();
-    const rows = GameConfig.SYMBOL_PER_REEL;
-
-    for (let col = 0; col < cols; col++) {
-      for (let row = 0; row < rows; row++) {
-        const lines = this.checkWinFromPosition(col, row, cols, rows);
-        winLines.push(...lines);
-      }
-    }
-
-    const totalWin = winLines.reduce((sum, line) => sum + line.win, 0);
-    return { totalWin, winLines };
-  }
-
-  private checkWinFromPosition(
-    startCol: number,
-    startRow: number,
-    maxCols: number,
-    maxRows: number
-  ): WinLine[] {
-    const winLines: WinLine[] = [];
-
-    for (const direction of SlotMachine.WIN_DIRECTIONS) {
-      const line = this.checkWinInDirection(
-        startCol,
-        startRow,
-        direction,
-        maxCols,
-        maxRows
-      );
-      if (line) {
-        winLines.push(line);
-      }
-    }
-
-    return winLines;
-  }
-
-  private checkWinInDirection(
-    startCol: number,
-    startRow: number,
-    direction: WinDirection,
-    maxCols: number,
-    maxRows: number
-  ): WinLine | null {
-    const { colDelta, rowDelta } = direction;
-    const endCol = startCol + (SlotMachine.MIN_WIN_LENGTH - 1) * colDelta;
-    const endRow = startRow + (SlotMachine.MIN_WIN_LENGTH - 1) * rowDelta;
-
-    if (endCol < 0 || endCol >= maxCols || endRow < 0 || endRow >= maxRows) {
-      return null;
-    }
-
-    const symbols = this.getSymbolsInLine(
-      startCol,
-      startRow,
-      direction,
-      SlotMachine.MIN_WIN_LENGTH
-    );
-
-    if (!this.isValidWinLine(symbols)) {
-      return null;
-    }
-
-    const win = this.calculateWin(symbols[0]);
-    if (win <= 0) {
-      return null;
-    }
-
-    return this.createWinLine(
-      symbols[0],
-      startCol,
-      startRow,
-      direction,
-      SlotMachine.MIN_WIN_LENGTH,
-      win
-    );
-  }
-
-  private getSymbolsInLine(
-    startCol: number,
-    startRow: number,
-    direction: WinDirection,
-    length: number
-  ): string[] {
-    const symbols: string[] = [];
-    const { colDelta, rowDelta } = direction;
-
-    for (let i = 0; i < length; i++) {
-      const col = startCol + i * colDelta;
-      const row = startRow + i * rowDelta;
-      const symbol = this.currentSymbols[col]?.[row] ?? "";
-      symbols.push(symbol);
-    }
-
-    return symbols;
-  }
-
-  private isValidWinLine(symbols: string[]): boolean {
-    if (symbols.length < SlotMachine.MIN_WIN_LENGTH) {
-      return false;
-    }
-
-    const firstSymbol = symbols[0];
-    if (!firstSymbol) {
-      return false;
-    }
-
-    return symbols.every((symbol) => symbol === firstSymbol);
-  }
-
-  private calculateWin(symbol: string): number {
-    const paytable = GameConfig.PAYTABLE[symbol];
-    if (!paytable) {
-      return 0;
+    if (this.pendingSpinResult) {
+      return {
+        totalWin: this.pendingSpinResult.totalWin,
+        winLines: this.pendingSpinResult.winLines,
+      };
     }
 
     const bet = GameManager.getInstance()?.getCurrentBet() || 1;
-    const multiplier = paytable[SlotMachine.MIN_WIN_LENGTH];
-    return multiplier ? multiplier * bet : 0;
-  }
-
-  private createWinLine(
-    symbol: string,
-    startCol: number,
-    startRow: number,
-    direction: WinDirection,
-    length: number,
-    win: number
-  ): WinLine {
-    const positions: { col: number; row: number }[] = [];
-    const { colDelta, rowDelta } = direction;
-
-    for (let i = 0; i < length; i++) {
-      positions.push({
-        col: startCol + i * colDelta,
-        row: startRow + i * rowDelta,
-      });
-    }
-
-    return {
-      symbol,
-      count: length,
-      positions,
-      win,
-    };
+    return SlotLogic.checkWin(this.currentSymbols, bet);
   }
 
   // ---------------------------------------------------------------------------

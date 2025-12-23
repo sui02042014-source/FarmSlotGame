@@ -1,4 +1,5 @@
 import { SpriteFrame, resources } from "cc";
+import { AssetBundleManager } from "./AssetBundleManager";
 
 export class SpriteFrameCache {
   private static instance: SpriteFrameCache | null = null;
@@ -12,6 +13,36 @@ export class SpriteFrameCache {
       SpriteFrameCache.instance = new SpriteFrameCache();
     }
     return SpriteFrameCache.instance;
+  }
+
+  public async getSpriteFrameFromBundle(
+    bundleName: string,
+    path: string
+  ): Promise<SpriteFrame | null> {
+    const cached = this.cache.get(`${bundleName}:${path}`);
+    if (cached) return cached;
+
+    const existing = this.loading.get(`${bundleName}:${path}`);
+    if (existing) return existing;
+
+    const loader = new Promise<SpriteFrame | null>(async (resolve) => {
+      const manager = AssetBundleManager.getInstance();
+      const sf = await manager.load(bundleName, path, SpriteFrame);
+      if (!sf) {
+        resolve(null);
+        return;
+      }
+      this.cache.set(`${bundleName}:${path}`, sf);
+      resolve(sf);
+    });
+
+    this.loading.set(`${bundleName}:${path}`, loader);
+    loader.then(
+      () => this.loading.delete(`${bundleName}:${path}`),
+      () => this.loading.delete(`${bundleName}:${path}`)
+    );
+
+    return loader;
   }
 
   public async getSpriteFrame(path: string): Promise<SpriteFrame | null> {

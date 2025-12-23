@@ -1,21 +1,27 @@
-import { _decorator, Component, Node, tween, Tween, Vec3 } from "cc";
+import { _decorator, Component, Node, tween, Tween, Vec3, Sprite } from "cc";
 import { GameConfig } from "../data/GameConfig";
 import { ReelContainer } from "./ReelContainer";
-
+import { SpriteFrameCache } from "../utils/SpriteFrameCache";
+import { SymbolData } from "../data/SymbolData";
 const { ccclass, property } = _decorator;
 
 @ccclass("ReelController")
 export class ReelController extends Component {
   @property(Node) reelContainerNode: Node = null!;
 
+  private static readonly SYMBOL_NAME_PREFIX = "Symbol_";
+
   private reelContainer: ReelContainer = null!;
   private readonly symbolSpacing: number =
     GameConfig.SYMBOL_SIZE + GameConfig.SYMBOL_SPACING;
+  private readonly spriteFrameCache = SpriteFrameCache.getInstance();
 
   private isSpinning = false;
   private isStartScheduled = false;
   private spinSpeed = 0;
   private targetSymbols: string[] = [];
+
+  // ==================== Lifecycle ====================
 
   protected start(): void {
     this.ensureReelContainer();
@@ -26,6 +32,8 @@ export class ReelController extends Component {
     if (!this.isSpinning || !this.reelContainer) return;
     this.updateReelPositions(dt);
   }
+
+  // ==================== Public API ====================
 
   public spin(targetSymbols: string[], delay: number = 0): void {
     this.ensureReelContainer();
@@ -54,25 +62,36 @@ export class ReelController extends Component {
 
     if (this.targetSymbols?.length) {
       this.ensureReelContainer();
-      this.reelContainer.setVisibleSymbols(this.targetSymbols);
+      this.updateVisibleSymbols(this.targetSymbols);
     }
 
     await this.snapToGrid();
   }
 
   public getVisibleSymbols(): string[] {
-    this.ensureReelContainer();
-    return this.reelContainer.getVisibleSymbols();
+    const visibleNodes = this.getVisibleSymbolNodes();
+    if (!visibleNodes.length) return [];
+
+    return visibleNodes
+      .map((node) => this.extractSymbolIdFromNode(node))
+      .filter((id) => id !== "");
+  }
+
+  public getVisibleSymbolNodes(): Node[] {
+    const validNodes = this.getValidSymbolNodes();
+    if (!validNodes.length) return [];
+
+    const targetPositions = this.calculateVisiblePositions();
+    const selectedNodes = this.selectClosestNodes(validNodes, targetPositions);
+
+    return selectedNodes.sort((a, b) => b.position.y - a.position.y);
   }
 
   public highlightWinSymbols(rows: number[]): void {
-    this.ensureReelContainer();
-    const visibleNodes = this.reelContainer.getVisibleSymbolNodes();
+    const visibleNodes = this.getVisibleSymbolNodes();
 
     rows.forEach((row) => {
-      if (row < 0 || row >= visibleNodes.length) {
-        return;
-      }
+      if (row < 0 || row >= visibleNodes.length) return;
 
       const node = visibleNodes[row];
       if (!node?.isValid) return;
@@ -106,16 +125,7 @@ export class ReelController extends Component {
     }
   }
 
-  private ensureReelContainer(): void {
-    if (this.reelContainer) return;
-    this.reelContainer =
-      this.reelContainerNode.getComponent(ReelContainer) ||
-      this.reelContainerNode.addComponent(ReelContainer);
-  }
-
-  private getNodes(): Node[] {
-    return this.reelContainer?.getSymbolNodes().filter((n) => n?.isValid) || [];
-  }
+  // ==================== Spin Logic ====================
 
   private beginSpin(): void {
     this.isStartScheduled = false;
@@ -157,6 +167,55 @@ export class ReelController extends Component {
         node.setPosition(node.position.x, maxY, node.position.z);
       }
     });
+  }
+
+  // ==================== Stop Logic ====================
+
+  private updateVisibleSymbols(symbols: string[]): void {
+    const visibleNodes = this.getVisibleSymbolNodes();
+    if (!visibleNodes.length || !symbols.length) return;
+
+    const updateCount = Math.min(symbols.length, visibleNodes.length);
+
+    for (let i = 0; i < updateCount; i++) {
+      const node = visibleNodes[i];
+      const symbolId = symbols[i];
+
+      if (node?.isValid && symbolId) {
+        this.updateNodeSymbol(node, symbolId);
+      }
+    }
+  }
+
+  private updateNodeSymbol(node: Node, symbolId: string): void {
+    node.name = `${ReelController.SYMBOL_NAME_PREFIX}${symbolId}`;
+    this.loadSpriteFrame(node, symbolId);
+  }
+
+  private async loadSpriteFrame(node: Node, symbolId: string): Promise<void> {
+    const sprite = node.getComponent(Sprite);
+    const symbolData = SymbolData.getSymbol(symbolId);
+
+    if (!sprite || !symbolData) {
+      console.warn(
+        `Failed to load sprite for symbol ${symbolId}: missing sprite or symbol data`
+      );
+      return;
+    }
+
+    try {
+      const path = `${symbolData.spritePath}/spriteFrame`;
+      const spriteFrame = await this.spriteFrameCache.getSpriteFrameFromBundle(
+        "symbols",
+        path
+      );
+
+      if (spriteFrame && node?.isValid && sprite?.isValid) {
+        sprite.spriteFrame = spriteFrame;
+      }
+    } catch (error) {
+      console.error(`Error loading sprite frame for ${symbolId}:`, error);
+    }
   }
 
   private snapToGrid(animate: boolean = true): Promise<void> {
@@ -209,5 +268,73 @@ export class ReelController extends Component {
           .start();
       });
     });
+  }
+
+  // ==================== Helper Methods ====================
+
+  private ensureReelContainer(): void {
+    if (this.reelContainer) return;
+    this.reelContainer =
+      this.reelContainerNode.getComponent(ReelContainer) ||
+      this.reelContainerNode.addComponent(ReelContainer);
+  }
+
+  private getNodes(): Node[] {
+    return this.reelContainer?.getSymbolNodes().filter((n) => n?.isValid) || [];
+  }
+
+  private getValidSymbolNodes(): Node[] {
+    return (
+      this.reelContainer?.getSymbolNodes().filter((node) => node?.isValid) || []
+    );
+  }
+
+  private calculateVisiblePositions(): number[] {
+    const visibleCount = GameConfig.SYMBOL_PER_REEL;
+    const half = (visibleCount - 1) / 2;
+    const positions: number[] = [];
+
+    for (let row = 0; row < visibleCount; row++) {
+      positions.push((half - row) * this.symbolSpacing);
+    }
+
+    return positions;
+  }
+
+  private selectClosestNodes(nodes: Node[], targetPositions: number[]): Node[] {
+    const remaining = [...nodes];
+    const selected: Node[] = [];
+
+    for (const targetY of targetPositions) {
+      if (remaining.length === 0) break;
+
+      const closestIndex = this.findClosestNodeIndex(remaining, targetY);
+      selected.push(remaining.splice(closestIndex, 1)[0]);
+    }
+
+    return selected;
+  }
+
+  private findClosestNodeIndex(nodes: Node[], targetY: number): number {
+    let closestIndex = 0;
+    let minDistance = Math.abs(nodes[0].position.y - targetY);
+
+    for (let i = 1; i < nodes.length; i++) {
+      const distance = Math.abs(nodes[i].position.y - targetY);
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestIndex = i;
+      }
+    }
+
+    return closestIndex;
+  }
+
+  private extractSymbolIdFromNode(node: Node): string {
+    const name = node.name;
+    if (!name.startsWith(ReelController.SYMBOL_NAME_PREFIX)) {
+      return "";
+    }
+    return name.slice(ReelController.SYMBOL_NAME_PREFIX.length);
   }
 }

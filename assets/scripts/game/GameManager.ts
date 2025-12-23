@@ -2,11 +2,11 @@ import { _decorator, Component, Label, Node } from "cc";
 import { GameConfig, GameState } from "../data/GameConfig";
 import { ModalManager } from "../ui/ModalManager";
 import { SpinButtonController } from "../ui/SpinButtonController";
+import { AssetBundleManager } from "../utils/AssetBundleManager";
 import { AudioManager } from "../utils/AudioManager";
 import { CoinFlyEffect } from "../utils/CoinFlyEffect";
 import { NumberCounter } from "../utils/NumberCounter";
 import { PlayerDataStorage } from "../utils/PlayerDataStorage";
-import { SymbolPreloader } from "../utils/SymbolPreloader";
 import { SlotMachine } from "./SlotMachine";
 
 const { ccclass, property } = _decorator;
@@ -71,15 +71,16 @@ export class GameManager extends Component {
     this.initGame();
   }
 
-  private initGame(): void {
+  private async initGame(): Promise<void> {
+    const bundleManager = AssetBundleManager.getInstance();
+    await bundleManager.preloadCriticalBundles();
+
     const loaded = PlayerDataStorage.load(this.playerCoins, this.currentBet);
+
     this.playerCoins = loaded.coins;
     this.currentBet = loaded.bet;
     this.currentBetIndex = loaded.betIndex;
 
-    SymbolPreloader.preloadAll().catch((err) => {
-      console.warn("[GameManager] Failed to preload some sprite frames:", err);
-    });
     this.setupWinCounter();
     this.updateUI();
     this.setState(GameConfig.GAME_STATES.IDLE);
@@ -109,6 +110,7 @@ export class GameManager extends Component {
 
   public setState(state: GameState): void {
     const audioManager = AudioManager.getInstance();
+
     const wasSpinning = this.currentState === GameConfig.GAME_STATES.SPINNING;
     const isSpinning = state === GameConfig.GAME_STATES.SPINNING;
 
@@ -117,7 +119,7 @@ export class GameManager extends Component {
     }
 
     if (!wasSpinning && isSpinning) {
-      const soundPath = `sounds/${GameConfig.SOUNDS.SPIN}`;
+      const soundPath = GameConfig.SOUNDS.SPIN;
       audioManager?.playSpinSound(soundPath);
     }
 
@@ -266,7 +268,7 @@ export class GameManager extends Component {
 
     const audioManager = AudioManager.getInstance();
     if (audioManager) {
-      audioManager.playSFX(`sounds/${GameConfig.SOUNDS.WIN}`);
+      audioManager.playSFX(GameConfig.SOUNDS.WIN);
     }
 
     this.updateUI();
@@ -284,18 +286,23 @@ export class GameManager extends Component {
 
   private handleWinPresentation(amount: number): void {
     const modalManager = ModalManager.getInstance();
-    if (this.shouldShowWinModal(amount) && modalManager) {
-      modalManager.showWinModal(amount, this.currentBet);
+    this.playCoinFlyEffect();
+
+    if (!this.shouldShowWinModal(amount) || !modalManager) {
       return;
     }
 
-    this.playCoinFlyEffect();
+    const delay = Math.max(GameConfig.ANIM.WIN_POPUP_DELAY ?? 0, 0);
+    this.scheduleOnce(
+      () => modalManager.showWinModal(amount, this.currentBet),
+      delay
+    );
   }
 
   private onLose(): void {
     const audioManager = AudioManager.getInstance();
     if (audioManager) {
-      audioManager.playSFX(`sounds/${GameConfig.SOUNDS.LOSE}`);
+      audioManager.playSFX(GameConfig.SOUNDS.LOSE);
     }
     this.setState(GameConfig.GAME_STATES.IDLE);
     this.continueAutoPlay();

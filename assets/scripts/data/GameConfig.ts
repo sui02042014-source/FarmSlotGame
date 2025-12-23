@@ -80,7 +80,7 @@ export class GameConfig {
   static readonly ANIM = {
     SYMBOL_WIN_DURATION: 0.5,
     COIN_FLY_DURATION: 1.0,
-    WIN_POPUP_DELAY: 0.5,
+    WIN_POPUP_DELAY: 1,
     NUMBER_COUNT_DURATION: 2.0,
   };
 

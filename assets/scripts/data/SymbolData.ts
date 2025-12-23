@@ -29,7 +29,7 @@ export class SymbolData {
         name: "Pig",
         type: SymbolType.HIGH_VALUE,
         value: 500,
-        spritePath: "symbols/9_Pig",
+        spritePath: "9_Pig",
       },
     ],
     [
@@ -39,7 +39,7 @@ export class SymbolData {
         name: "Cow",
         type: SymbolType.HIGH_VALUE,
         value: 500,
-        spritePath: "symbols/10_Cow",
+        spritePath: "10_Cow",
       },
     ],
     [
@@ -49,7 +49,7 @@ export class SymbolData {
         name: "Chicken",
         type: SymbolType.HIGH_VALUE,
         value: 400,
-        spritePath: "symbols/7_Hen",
+        spritePath: "7_Hen",
       },
     ],
     [
@@ -59,7 +59,7 @@ export class SymbolData {
         name: "Rabbit",
         type: SymbolType.HIGH_VALUE,
         value: 400,
-        spritePath: "symbols/8_Rabbit",
+        spritePath: "8_Rabbit",
       },
     ],
     [
@@ -69,7 +69,7 @@ export class SymbolData {
         name: "Hay",
         type: SymbolType.HIGH_VALUE,
         value: 300,
-        spritePath: "symbols/6_Cart_with_hay",
+        spritePath: "6_Cart_with_hay",
       },
     ],
     [
@@ -79,7 +79,7 @@ export class SymbolData {
         name: "Truck",
         type: SymbolType.MEDIUM_VALUE,
         value: 250,
-        spritePath: "symbols/11_Truck",
+        spritePath: "11_Truck",
       },
     ],
     [
@@ -89,7 +89,7 @@ export class SymbolData {
         name: "Barn (placeholder)",
         type: SymbolType.MEDIUM_VALUE,
         value: 200,
-        spritePath: "symbols/13_Bonus_Mill",
+        spritePath: "13_Bonus_Mill",
       },
     ],
     [
@@ -99,7 +99,7 @@ export class SymbolData {
         name: "A",
         type: SymbolType.LOW_VALUE,
         value: 150,
-        spritePath: "symbols/5_Tomato",
+        spritePath: "5_Tomato",
       },
     ],
     [
@@ -109,7 +109,7 @@ export class SymbolData {
         name: "K",
         type: SymbolType.LOW_VALUE,
         value: 150,
-        spritePath: "symbols/4_Eggplant",
+        spritePath: "4_Eggplant",
       },
     ],
     [
@@ -119,7 +119,7 @@ export class SymbolData {
         name: "Q",
         type: SymbolType.LOW_VALUE,
         value: 100,
-        spritePath: "symbols/3_Watermelon",
+        spritePath: "3_Watermelon",
       },
     ],
     [
@@ -129,7 +129,7 @@ export class SymbolData {
         name: "J",
         type: SymbolType.LOW_VALUE,
         value: 100,
-        spritePath: "symbols/2_Carrot",
+        spritePath: "2_Carrot",
       },
     ],
     [
@@ -139,7 +139,7 @@ export class SymbolData {
         name: "10",
         type: SymbolType.LOW_VALUE,
         value: 80,
-        spritePath: "symbols/1_Pumpkin",
+        spritePath: "1_Pumpkin",
       },
     ],
     [
@@ -149,7 +149,7 @@ export class SymbolData {
         name: "Wild",
         type: SymbolType.WILD,
         value: 1000,
-        spritePath: "symbols/12_Wild_Girl",
+        spritePath: "12_Wild_Girl",
         animationPath: "animations/wild_anim",
       },
     ],
@@ -160,7 +160,7 @@ export class SymbolData {
         name: "Bonus",
         type: SymbolType.BONUS,
         value: 0,
-        spritePath: "symbols/13_Bonus_Mill",
+        spritePath: "13_Bonus_Mill",
         animationPath: "animations/bonus_anim",
       },
     ],
@@ -171,7 +171,7 @@ export class SymbolData {
         name: "Scatter",
         type: SymbolType.SCATTER,
         value: 200,
-        spritePath: "symbols/Experience_star",
+        spritePath: "Experience_star",
         animationPath: "animations/scatter_anim",
       },
     ],

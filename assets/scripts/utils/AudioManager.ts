@@ -1,4 +1,5 @@
-import { _decorator, Component, AudioClip, AudioSource, resources } from "cc";
+import { _decorator, Component, AudioClip, AudioSource } from "cc";
+import { AssetBundleManager } from "./AssetBundleManager";
 const { ccclass } = _decorator;
 
 @ccclass("AudioManager")
@@ -101,27 +102,31 @@ export class AudioManager extends Component {
   }
 
   private getOrLoadClip(path: string): Promise<AudioClip | null> {
-    const cached = this.audioCache.get(path);
+    const cacheKey = `audio:${path}`;
+
+    const cached = this.audioCache.get(cacheKey);
     if (cached) return Promise.resolve(cached);
 
-    const existing = this.audioLoading.get(path);
+    const existing = this.audioLoading.get(cacheKey);
     if (existing) return existing;
 
-    const loader = new Promise<AudioClip | null>((resolve) => {
-      resources.load(path, AudioClip, (err, clip) => {
-        if (err || !clip) {
-          resolve(null);
-          return;
-        }
-        this.audioCache.set(path, clip);
-        resolve(clip);
-      });
+    const loader = new Promise<AudioClip | null>(async (resolve) => {
+      const bundleManager = AssetBundleManager.getInstance();
+      const clip = await bundleManager.load("audio", path, AudioClip);
+
+      if (!clip) {
+        resolve(null);
+        return;
+      }
+
+      this.audioCache.set(cacheKey, clip);
+      resolve(clip);
     });
 
-    this.audioLoading.set(path, loader);
+    this.audioLoading.set(cacheKey, loader);
     loader.then(
-      () => this.audioLoading.delete(path),
-      () => this.audioLoading.delete(path)
+      () => this.audioLoading.delete(cacheKey),
+      () => this.audioLoading.delete(cacheKey)
     );
     return loader;
   }

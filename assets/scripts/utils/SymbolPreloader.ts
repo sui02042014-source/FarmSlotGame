@@ -11,8 +11,8 @@ export class SymbolPreloader {
       spritePaths.push(`${symbol.spritePath}/spriteFrame`);
     });
 
-    spritePaths.push("win/coin_icon/spriteFrame");
-
-    await cache.preloadSpriteFrames(spritePaths);
+    await Promise.all(
+      spritePaths.map((p) => cache.getSpriteFrameFromBundle("symbols", p))
+    );
   }
 }
