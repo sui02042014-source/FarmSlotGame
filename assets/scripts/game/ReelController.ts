@@ -42,10 +42,6 @@ export class ReelController extends Component {
     }
   }
 
-  /**
-   * Dừng quay, gán lại symbol hiển thị theo `targetSymbols`
-   * và căn lại vị trí symbol theo lưới.
-   */
   public async stop(): Promise<void> {
     if (this.isStartScheduled) {
       this.unscheduleAllCallbacks();
@@ -64,16 +60,11 @@ export class ReelController extends Component {
     await this.snapToGrid();
   }
 
-  /** Lấy danh sách symbol đang hiển thị theo thứ tự từ trên xuống dưới. */
   public getVisibleSymbols(): string[] {
     this.ensureReelContainer();
     return this.reelContainer.getVisibleSymbols();
   }
 
-  /**
-   * Làm nổi bật (scale nhấp nháy) các symbol chiến thắng theo index hàng.
-   * `rows` là index trong mảng symbol đang hiển thị.
-   */
   public highlightWinSymbols(rows: number[]): void {
     this.ensureReelContainer();
     const visibleNodes = this.reelContainer.getVisibleSymbolNodes();
@@ -96,9 +87,6 @@ export class ReelController extends Component {
     });
   }
 
-  /**
-   * Reset toàn bộ trạng thái reel về ban đầu.
-   */
   public reset(): void {
     this.ensureReelContainer();
 
@@ -117,10 +105,6 @@ export class ReelController extends Component {
       this.snapToGrid(false);
     }
   }
-
-  // ---------------------------------------------------------------------------
-  // Internal helpers
-  // ---------------------------------------------------------------------------
 
   private ensureReelContainer(): void {
     if (this.reelContainer) return;
@@ -145,7 +129,6 @@ export class ReelController extends Component {
     );
   }
 
-  /** Cập nhật vị trí reel khi đang quay, bao gồm loop lại các symbol vượt quá ngưỡng. */
   private updateReelPositions(dt: number): void {
     const nodes = this.getNodes();
     if (!nodes.length) return;
@@ -153,7 +136,6 @@ export class ReelController extends Component {
     const distance = this.spinSpeed * dt;
     let maxY = Number.NEGATIVE_INFINITY;
 
-    // Di chuyển toàn bộ symbol xuống dưới
     nodes.forEach((node) => {
       const y = node.position.y - distance;
       node.setPosition(node.position.x, y, node.position.z);
@@ -165,7 +147,6 @@ export class ReelController extends Component {
     this.recycleOffscreenNodes(nodes, maxY);
   }
 
-  /** Đưa các symbol đã đi ra ngoài vùng nhìn thấy lên trên cùng để tạo hiệu ứng quay loop. */
   private recycleOffscreenNodes(nodes: Node[], currentMaxY: number): void {
     let maxY = currentMaxY;
     const threshold = -this.symbolSpacing * (nodes.length / 2 + 1);

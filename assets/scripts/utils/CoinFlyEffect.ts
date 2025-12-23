@@ -96,8 +96,8 @@ export class CoinFlyEffect {
       scatterDuration = 0.22,
       flyDuration = 0.6,
       stagger = 0.02,
-      coinSize = 44,
-      coinScale = 0.7,
+      coinSize = 60,
+      coinScale = 1,
       spriteFramePath = "win/coin_icon/spriteFrame",
       onAllArrive,
     } = opts;

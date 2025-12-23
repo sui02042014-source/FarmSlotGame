@@ -72,18 +72,6 @@ export class WinModal extends BaseModal {
   }
 
   private updateUI(): void {
-    if (this.titleLabel) {
-      if (this.winMultiplier >= 20) {
-        this.titleLabel.string = "MEGA WIN!";
-      } else if (this.winMultiplier >= 10) {
-        this.titleLabel.string = "BIG WIN!";
-      } else if (this.winMultiplier >= 5) {
-        this.titleLabel.string = "GREAT WIN!";
-      } else {
-        this.titleLabel.string = "YOU WIN!";
-      }
-    }
-
     if (this.winMultiplierLabel) {
       this.winMultiplierLabel.string = `${this.winMultiplier.toFixed(1)}x`;
     }
@@ -135,8 +123,8 @@ export class WinModal extends BaseModal {
       scatterDuration: 0.22,
       flyDuration: 0.65,
       stagger: 0.02,
-      coinSize: 42,
-      coinScale: 0.75,
+      coinSize: 60,
+      coinScale: 1,
       spriteFramePath: "win/coin_icon/spriteFrame",
       onAllArrive: () => {
         const s0 = target.scale.clone();

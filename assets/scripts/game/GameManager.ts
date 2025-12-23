@@ -107,10 +107,6 @@ export class GameManager extends Component {
     if (this.winLabel) this.winLabel.string = this.lastWin.toFixed(2);
   }
 
-  // ---------------------------------------------------------------------------
-  // State & accessors
-  // ---------------------------------------------------------------------------
-
   public setState(state: GameState): void {
     const audioManager = AudioManager.getInstance();
     const wasSpinning = this.currentState === GameConfig.GAME_STATES.SPINNING;
@@ -353,8 +349,8 @@ export class GameManager extends Component {
       scatterDuration: 0.22,
       flyDuration: 0.65,
       stagger: 0.02,
-      coinSize: 42,
-      coinScale: 0.75,
+      coinSize: 60,
+      coinScale: 1,
       spriteFramePath: "win/coin_icon/spriteFrame",
     });
   }
