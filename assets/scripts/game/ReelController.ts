@@ -72,6 +72,22 @@ export class ReelController extends Component {
     this.prepareStopByTarget();
   }
 
+  public getVisibleSymbols(): string[] {
+    const sorted = this.reelContainer.getSortedContainers();
+    const visible = GameConfig.SYMBOL_PER_REEL;
+    const centerIndex = Math.floor((sorted.length - visible) / 2);
+    const symbols: string[] = [];
+
+    for (let i = 0; i < visible; i++) {
+      const container = sorted[centerIndex + i];
+      if (container) {
+        symbols.push(container.symbolId);
+      }
+    }
+
+    return symbols;
+  }
+
   // ============================================================================
   // Setup
   // ============================================================================

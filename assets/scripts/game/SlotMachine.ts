@@ -3,6 +3,7 @@ import { GameConfig } from "../data/GameConfig";
 import { ReelController } from "./ReelController";
 import { GameManager } from "./GameManager";
 import { SlotLogic, WinLine, SpinResult } from "../logic/SlotLogic";
+
 const { ccclass, property } = _decorator;
 
 export type { WinLine };
@@ -12,62 +13,29 @@ export class SlotMachine extends Component {
   @property([Node])
   reels: Node[] = [];
 
-  private reelControllers: Array<ReelController | null> = [];
+  private reelControllers: ReelController[] = [];
   private isSpinning: boolean = false;
   private currentSymbols: string[][] = [];
   private pendingSpinResult: SpinResult | null = null;
-  private readonly debugLogs: boolean = false;
 
-  // ---------------------------------------------------------------------------
+  // ============================================================================
   // Lifecycle
-  // ---------------------------------------------------------------------------
+  // ============================================================================
 
   protected start(): void {
-    this.initializeReelControllers();
-    if (this.debugLogs) {
-      const count = this.reelControllers.filter(Boolean).length;
-      console.log(`[SlotMachine] Initialized with ${count} reel controllers`);
-    }
+    this.reelControllers = this.reels
+      .map((reel) => reel?.getComponent(ReelController))
+      .filter(
+        (controller): controller is ReelController => controller !== null
+      );
   }
 
-  // ---------------------------------------------------------------------------
-  // Initialization
-  // ---------------------------------------------------------------------------
-
-  private initializeReelControllers(): void {
-    this.reelControllers = new Array(this.reels.length).fill(null);
-    this.reels.forEach((reel, col) => {
-      const controller = reel.getComponent(ReelController);
-      if (!controller) {
-        console.warn(`[SlotMachine] ReelController missing at col ${col}`);
-        return;
-      }
-      this.reelControllers[col] = controller;
-    });
-  }
-
-  private ensureReelControllersInitialized(): void {
-    if (!this.reelControllers.length) {
-      this.initializeReelControllers();
-    }
-  }
-
-  private getReelCount(): number {
-    return Math.min(
-      GameConfig.REEL_COUNT,
-      this.reels.length || GameConfig.REEL_COUNT
-    );
-  }
-
-  // ---------------------------------------------------------------------------
+  // ============================================================================
   // Spin Control
-  // ---------------------------------------------------------------------------
+  // ============================================================================
 
   public spin(): void {
-    this.ensureReelControllersInitialized();
-
-    if (this.isSpinning) {
-      if (this.debugLogs) console.log("[SlotMachine] Already spinning");
+    if (this.isSpinning || this.reelControllers.length === 0) {
       return;
     }
 
@@ -76,17 +44,17 @@ export class SlotMachine extends Component {
 
     const bet = GameManager.getInstance()?.getCurrentBet() || 1;
     this.pendingSpinResult = SlotLogic.calculateSpinResult(
-      this.getReelCount(),
+      GameConfig.REEL_COUNT,
       GameConfig.SYMBOL_PER_REEL,
       bet
     );
 
     const targetSymbols = this.pendingSpinResult.symbolGrid;
+    console.log("targetSymbols", targetSymbols);
     this.startReelSpins(targetSymbols);
     this.currentSymbols = targetSymbols;
 
     this.scheduleOnce(() => void this.stopSpin(), GameConfig.SPIN_DURATION);
-    if (this.debugLogs) console.log("[SlotMachine] Spin started");
   }
 
   private startReelSpins(targetSymbols: string[][]): void {
@@ -96,8 +64,6 @@ export class SlotMachine extends Component {
   }
 
   private async stopSpin(): Promise<void> {
-    this.ensureReelControllersInitialized();
-
     await this.stopReelsSequentially();
     this.isSpinning = false;
 
@@ -105,51 +71,35 @@ export class SlotMachine extends Component {
     if (this.pendingSpinResult) {
       this.pendingSpinResult.symbolGrid = this.currentSymbols;
     }
+
     GameManager.getInstance()?.onSpinComplete();
   }
 
   private async stopReelsSequentially(): Promise<void> {
-    const cols = this.getReelCount();
-    const stopPromises: Promise<void>[] = [];
+    const stopPromises = this.reelControllers
+      .slice(0, GameConfig.REEL_COUNT)
+      .map((controller, col) => {
+        if (!controller) return Promise.resolve();
 
-    for (let col = 0; col < cols; col++) {
-      const delayTime = col * GameConfig.REEL_STOP_DELAY;
-      const stopPromise = this.createStopPromise(col, delayTime);
-      stopPromises.push(stopPromise);
-    }
+        return new Promise<void>((resolve) => {
+          this.scheduleOnce(() => {
+            controller.stop().then(() => resolve());
+          }, col * GameConfig.REEL_STOP_DELAY);
+        });
+      });
 
     await Promise.all(stopPromises);
   }
 
-  private createStopPromise(col: number, delay: number): Promise<void> {
-    return new Promise<void>((resolve) => {
-      this.scheduleOnce(() => {
-        this.reelControllers[col]?.stop().then(() => resolve());
-      }, delay);
-    });
-  }
-
   private buildSymbolGrid(): string[][] {
-    const cols = this.getReelCount();
-    const grid: string[][] = [];
-
-    // for (let col = 0; col < cols; col++) {
-    //   const visible = this.reelControllers[col]?.getVisibleSymbols() || [];
-    //   const colArr: string[] = [];
-
-    //   for (let row = 0; row < GameConfig.SYMBOL_PER_REEL; row++) {
-    //     colArr.push(visible[row] ?? "");
-    //   }
-
-    //   grid.push(colArr);
-    // }
-
-    return grid;
+    return this.reelControllers
+      .slice(0, GameConfig.REEL_COUNT)
+      .map((controller) => controller?.getVisibleSymbols() || []);
   }
 
-  // ---------------------------------------------------------------------------
+  // ============================================================================
   // Win Detection
-  // ---------------------------------------------------------------------------
+  // ============================================================================
 
   public checkWin(): { totalWin: number; winLines: WinLine[] } {
     if (this.pendingSpinResult) {
@@ -163,9 +113,9 @@ export class SlotMachine extends Component {
     return SlotLogic.checkWin(this.currentSymbols, bet);
   }
 
-  // ---------------------------------------------------------------------------
+  // ============================================================================
   // Win Display
-  // ---------------------------------------------------------------------------
+  // ============================================================================
 
   public showWinLines(winLines: WinLine[]): void {
     if (!winLines?.length) return;
@@ -179,21 +129,17 @@ export class SlotMachine extends Component {
   ): Map<number, Set<number>> {
     const rowsByCol = new Map<number, Set<number>>();
 
-    winLines.forEach((line) => {
-      line.positions.forEach((position) => {
+    for (const line of winLines) {
+      for (const position of line.positions) {
         if (!rowsByCol.has(position.col)) {
           rowsByCol.set(position.col, new Set<number>());
         }
         rowsByCol.get(position.col)!.add(position.row);
-      });
-    });
+      }
+    }
 
     return rowsByCol;
   }
 
-  private highlightWinSymbols(rowsByCol: Map<number, Set<number>>): void {
-    // rowsByCol.forEach((rowsSet, col) => {
-    //   this.reelControllers[col]?.highlightWinSymbols(Array.from(rowsSet));
-    // });
-  }
+  private highlightWinSymbols(rowsByCol: Map<number, Set<number>>): void {}
 }
