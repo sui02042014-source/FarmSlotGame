@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, tween, Vec3 } from "cc";
+import { _decorator, Component, Node, tween, Vec3, UIOpacity } from "cc";
 import { GameConfig } from "../data/GameConfig";
 import { SymbolData } from "../data/SymbolData";
 import { ReelContainer, SymbolContainer } from "./ReelContainer";
@@ -27,6 +27,7 @@ export class ReelController extends Component {
 
   private stopDeceleration = 0;
   private isStoppingByTarget = false;
+  private highlightedContainers: Set<SymbolContainer> = new Set();
 
   // ============================================================================
   // Lifecycle
@@ -86,6 +87,77 @@ export class ReelController extends Component {
     }
 
     return symbols;
+  }
+
+  public highlightSymbols(rows: Set<number>): void {
+    // Clear existing highlights first
+    this.clearHighlight();
+
+    // Get visible containers sorted by position (top to bottom)
+    const sorted = this.reelContainer.getSortedContainers();
+    const visible = GameConfig.SYMBOL_PER_REEL;
+    const centerIndex = Math.floor((sorted.length - visible) / 2);
+
+    // Highlight containers at the specified row indices
+    for (let i = 0; i < visible; i++) {
+      if (rows.has(i)) {
+        const container = sorted[centerIndex + i];
+        if (container) {
+          this.applyHighlight(container);
+          this.highlightedContainers.add(container);
+        }
+      }
+    }
+  }
+
+  public clearHighlight(): void {
+    // Remove highlight from all previously highlighted containers
+    this.highlightedContainers.forEach((container) => {
+      if (container.node?.isValid) {
+        this.removeHighlight(container);
+      }
+    });
+    this.highlightedContainers.clear();
+  }
+
+  private applyHighlight(container: SymbolContainer): void {
+    if (!container.node?.isValid) return;
+
+    // Add or get UIOpacity component
+    let uiOpacity = container.node.getComponent(UIOpacity);
+    if (!uiOpacity) {
+      uiOpacity = container.node.addComponent(UIOpacity);
+    }
+
+    // Animate scale and opacity for highlight effect
+    tween(container.node)
+      .to(0.2, { scale: new Vec3(1.15, 1.15, 1) }, { easing: "sineOut" })
+      .start();
+
+    tween(uiOpacity).to(0.2, { opacity: 255 }, { easing: "sineOut" }).start();
+  }
+
+  private removeHighlight(container: SymbolContainer): void {
+    if (!container.node?.isValid) return;
+
+    const uiOpacity = container.node.getComponent(UIOpacity);
+
+    // Animate back to normal scale
+    tween(container.node)
+      .to(0.2, { scale: new Vec3(1, 1, 1) }, { easing: "sineIn" })
+      .start();
+
+    // Remove UIOpacity component if it exists (it was added for highlighting)
+    if (uiOpacity) {
+      tween(uiOpacity)
+        .to(0.2, { opacity: 255 }, { easing: "sineIn" })
+        .call(() => {
+          if (container.node?.isValid && uiOpacity) {
+            uiOpacity.destroy();
+          }
+        })
+        .start();
+    }
   }
 
   // ============================================================================

@@ -39,6 +39,7 @@ export class SlotMachine extends Component {
       return;
     }
 
+    this.clearWinHighlights();
     this.isSpinning = true;
     this.unschedule(() => void this.stopSpin());
 
@@ -141,5 +142,18 @@ export class SlotMachine extends Component {
     return rowsByCol;
   }
 
-  private highlightWinSymbols(rowsByCol: Map<number, Set<number>>): void {}
+  private highlightWinSymbols(rowsByCol: Map<number, Set<number>>): void {
+    rowsByCol.forEach((rows, col) => {
+      const controller = this.reelControllers[col];
+      if (controller) {
+        controller.highlightSymbols(rows);
+      }
+    });
+  }
+
+  public clearWinHighlights(): void {
+    this.reelControllers.forEach((controller) => {
+      controller?.clearHighlight();
+    });
+  }
 }
