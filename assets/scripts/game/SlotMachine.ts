@@ -133,16 +133,16 @@ export class SlotMachine extends Component {
     const cols = this.getReelCount();
     const grid: string[][] = [];
 
-    for (let col = 0; col < cols; col++) {
-      const visible = this.reelControllers[col]?.getVisibleSymbols() || [];
-      const colArr: string[] = [];
+    // for (let col = 0; col < cols; col++) {
+    //   const visible = this.reelControllers[col]?.getVisibleSymbols() || [];
+    //   const colArr: string[] = [];
 
-      for (let row = 0; row < GameConfig.SYMBOL_PER_REEL; row++) {
-        colArr.push(visible[row] ?? "");
-      }
+    //   for (let row = 0; row < GameConfig.SYMBOL_PER_REEL; row++) {
+    //     colArr.push(visible[row] ?? "");
+    //   }
 
-      grid.push(colArr);
-    }
+    //   grid.push(colArr);
+    // }
 
     return grid;
   }
@@ -192,8 +192,8 @@ export class SlotMachine extends Component {
   }
 
   private highlightWinSymbols(rowsByCol: Map<number, Set<number>>): void {
-    rowsByCol.forEach((rowsSet, col) => {
-      this.reelControllers[col]?.highlightWinSymbols(Array.from(rowsSet));
-    });
+    // rowsByCol.forEach((rowsSet, col) => {
+    //   this.reelControllers[col]?.highlightWinSymbols(Array.from(rowsSet));
+    // });
   }
 }

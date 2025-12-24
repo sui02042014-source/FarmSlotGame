@@ -2640,9 +2640,6 @@
     },
     "_enabled": true,
     "__prefab": null,
-    "reelContainerNode": {
-      "__id__": 64
-    },
     "_id": "c5kTgmFlVMZZPnflcFuccC"
   },
   {
@@ -2873,9 +2870,6 @@
     },
     "_enabled": true,
     "__prefab": null,
-    "reelContainerNode": {
-      "__id__": 72
-    },
     "_id": "71c9EyHNFPl6Er96Krhij6"
   },
   {
@@ -3106,9 +3100,6 @@
     },
     "_enabled": true,
     "__prefab": null,
-    "reelContainerNode": {
-      "__id__": 80
-    },
     "_id": "42vCIMD3xMC456tFEIvG6w"
   },
   {
@@ -3339,9 +3330,6 @@
     },
     "_enabled": true,
     "__prefab": null,
-    "reelContainerNode": {
-      "__id__": 88
-    },
     "_id": "f3Dw1PzGdEv6aSBPt1L/M4"
   },
   {
@@ -3572,9 +3560,6 @@
     },
     "_enabled": true,
     "__prefab": null,
-    "reelContainerNode": {
-      "__id__": 96
-    },
     "_id": "39bRsObHJDVY+rz+QILe3F"
   },
   {
@@ -6283,7 +6268,7 @@
     "_priority": 0,
     "_fov": 45,
     "_fovAxis": 0,
-    "_orthoHeight": 946.724286949006,
+    "_orthoHeight": 1072.490013315579,
     "_near": 0,
     "_far": 2000,
     "_color": {
