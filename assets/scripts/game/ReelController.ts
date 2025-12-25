@@ -4,7 +4,6 @@ import {
   Node,
   tween,
   Vec3,
-  UIOpacity,
   CCInteger,
   v3,
   Tween,
@@ -43,7 +42,6 @@ export class ReelController extends Component {
   private readonly allSymbols = SymbolData.getAllSymbols();
 
   private isStoppingByTarget = false;
-  private highlightedContainers: Set<SymbolContainer> = new Set();
   private activeTweens: Tween<Node>[] = [];
 
   // Track position offsets for smooth infinite scroll
@@ -84,7 +82,6 @@ export class ReelController extends Component {
     if (!this.stateMachine.canSpin()) return;
 
     this.targetSymbols = this.normalizeTargetSymbols(targetSymbols);
-    this.clearHighlight();
     this.resetMovementState();
 
     delay > 0
@@ -102,40 +99,6 @@ export class ReelController extends Component {
   public getVisibleSymbols(): string[] {
     const visibleContainers = this.getVisibleContainers();
     return visibleContainers.map((container) => container.symbolId);
-  }
-
-  public highlightSymbols(rows: Set<number>): void {
-    this.clearHighlight();
-
-    const visibleSymbols = this.getVisibleSymbols();
-    const containers = this.reelContainer.getAllContainers();
-    const visible = GameConfig.SYMBOL_PER_REEL;
-
-    for (let row = 0; row < visible; row++) {
-      if (rows.has(row)) {
-        const symbolId = visibleSymbols[row];
-        const container = containers.find(
-          (c) =>
-            c.symbolId === symbolId &&
-            Math.abs(c.node.position.y + row * this.symbolSpacing) <
-              this.symbolSpacing / 2
-        );
-
-        if (container) {
-          this.applyHighlight(container);
-          this.highlightedContainers.add(container);
-        }
-      }
-    }
-  }
-
-  public clearHighlight(): void {
-    this.highlightedContainers.forEach((container) => {
-      if (container.node?.isValid) {
-        this.removeHighlight(container);
-      }
-    });
-    this.highlightedContainers.clear();
   }
 
   // ============================================================================
@@ -504,39 +467,6 @@ export class ReelController extends Component {
       }
     });
     this.activeTweens = [];
-  }
-
-  private applyHighlight(container: SymbolContainer): void {
-    if (!container.node?.isValid) return;
-
-    tween(container.node)
-      .repeatForever(
-        tween(container.node)
-          .to(0.3, { scale: v3(1.2, 1.2, 1) }, { easing: "sineOut" })
-          .to(0.3, { scale: v3(1.1, 1.1, 1) }, { easing: "sineIn" })
-      )
-      .start();
-
-    let uiOpacity = container.node.getComponent(UIOpacity);
-    if (!uiOpacity) {
-      uiOpacity = container.node.addComponent(UIOpacity);
-      uiOpacity.opacity = 255;
-    }
-  }
-
-  private removeHighlight(container: SymbolContainer): void {
-    if (!container.node?.isValid) return;
-
-    tween(container.node).stop();
-
-    const uiOpacity = container.node.getComponent(UIOpacity);
-    if (uiOpacity) {
-      uiOpacity.destroy();
-    }
-
-    tween(container.node)
-      .to(0.2, { scale: v3(1, 1, 1) }, { easing: "sineIn" })
-      .start();
   }
 
   private shuffleArray<T>(arr: T[]): T[] {

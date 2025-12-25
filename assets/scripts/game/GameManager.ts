@@ -245,10 +245,6 @@ export class GameManager extends Component {
     totalWin: number,
     winLines: ReturnType<SlotMachine["checkWin"]>["winLines"]
   ): void {
-    if (totalWin > 0 && winLines.length > 0) {
-      slot.showWinLines(winLines);
-    }
-
     if (totalWin > 0) {
       this.onWin(totalWin);
     } else {

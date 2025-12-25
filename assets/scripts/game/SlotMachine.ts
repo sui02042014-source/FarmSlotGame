@@ -39,7 +39,6 @@ export class SlotMachine extends Component {
       return;
     }
 
-    this.clearWinHighlights();
     this.isSpinning = true;
     this.unschedule(() => void this.stopSpin());
 
@@ -112,48 +111,5 @@ export class SlotMachine extends Component {
 
     const bet = GameManager.getInstance()?.getCurrentBet() || 1;
     return SlotLogic.checkWin(this.currentSymbols, bet);
-  }
-
-  // ============================================================================
-  // Win Display
-  // ============================================================================
-
-  public showWinLines(winLines: WinLine[]): void {
-    if (!winLines?.length) return;
-
-    const rowsByCol = this.groupWinPositionsByColumn(winLines);
-    this.highlightWinSymbols(rowsByCol);
-  }
-
-  private groupWinPositionsByColumn(
-    winLines: WinLine[]
-  ): Map<number, Set<number>> {
-    const rowsByCol = new Map<number, Set<number>>();
-
-    for (const line of winLines) {
-      for (const position of line.positions) {
-        if (!rowsByCol.has(position.col)) {
-          rowsByCol.set(position.col, new Set<number>());
-        }
-        rowsByCol.get(position.col)!.add(position.row);
-      }
-    }
-
-    return rowsByCol;
-  }
-
-  private highlightWinSymbols(rowsByCol: Map<number, Set<number>>): void {
-    rowsByCol.forEach((rows, col) => {
-      const controller = this.reelControllers[col];
-      if (controller) {
-        controller.highlightSymbols(rows);
-      }
-    });
-  }
-
-  public clearWinHighlights(): void {
-    this.reelControllers.forEach((controller) => {
-      controller?.clearHighlight();
-    });
   }
 }
