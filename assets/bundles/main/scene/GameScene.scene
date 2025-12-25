@@ -6398,7 +6398,9 @@
     "winLabel": {
       "__id__": 146
     },
-    "winLabelNode": null,
+    "winLabelNode": {
+      "__id__": 144
+    },
     "spinButtons": [],
     "_id": "85hYY01BFMVJQC3VjthzBu"
   },

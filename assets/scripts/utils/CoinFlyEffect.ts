@@ -1,4 +1,14 @@
-import { Node, Sprite, UITransform, Vec3, tween, math, Size, Tween } from "cc";
+import {
+  Color,
+  math,
+  Node,
+  Size,
+  Sprite,
+  tween,
+  Tween,
+  UITransform,
+  Vec3,
+} from "cc";
 import { SpriteFrameCache } from "./SpriteFrameCache";
 
 export type CoinFlyEffectOptions = {
@@ -12,7 +22,6 @@ export type CoinFlyEffectOptions = {
   stagger?: number;
   coinSize?: number;
   coinScale?: number;
-  spriteFramePath?: string;
   onAllArrive?: () => void;
 };
 
@@ -25,14 +34,20 @@ class CoinPool {
     let coin: Node;
     if (this.pool.length > 0) {
       coin = this.pool.pop()!;
-      coin.setParent(parent);
     } else {
-      coin = new Node("Coin");
-      const ui = coin.addComponent(UITransform);
-      ui.setContentSize(new Size(coinSize, coinSize));
+      coin = new Node("Coin_FX");
+      coin
+        .addComponent(UITransform)
+        .setContentSize(new Size(coinSize, coinSize));
       const sprite = coin.addComponent(Sprite);
       sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+      sprite.trim = true;
     }
+
+    coin.layer = parent.layer;
+    coin.setParent(parent);
+    coin.active = true;
+
     this.active.add(coin);
     return coin;
   }
@@ -40,10 +55,10 @@ class CoinPool {
   public release(coin: Node): void {
     if (!coin?.isValid) return;
     Tween.stopAllByTarget(coin);
-    coin.setParent(null);
-    coin.setPosition(Vec3.ZERO);
-    coin.setScale(Vec3.ONE);
+    coin.active = false;
+    coin.removeFromParent();
     this.active.delete(coin);
+
     if (this.pool.length < this.maxPoolSize) {
       this.pool.push(coin);
     } else {
@@ -51,22 +66,10 @@ class CoinPool {
     }
   }
 
-  public releaseAll(): void {
-    this.active.forEach((coin) => {
-      if (coin?.isValid) {
-        Tween.stopAllByTarget(coin);
-        coin.setParent(null);
-        this.pool.push(coin);
-      }
-    });
-    this.active.clear();
-  }
-
   public clear(): void {
-    this.releaseAll();
-    this.pool.forEach((coin) => {
-      if (coin?.isValid) coin.destroy();
-    });
+    this.active.forEach((c) => c.isValid && c.destroy());
+    this.pool.forEach((c) => c.isValid && c.destroy());
+    this.active.clear();
     this.pool = [];
   }
 }
@@ -74,110 +77,89 @@ class CoinPool {
 export class CoinFlyEffect {
   private static coinPool: CoinPool = new CoinPool();
 
-  private static getWorldPos(node: Node): Vec3 {
-    const ui = node.getComponent(UITransform);
-    if (ui) return ui.convertToWorldSpaceAR(Vec3.ZERO);
-    return node.worldPosition.clone();
-  }
-
-  private static worldToLocal(parent: Node, world: Vec3): Vec3 {
-    const ui = parent.getComponent(UITransform);
-    if (ui) return ui.convertToNodeSpaceAR(world);
-    return parent.inverseTransformPoint(new Vec3(), world);
-  }
-
   public static async play(opts: CoinFlyEffectOptions): Promise<void> {
     const {
       parent,
       fromNode,
       toNode,
-      coinCount = 32,
+      coinCount = 20,
       scatterRadius = 180,
-      scatterDuration = 0.22,
-      flyDuration = 0.6,
-      stagger = 0.02,
+      scatterDuration = 0.3,
+      flyDuration = 0.65,
+      stagger = 0.03,
       coinSize = 60,
-      coinScale = 1,
-      spriteFramePath = "win/coin_icon/spriteFrame",
+      coinScale = 1.0,
       onAllArrive,
     } = opts;
 
     if (!parent?.isValid || !fromNode?.isValid || !toNode?.isValid) return;
 
     const cache = SpriteFrameCache.getInstance();
-    const sf = await cache.getSpriteFrame(spriteFramePath);
-    if (!sf || !parent?.isValid || !fromNode?.isValid || !toNode?.isValid)
+    const spritePath = "ui/win/coin_icon/spriteFrame";
+
+    const sf = await cache.getSpriteFrameFromBundle("game", spritePath);
+
+    if (!sf) {
+      console.error(
+        `[CoinFly] Không thể load icon từ bundle 'game' tại: ${spritePath}`
+      );
       return;
-
-    const fromWorld = this.getWorldPos(fromNode);
-    const toWorld = this.getWorldPos(toNode);
-    const start = this.worldToLocal(parent, fromWorld);
-    const target = this.worldToLocal(parent, toWorld);
-
-    let arrived = 0;
-    const total = Math.max(0, coinCount | 0);
-    if (!total) return;
-
-    const coins: Node[] = [];
-    for (let i = 0; i < total; i++) {
-      if (!parent?.isValid) break;
-      const coin = this.coinPool.get(parent, coinSize);
-      const sprite = coin.getComponent(Sprite);
-      if (sprite) {
-        sprite.spriteFrame = sf;
-      }
-      coins.push(coin);
     }
 
-    for (let i = 0; i < coins.length; i++) {
-      const coin = coins[i];
-      if (!coin?.isValid || !parent?.isValid) continue;
+    const fromUITrans = fromNode.getComponent(UITransform)!;
+    const toUITrans = toNode.getComponent(UITransform)!;
+    const parentUITrans = parent.getComponent(UITransform)!;
 
-      coin.setPosition(start);
-      coin.setScale(new Vec3(coinScale, coinScale, 1));
-      const maxSiblingIndex =
-        parent.children.length > 0
-          ? Math.max(...parent.children.map((child) => child.getSiblingIndex()))
-          : -1;
-      coin.setSiblingIndex(maxSiblingIndex + 1);
+    const fromWorldPos = fromUITrans.convertToWorldSpaceAR(Vec3.ZERO);
+    const toWorldPos = toUITrans.convertToWorldSpaceAR(Vec3.ZERO);
+
+    const startPos = parentUITrans.convertToNodeSpaceAR(fromWorldPos);
+    const endPos = parentUITrans.convertToNodeSpaceAR(toWorldPos);
+
+    let arrivedCount = 0;
+
+    for (let i = 0; i < coinCount; i++) {
+      const coin = this.coinPool.get(parent, coinSize);
+      const sprite = coin.getComponent(Sprite)!;
+      sprite.spriteFrame = sf;
+      sprite.color = Color.WHITE;
+
+      coin.setPosition(startPos);
+      coin.setScale(Vec3.ZERO);
 
       const angle = math.randomRange(0, Math.PI * 2);
-      const dist = math.randomRange(scatterRadius * 0.35, scatterRadius);
-      const scatter = new Vec3(
-        start.x + Math.cos(angle) * dist,
-        start.y + Math.sin(angle) * dist,
+      const dist = math.randomRange(scatterRadius * 0.4, scatterRadius);
+      const scatterPos = new Vec3(
+        startPos.x + Math.cos(angle) * dist,
+        startPos.y + Math.sin(angle) * dist,
         0
       );
 
-      const midScale = coinScale * math.randomRange(0.9, 1.15);
-      const endScale = coinScale * math.randomRange(0.45, 0.75);
       const delay = i * stagger;
-
-      const liftUp = new Vec3(start.x, start.y + 100, 0);
-      const liftDuration = scatterDuration * 0.3;
 
       tween(coin)
         .delay(delay)
         .to(
-          liftDuration,
-          { position: liftUp, scale: new Vec3(midScale, midScale, 1) },
-          { easing: "quadOut" }
-        )
-        .to(
-          scatterDuration - liftDuration,
-          { position: scatter, scale: new Vec3(midScale, midScale, 1) },
-          { easing: "quadOut" }
+          scatterDuration,
+          {
+            position: scatterPos,
+            scale: new Vec3(coinScale, coinScale, 1),
+          },
+          { easing: "backOut" }
         )
         .to(
           flyDuration,
-          { position: target, scale: new Vec3(endScale, endScale, 1) },
-          { easing: "quadIn" }
+          {
+            position: endPos,
+            scale: new Vec3(coinScale * 0.5, coinScale * 0.5, 1),
+          },
+          { easing: "quartIn" }
         )
         .call(() => {
           this.coinPool.release(coin);
-          arrived++;
-          if (arrived >= total) {
-            if (onAllArrive) onAllArrive();
+          arrivedCount++;
+          if (arrivedCount >= coinCount && onAllArrive) {
+            onAllArrive();
           }
         })
         .start();

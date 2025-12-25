@@ -1,4 +1,4 @@
-import { _decorator, Component, Label, Node } from "cc";
+import { _decorator, Component, Label, Node, tween, Vec3 } from "cc";
 import { GameConfig, GameState } from "../data/GameConfig";
 import { ModalManager } from "../ui/ModalManager";
 import { SpinButtonController } from "../ui/SpinButtonController";
@@ -44,7 +44,7 @@ export class GameManager extends Component {
   private winCounter: NumberCounter = null!;
 
   private readonly AUTO_PLAY_DELAY: number = 3.5;
-  private readonly BIG_WIN_THRESHOLD: number = 400;
+  private readonly BIG_WIN_THRESHOLD: number = 3000;
 
   private static instance: GameManager = null!;
 
@@ -283,21 +283,6 @@ export class GameManager extends Component {
     return amount >= this.BIG_WIN_THRESHOLD;
   }
 
-  private handleWinPresentation(amount: number): void {
-    const modalManager = ModalManager.getInstance();
-    this.playCoinFlyEffect();
-
-    if (!this.shouldShowWinModal(amount) || !modalManager) {
-      return;
-    }
-
-    const delay = Math.max(GameConfig.ANIM.WIN_POPUP_DELAY ?? 0, 0);
-    this.scheduleOnce(
-      () => modalManager.showWinModal(amount, this.currentBet),
-      delay
-    );
-  }
-
   private onLose(): void {
     const audioManager = AudioManager.getInstance();
     if (audioManager) {
@@ -311,53 +296,45 @@ export class GameManager extends Component {
   // Coin Fly Effect
   // ==========================================
 
-  private getCoinEffectParent(): Node | null {
+  private handleWinPresentation(amount: number): void {
     const modalManager = ModalManager.getInstance();
-    if (modalManager?.getOverlayContainer?.()) {
-      const overlay = modalManager.getOverlayContainer();
-      if (overlay?.isValid) return overlay;
+
+    if (this.shouldShowWinModal(amount) && modalManager) {
+      const delay = Math.max(GameConfig.ANIM.WIN_POPUP_DELAY ?? 0, 0);
+      this.scheduleOnce(
+        () => modalManager.showWinModal(amount, this.currentBet),
+        delay
+      );
+    } else {
+      this.scheduleOnce(() => this.playCoinFlyEffect(), 0.5);
     }
-
-    return (
-      this.coinIconNode?.parent ??
-      this.coinLabel?.node?.parent ??
-      this.node.scene?.getChildByName("Canvas") ??
-      this.node.parent ??
-      this.node
-    );
-  }
-
-  private getCoinEffectFromNode(): Node | null {
-    return this.winLabelNode ?? this.winLabel?.node ?? this.node;
-  }
-
-  private getCoinEffectTargetNode(): Node | null {
-    if (this.coinIconNode?.isValid) return this.coinIconNode;
-    if (this.coinLabel?.node?.isValid) return this.coinLabel.node;
-    return null;
   }
 
   private playCoinFlyEffect(): void {
-    const parent = this.getCoinEffectParent();
-    const from = this.getCoinEffectFromNode();
-    const target = this.getCoinEffectTargetNode();
+    const scene = this.node.scene;
+    const canvas =
+      scene?.getComponentInChildren("cc.Canvas")?.node ||
+      scene?.getChildByName("Canvas");
 
-    if (!parent?.isValid || !from?.isValid || !target?.isValid) {
+    if (!canvas || !this.winLabelNode?.isValid || !this.coinIconNode?.isValid) {
       return;
     }
 
     CoinFlyEffect.play({
-      parent,
-      fromNode: from,
-      toNode: target,
-      coinCount: 22,
-      scatterRadius: 220,
-      scatterDuration: 0.22,
-      flyDuration: 0.65,
-      stagger: 0.02,
+      parent: canvas,
+      fromNode: this.winLabelNode,
+      toNode: this.coinIconNode,
+      coinCount: 20,
+      scatterRadius: 150,
       coinSize: 60,
-      coinScale: 1,
-      spriteFramePath: "win/coin_icon/spriteFrame",
+      onAllArrive: () => {
+        if (this.coinIconNode?.isValid) {
+          tween(this.coinIconNode)
+            .to(0.1, { scale: new Vec3(1.2, 1.2, 1) })
+            .to(0.1, { scale: new Vec3(1, 1, 1) })
+            .start();
+        }
+      },
     });
   }
 
