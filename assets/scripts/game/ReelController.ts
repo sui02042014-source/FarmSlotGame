@@ -270,6 +270,8 @@ export class ReelController extends Component {
 
   private finalizeStop(): void {
     this.scheduleOnce(() => {
+      // Check again after animations complete
+      this.checkTargetSymbolMatch();
       this.isStoppingByTarget = false;
       this.stateMachine.reset();
     }, 0.2);
@@ -298,6 +300,7 @@ export class ReelController extends Component {
         this.currentSpeed = 0;
         this.acceleration = 0;
         this.snapToFinalPositions();
+        this.checkTargetSymbolMatch();
         this.stateMachine.setResult();
       }
     } else if (this.isAccelerating) {
@@ -351,7 +354,6 @@ export class ReelController extends Component {
 
       // If symbol has wrapped around
       if (Math.abs(wrapDelta) > 0) {
-        // Update symbol image for wrapped symbols during spin
         if (this.stateMachine.isSpinning() && !this.stateMachine.isStopping()) {
           const randomSymbol =
             this.allSymbols[Math.floor(Math.random() * this.allSymbols.length)];
@@ -438,12 +440,12 @@ export class ReelController extends Component {
                 0
               ),
             },
-            { easing: "quadOut" }
+            { easing: "backOut" }
           )
           .to(
             duration * 0.3,
             { position: v3(0, targetY, 0) },
-            { easing: "quadIn" }
+            { easing: "backIn" }
           )
           .start();
 
@@ -451,6 +453,44 @@ export class ReelController extends Component {
       } else {
         container.node.setPosition(0, targetY);
       }
+    }
+  }
+
+  // ============================================================================
+  // Debug & Validation
+  // ============================================================================
+
+  private checkTargetSymbolMatch(): void {
+    const visibleSymbols = this.getVisibleSymbols();
+    const matches: boolean[] = [];
+    const maxLength = Math.max(
+      visibleSymbols.length,
+      this.targetSymbols.length
+    );
+
+    for (let i = 0; i < maxLength; i++) {
+      const visible = visibleSymbols[i] || "N/A";
+      const target = this.targetSymbols[i] || "N/A";
+      const match = visible === target;
+      matches.push(match);
+    }
+
+    const allMatch = matches.every((m) => m);
+    const matchCount = matches.filter((m) => m).length;
+
+    console.log(
+      `[ReelController] Target Symbol Match Check:\n` +
+        `  Target: [${this.targetSymbols.join(", ")}]\n` +
+        `  Visible: [${visibleSymbols.join(", ")}]\n` +
+        `  Matches: ${matchCount}/${maxLength} - ${
+          allMatch ? "✓ ALL MATCH" : "✗ MISMATCH"
+        }`
+    );
+
+    if (!allMatch) {
+      console.warn(
+        `[ReelController] Symbol mismatch detected! Check reel alignment logic.`
+      );
     }
   }
 
