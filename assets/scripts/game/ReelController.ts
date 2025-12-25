@@ -1,57 +1,57 @@
-import {
-  _decorator,
-  Component,
-  Node,
-  tween,
-  Vec3,
-  CCInteger,
-  v3,
-  Tween,
-} from "cc";
+import { _decorator, Component, CCInteger, tween, Node, Vec3, Color } from "cc";
 import { GameConfig } from "../data/GameConfig";
 import { SymbolData } from "../data/SymbolData";
 import { ReelContainer, SymbolContainer } from "./ReelContainer";
-import { ReelState, ReelStateMachine } from "./ReelStateMachine";
+import { ReelStateMachine, ReelState } from "./ReelStateMachine";
 
 const { ccclass, property } = _decorator;
 
+enum GridRow {
+  TOP = 1,
+  MIDDLE = 0,
+  BOTTOM = -1,
+}
+
+const REEL_CONSTANTS = {
+  ACCELERATION: 3500,
+  BLUR_THRESHOLD: 800,
+  STOP_DURATION: 2.5,
+  FRAME_TIME: 0.016,
+  POSITION_TOLERANCE: 30,
+  VISIBILITY_TOLERANCE: 10,
+  EXTRA_WRAP_MULTIPLIER: 2,
+} as const;
+
 @ccclass("ReelController")
 export class ReelController extends Component {
-  @property({ type: CCInteger, tooltip: "Extra symbols for smooth wrapping" })
+  @property({ type: CCInteger })
   private bufferSymbols: number = 2;
 
-  @property({ type: CCInteger, tooltip: "Wrap threshold in symbols" })
+  @property({ type: ReelContainer })
   private reelContainer!: ReelContainer;
-  private stateMachine!: ReelStateMachine;
 
+  private stateMachine!: ReelStateMachine;
   private readonly symbolSpacing =
     GameConfig.SYMBOL_SIZE + GameConfig.SYMBOL_SPACING;
-  private readonly symbolSize = GameConfig.SYMBOL_SIZE;
-  private totalSymbols = 0;
 
+  private totalSymbols = 0;
   private topBoundary = 0;
-  private bottomBoundary = 0;
   private wrapHeight = 0;
 
   private currentSpeed = 0;
-  private targetSpeed = 0;
-  private acceleration = 0;
-  private isAccelerating = false;
-
-  private targetSymbols: string[] = [];
-  private readonly allSymbols = SymbolData.getAllSymbols();
-
-  private isStoppingByTarget = false;
-  private activeTweens: Tween<Node>[] = [];
-
-  // Track position offsets for smooth infinite scroll
   private positionOffset = 0;
-  private previousOffset = 0;
-  private wrapCount = 0;
+  private lastPositionOffset = 0;
+  private finalOffset = 0;
+  private tweenData = { offset: 0 };
 
-  // ============================================================================
-  // Lifecycle
-  // ============================================================================
+  private originalPositions: Map<SymbolContainer, number> = new Map();
+  private containerLaps: Map<SymbolContainer, number> = new Map();
+  private targetSymbols: string[] = [];
+  private isFinalizing = false;
+
+  // ==========================================
+  // Lifecycle Methods
+  // ==========================================
 
   protected onLoad(): void {
     this.setupDimensions();
@@ -59,58 +59,304 @@ export class ReelController extends Component {
     this.initializeReel();
   }
 
-  protected onDestroy(): void {
-    this.stopAllTweens();
-    this.reelContainer.clearContainers();
-  }
-
   protected update(dt: number): void {
-    if (this.stateMachine.isIdle() || this.stateMachine.isResult()) return;
-
-    this.updateSpeed(dt);
-
-    if (this.currentSpeed > 0) {
-      this.updateReelMovement(dt);
+    if (this.stateMachine.isSpinning() && !this.isFinalizing) {
+      this.updateSpeed(dt);
+      this.positionOffset += this.currentSpeed * dt;
+      this.syncSymbols(dt);
     }
   }
 
-  // ============================================================================
-  // Public API
-  // ============================================================================
+  // ==========================================
+  // Public API - Spin Control
+  // ==========================================
 
-  public spin(targetSymbols: string[], delay = 0): void {
+  public startSpin(targetSymbols: string[], delay = 0): void {
     if (!this.stateMachine.canSpin()) return;
 
-    this.targetSymbols = this.normalizeTargetSymbols(targetSymbols);
-    this.resetMovementState();
+    this.targetSymbols = targetSymbols;
+    this.isFinalizing = false;
 
-    delay > 0
-      ? this.scheduleOnce(() => this.stateMachine.startSpin(), delay)
-      : this.stateMachine.startSpin();
+    this.scheduleOnce(() => {
+      this.stateMachine.startSpin();
+      this.currentSpeed = 0;
+    }, delay);
   }
 
-  public async stop(): Promise<void> {
-    if (!this.stateMachine.canStop() || this.isStoppingByTarget) return;
-
-    this.isStoppingByTarget = true;
-    this.stateMachine.startStopping();
+  public stopSpin(): void {
+    if (this.stateMachine.isSpinning() && !this.isFinalizing) {
+      this.stateMachine.startStopping();
+      this.beginSmoothStop();
+    }
   }
 
-  public getVisibleSymbols(): string[] {
-    const visibleContainers = this.getVisibleContainers();
-    return visibleContainers.map((container) => container.symbolId);
+  // ==========================================
+  // Spin Control - Internal
+  // ==========================================
+
+  private updateSpeed(dt: number): void {
+    this.currentSpeed = Math.min(
+      this.currentSpeed + REEL_CONSTANTS.ACCELERATION * dt,
+      GameConfig.SPIN_SPEED_MAX
+    );
   }
 
-  // ============================================================================
-  // Setup
-  // ============================================================================
+  private beginSmoothStop(): void {
+    this.isFinalizing = true;
+    this.lastPositionOffset = this.positionOffset;
+
+    const currentSnap = this.positionOffset % this.symbolSpacing;
+    const distToSnap = this.symbolSpacing - currentSnap;
+
+    const extraDistance =
+      this.wrapHeight * REEL_CONSTANTS.EXTRA_WRAP_MULTIPLIER;
+    this.finalOffset = this.positionOffset + distToSnap + extraDistance;
+
+    this.tweenData.offset = this.positionOffset;
+
+    tween(this.tweenData)
+      .to(
+        REEL_CONSTANTS.STOP_DURATION,
+        { offset: this.finalOffset },
+        {
+          easing: "quartOut",
+          onUpdate: () => {
+            this.positionOffset = this.tweenData.offset;
+            this.syncSymbols(REEL_CONSTANTS.FRAME_TIME);
+          },
+        }
+      )
+      .call(() => {
+        this.onStopComplete();
+      })
+      .start();
+  }
+
+  private onStopComplete(): void {
+    this.positionOffset = this.finalOffset;
+    this.currentSpeed = 0;
+    this.isFinalizing = false;
+    this.stateMachine.setResult();
+    this.forceShowNormalSymbols();
+    this.checkFinalResult();
+    this.node.emit("REEL_STOPPED");
+  }
+
+  // ==========================================
+  // Symbol Synchronization
+  // ==========================================
+
+  private syncSymbols(dt: number): void {
+    const containers = this.reelContainer.getAllContainers();
+    const shouldBlur = this.shouldApplyBlurEffect(dt);
+
+    for (const container of containers) {
+      this.updateSymbolPosition(container);
+      this.handleSymbolWrapping(container);
+      this.updateBlurEffect(container, shouldBlur);
+    }
+  }
+
+  private shouldApplyBlurEffect(dt: number): boolean {
+    if (dt === 0) return false;
+
+    const instantSpeed =
+      Math.abs(this.positionOffset - this.lastPositionOffset) / dt;
+    this.lastPositionOffset = this.positionOffset;
+
+    return instantSpeed > REEL_CONSTANTS.BLUR_THRESHOLD;
+  }
+
+  private updateSymbolPosition(container: SymbolContainer): void {
+    const originY = this.originalPositions.get(container) ?? 0;
+    const halfWrap = this.wrapHeight / 2;
+
+    const y =
+      this.modulo(originY - this.positionOffset + halfWrap, this.wrapHeight) -
+      halfWrap;
+    container.node.setPosition(0, y);
+  }
+
+  private handleSymbolWrapping(container: SymbolContainer): void {
+    const originY = this.originalPositions.get(container) ?? 0;
+    const halfWrap = this.wrapHeight / 2;
+
+    const currentLap = Math.floor(
+      (originY - this.positionOffset + halfWrap) / this.wrapHeight
+    );
+    const finalLap = Math.floor(
+      (originY - this.finalOffset + halfWrap) / this.wrapHeight
+    );
+
+    const lastLap = this.containerLaps.get(container);
+
+    if (this.isFinalizing && lastLap !== undefined && lastLap !== currentLap) {
+      if (currentLap === finalLap) {
+        this.applyTargetSymbolToContainer(container, originY);
+      } else {
+        this.assignRandomSymbol(container);
+      }
+    }
+
+    this.containerLaps.set(container, currentLap);
+  }
+
+  // ==========================================
+  // Symbol Assignment
+  // ==========================================
+
+  private applyTargetSymbolToContainer(
+    container: SymbolContainer,
+    originY: number
+  ): void {
+    const gridRow = this.calculateFinalGridRow(originY);
+    const targetId = this.getTargetSymbolForRow(gridRow);
+
+    if (targetId) {
+      this.reelContainer.updateSymbolContainer(container, targetId);
+    } else {
+      this.assignRandomSymbol(container);
+    }
+  }
+
+  private calculateFinalGridRow(originY: number): number {
+    const halfWrap = this.wrapHeight / 2;
+    const finalY =
+      this.modulo(originY - this.finalOffset + halfWrap, this.wrapHeight) -
+      halfWrap;
+
+    return Math.round(finalY / this.symbolSpacing);
+  }
+
+  private getTargetSymbolForRow(gridRow: number): string | null {
+    if (gridRow === GridRow.TOP) return this.targetSymbols[0] || null;
+    if (gridRow === GridRow.MIDDLE) return this.targetSymbols[1] || null;
+    if (gridRow === GridRow.BOTTOM) return this.targetSymbols[2] || null;
+    return null;
+  }
+
+  private assignRandomSymbol(container: SymbolContainer): void {
+    const allSymbols = SymbolData.getAllSymbols();
+    const randomSymbol =
+      allSymbols[Math.floor(Math.random() * allSymbols.length)];
+    this.reelContainer.updateSymbolContainer(container, randomSymbol.id);
+  }
+
+  // ==========================================
+  // Result Checking
+  // ==========================================
+
+  private checkFinalResult(): void {
+    const visibleSymbols = this.getVisibleSymbols();
+    const isMatch = this.compareSymbols(visibleSymbols, this.targetSymbols);
+  }
+
+  private getVisibleSymbols(): string[] {
+    const containers = this.reelContainer.getAllContainers();
+    const visibilityThreshold =
+      this.symbolSpacing + REEL_CONSTANTS.VISIBILITY_TOLERANCE;
+
+    return containers
+      .filter((c) => Math.abs(c.node.position.y) <= visibilityThreshold)
+      .sort((a, b) => b.node.position.y - a.node.position.y)
+      .map((c) => c.symbolId);
+  }
+
+  private compareSymbols(actual: string[], expected: string[]): boolean {
+    return JSON.stringify(actual) === JSON.stringify(expected);
+  }
+
+  // ==========================================
+  // Public API - Symbol Access
+  // ==========================================
+
+  public getContainerAtRow(row: number): SymbolContainer | null {
+    const containers = this.reelContainer.getAllContainers();
+    const targetY = this.getRowYPosition(row);
+
+    const found =
+      containers.find(
+        (c) =>
+          Math.abs(c.node.position.y - targetY) <
+          REEL_CONSTANTS.POSITION_TOLERANCE
+      ) || null;
+
+    return found;
+  }
+
+  public highlightSymbol(row: number): void {
+    const container = this.getContainerAtRow(row);
+    if (!container) return;
+
+    this.stopContainerTweens(container);
+    this.startPulseAnimation(container);
+  }
+
+  public resetSymbolsScale(): void {
+    this.reelContainer.getAllContainers().forEach((container) => {
+      container.node.setScale(1, 1, 1);
+      container.sprite.color = new Color(255, 255, 255, 255);
+    });
+  }
+
+  // ==========================================
+  // Animation Helpers
+  // ==========================================
+
+  private stopContainerTweens(container: SymbolContainer): void {
+    tween(container.node).stop();
+    tween(container.sprite).stop();
+  }
+
+  private startPulseAnimation(container: SymbolContainer): void {
+    const pulseScale = 1.15;
+    const pulseDuration = 0.25;
+    const pulseRepeat = 2;
+
+    tween(container.node)
+      .to(
+        pulseDuration,
+        { scale: new Vec3(pulseScale, pulseScale, 1) },
+        { easing: "quadOut" }
+      )
+      .to(pulseDuration, { scale: new Vec3(1.0, 1.0, 1) }, { easing: "quadIn" })
+      .union()
+      .repeat(pulseRepeat)
+      .start();
+  }
+
+  // ==========================================
+  // Visual Effects
+  // ==========================================
+
+  private forceShowNormalSymbols(): void {
+    this.reelContainer
+      .getAllContainers()
+      .forEach((container) => this.updateBlurEffect(container, false));
+  }
+
+  private updateBlurEffect(container: SymbolContainer, isBlur: boolean): void {
+    if (container.isBlurred === isBlur) return;
+
+    container.isBlurred = isBlur;
+    const spriteFrame = isBlur
+      ? container.blurSpriteFrame || container.normalSpriteFrame
+      : container.normalSpriteFrame;
+
+    if (spriteFrame) {
+      container.sprite.spriteFrame = spriteFrame;
+    }
+  }
+
+  // ==========================================
+  // Initialization
+  // ==========================================
 
   private setupDimensions(): void {
     const visibleHeight = GameConfig.SYMBOL_PER_REEL * this.symbolSpacing;
     this.topBoundary =
       visibleHeight / 2 + this.symbolSpacing * this.bufferSymbols;
-    this.bottomBoundary = -this.topBoundary;
-    this.wrapHeight = this.topBoundary - this.bottomBoundary;
+    this.wrapHeight = this.topBoundary * 2;
     this.totalSymbols = GameConfig.SYMBOL_PER_REEL + this.bufferSymbols * 2;
   }
 
@@ -120,360 +366,44 @@ export class ReelController extends Component {
     this.stateMachine =
       this.getComponent(ReelStateMachine) ||
       this.addComponent(ReelStateMachine);
-
-    this.stateMachine.initialize({
-      onStateEnter: (state) => this.onStateEnter(state),
-    });
+    this.stateMachine.initialize({});
   }
 
   private async initializeReel(): Promise<void> {
-    const symbols = [...this.allSymbols];
-    this.shuffleArray(symbols);
-
+    const symbols = SymbolData.getAllSymbols();
     this.reelContainer.clearContainers();
-    this.stopAllTweens();
-
     const centerIndex = Math.floor(this.totalSymbols / 2);
 
     for (let i = 0; i < this.totalSymbols; i++) {
       const symbol = symbols[i % symbols.length];
       const container = await this.reelContainer.createSymbolContainer(
-        symbol.id,
-        this.symbolSize
+        symbol.id
       );
 
-      if (!container) continue;
-
-      container.node.setParent(this.node);
-      const positionY = (centerIndex - i) * this.symbolSpacing;
-      container.node.setPosition(0, positionY);
-      this.reelContainer.addContainer(container);
-    }
-
-    this.sortContainers();
-  }
-
-  // ============================================================================
-  // State Management
-  // ============================================================================
-
-  private onStateEnter(state: ReelState): void {
-    switch (state) {
-      case ReelState.SPINNING_ACCEL:
-        this.startAcceleration();
-        break;
-
-      case ReelState.SPINNING_CONST:
-        this.startConstantSpin();
-        break;
-
-      case ReelState.STOPPING:
-        this.startStopping();
-        break;
-
-      case ReelState.RESULT:
-        this.finalizeStop();
-        break;
-    }
-  }
-
-  private startAcceleration(): void {
-    this.currentSpeed = 0;
-    const minSpeed = GameConfig.SPIN_SPEED_MIN;
-    const maxSpeed = GameConfig.SPIN_SPEED_MAX;
-    this.targetSpeed = minSpeed + Math.random() * (maxSpeed - minSpeed);
-
-    this.acceleration = this.targetSpeed / 0.4;
-    this.isAccelerating = true;
-
-    this.scheduleOnce(() => {
-      if (this.stateMachine.isState(ReelState.SPINNING_ACCEL)) {
-        this.stateMachine.startConstantSpin();
-      }
-    }, 0.4);
-  }
-
-  private startConstantSpin(): void {
-    this.isAccelerating = false;
-    this.acceleration = 0;
-  }
-
-  private startStopping(): void {
-    this.acceleration = -(this.currentSpeed / 0.6);
-  }
-
-  private finalizeStop(): void {
-    this.scheduleOnce(() => {
-      this.checkTargetSymbolMatch();
-      this.isStoppingByTarget = false;
-      this.stateMachine.reset();
-    }, 0.8);
-  }
-
-  // ============================================================================
-  // Movement & Wrapping
-  // ============================================================================
-
-  private resetMovementState(): void {
-    this.positionOffset = 0;
-    this.previousOffset = 0;
-    this.wrapCount = 0;
-  }
-
-  private updateSpeed(dt: number): void {
-    if (this.stateMachine.isStopping()) {
-      this.currentSpeed += this.acceleration * dt;
-
-      // Ease out at the end
-      if (this.currentSpeed < 50) {
-        this.currentSpeed = Math.max(0, this.currentSpeed - 100 * dt);
-      }
-
-      if (this.currentSpeed <= 0) {
-        this.currentSpeed = 0;
-        this.acceleration = 0;
-        this.snapToFinalPositions();
-        this.checkTargetSymbolMatch();
-        this.stateMachine.setResult();
-      }
-    } else if (this.isAccelerating) {
-      this.currentSpeed += this.acceleration * dt;
-      this.currentSpeed = Math.min(this.currentSpeed, this.targetSpeed);
-
-      if (this.currentSpeed > this.targetSpeed * 0.8) {
-        this.acceleration *= 0.9;
+      if (container) {
+        const posY = (centerIndex - i) * this.symbolSpacing;
+        this.setupContainer(container, posY);
       }
     }
   }
 
-  private updateReelMovement(dt: number): void {
-    const deltaY = this.currentSpeed * dt;
-    this.positionOffset += deltaY;
-
-    // Check if we need to wrap symbols
-    const wrapDelta =
-      Math.floor(this.positionOffset / this.symbolSpacing) -
-      Math.floor(this.previousOffset / this.symbolSpacing);
-
-    if (Math.abs(wrapDelta) > 0) {
-      this.wrapSymbols(wrapDelta);
-      this.previousOffset = this.positionOffset;
-    }
-    this.updateSymbolPositions();
+  private setupContainer(container: SymbolContainer, posY: number): void {
+    container.node.setParent(this.node);
+    container.node.setPosition(0, posY);
+    this.originalPositions.set(container, posY);
+    this.containerLaps.set(container, 0);
+    this.reelContainer.addContainer(container);
   }
 
-  private updateSymbolPositions(): void {
-    const containers = this.reelContainer.getAllContainers();
-
-    for (const container of containers) {
-      const baseY = container.node.position.y;
-      const wrappedY =
-        this.modulo(baseY - this.positionOffset, this.wrapHeight) -
-        this.wrapHeight / 2;
-      container.node.setPosition(0, wrappedY);
-    }
-  }
-
-  private wrapSymbols(wrapDelta: number): void {
-    const containers = this.reelContainer.getAllContainers();
-    this.wrapCount += wrapDelta;
-
-    for (const container of containers) {
-      if (Math.abs(wrapDelta) > 0) {
-        if (this.stateMachine.isSpinning() && !this.stateMachine.isStopping()) {
-          const randomSymbol =
-            this.allSymbols[Math.floor(Math.random() * this.allSymbols.length)];
-          this.reelContainer.updateSymbolContainer(container, randomSymbol.id);
-        }
-      }
-    }
-
-    this.sortContainers();
-  }
-
-  private sortContainers(): void {
-    const containers = this.reelContainer.getAllContainers();
-    containers.sort((a, b) => b.node.position.y - a.node.position.y);
-  }
-
-  private getSortedContainers(): SymbolContainer[] {
-    const containers = this.reelContainer.getAllContainers();
-    return [...containers].sort(
-      (a, b) => b.node.position.y - a.node.position.y
-    );
-  }
-
-  private getVisibleContainers(): SymbolContainer[] {
-    const visible = GameConfig.SYMBOL_PER_REEL;
-    const sorted = this.getSortedContainers();
-    const centerIndex = Math.floor(sorted.length / 2);
-    const startIndex = centerIndex - Math.floor(visible / 2);
-
-    return sorted.slice(startIndex, startIndex + visible);
-  }
-
-  private calculateTargetPositions(
-    sorted: SymbolContainer[]
-  ): Map<SymbolContainer, number> {
-    const targetPositions = new Map<SymbolContainer, number>();
-    const centerIndex = Math.floor(sorted.length / 2);
-
-    sorted.forEach((container, i) => {
-      const offset = i - centerIndex;
-      const targetY = -offset * this.symbolSpacing;
-      targetPositions.set(container, targetY);
-    });
-
-    return targetPositions;
-  }
-
-  private applyTargetSymbolsToVisibleContainers(
-    sorted: SymbolContainer[]
-  ): void {
-    const visible = GameConfig.SYMBOL_PER_REEL;
-    const centerIndex = Math.floor(sorted.length / 2);
-    const startIndex = centerIndex - Math.floor(visible / 2);
-
-    for (let i = 0; i < visible && i < this.targetSymbols.length; i++) {
-      const containerIndex = startIndex + i;
-      if (containerIndex >= 0 && containerIndex < sorted.length) {
-        this.reelContainer.updateSymbolContainer(
-          sorted[containerIndex],
-          this.targetSymbols[i]
-        );
-      }
-    }
-  }
-
-  private animateContainersToPositions(
-    targetPositions: Map<SymbolContainer, number>
-  ): void {
-    this.stopAllTweens();
-
-    targetPositions.forEach((targetY, container) => {
-      const currentY = container.node.position.y;
-      const distance = Math.abs(currentY - targetY);
-
-      if (distance > 0.1) {
-        const tweenInstance = this.createSnapTween(
-          container.node,
-          currentY,
-          targetY
-        );
-        this.activeTweens.push(tweenInstance);
-      } else {
-        container.node.setPosition(0, targetY);
-      }
-    });
-  }
-
-  private createSnapTween(
-    node: Node,
-    currentY: number,
-    targetY: number
-  ): Tween<Node> {
-    const overshoot = Math.min(Math.abs(currentY - targetY) / 100, 0.3);
-    const duration = Math.min(0.4 + Math.abs(currentY - targetY) / 200, 0.8);
-    const overshootY = targetY + (currentY > targetY ? overshoot : -overshoot);
-
-    return tween(node)
-      .to(
-        duration * 0.7,
-        { position: v3(0, overshootY, 0) },
-        { easing: "backOut" }
-      )
-      .to(duration * 0.3, { position: v3(0, targetY, 0) }, { easing: "backIn" })
-      .start();
-  }
-
-  private normalizeTargetSymbols(targetSymbols: string[]): string[] {
-    if (
-      Array.isArray(targetSymbols) &&
-      targetSymbols.length > 0 &&
-      Array.isArray(targetSymbols[0])
-    ) {
-      console.warn(
-        `[ReelController] Received 2D array for targetSymbols, using first array:`,
-        targetSymbols
-      );
-      return targetSymbols[0] as any;
-    }
-    return targetSymbols;
-  }
-
-  private getReelLabel(): string {
-    const reelIndex = this.node.parent?.children.indexOf(this.node) ?? -1;
-    return reelIndex >= 0 ? `Reel ${reelIndex}` : "Reel";
-  }
-
-  // ============================================================================
-  // Stop Logic
-  // ============================================================================
-
-  private snapToFinalPositions(): void {
-    const sorted = this.getSortedContainers();
-    const targetPositions = this.calculateTargetPositions(sorted);
-
-    this.applyTargetSymbolsToVisibleContainers(sorted);
-    this.animateContainersToPositions(targetPositions);
-  }
-
-  // ============================================================================
-  // Debug & Validation
-  // ============================================================================
-
-  private checkTargetSymbolMatch(): void {
-    if (!this.targetSymbols?.length) {
-      console.warn(`[ReelController] No target symbols to check`);
-      return;
-    }
-
-    const visibleSymbols = this.getVisibleSymbols();
-    const matches = this.targetSymbols.map(
-      (target, i) => visibleSymbols[i] === target
-    );
-    const allMatch = matches.every((m) => m);
-    const matchCount = matches.filter((m) => m).length;
-    const reelLabel = this.getReelLabel();
-
-    console.log(
-      `[ReelController] ${reelLabel} - Target Symbol Match Check:\n` +
-        `  Target: [${this.targetSymbols.join(", ")}]\n` +
-        `  Visible: [${visibleSymbols.join(", ")}]\n` +
-        `  Matches: ${matchCount}/${this.targetSymbols.length} - ${
-          allMatch ? "✓ ALL MATCH" : "✗ MISMATCH"
-        }`
-    );
-
-    if (!allMatch) {
-      console.warn(
-        `[ReelController] ${reelLabel} - Symbol mismatch detected! Check reel alignment logic.`
-      );
-    }
-  }
-
-  // ============================================================================
+  // ==========================================
   // Utility Methods
-  // ============================================================================
+  // ==========================================
 
-  private modulo(value: number, modulus: number): number {
-    return ((value % modulus) + modulus) % modulus;
+  private getRowYPosition(row: number): number {
+    return (1 - row) * this.symbolSpacing;
   }
 
-  private stopAllTweens(): void {
-    this.activeTweens.forEach((tween) => {
-      if (tween && typeof tween.stop === "function") {
-        tween.stop();
-      }
-    });
-    this.activeTweens = [];
-  }
-
-  private shuffleArray<T>(arr: T[]): T[] {
-    for (let i = arr.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [arr[i], arr[j]] = [arr[j], arr[i]];
-    }
-    return arr;
+  private modulo(v: number, m: number): number {
+    return ((v % m) + m) % m;
   }
 }

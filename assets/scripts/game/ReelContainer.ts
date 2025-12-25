@@ -25,6 +25,10 @@ export class ReelContainer extends Component {
   private readonly spriteFrameCache = SpriteFrameCache.getInstance();
   private containers: SymbolContainer[] = [];
 
+  // ==========================================
+  // Symbol Container Creation
+  // ==========================================
+
   public async createSymbolContainer(
     symbolId: string,
     symbolSize?: number
@@ -55,6 +59,10 @@ export class ReelContainer extends Component {
     };
   }
 
+  // ==========================================
+  // Sprite Loading
+  // ==========================================
+
   public async loadSymbolSprite(
     symbolId: string,
     isBlur: boolean = false
@@ -78,12 +86,13 @@ export class ReelContainer extends Component {
 
       return spriteFrame;
     } catch (error) {
-      if (!isBlur) {
-        console.warn(`Failed to load sprite for ${symbolId}:`, error);
-      }
       return null;
     }
   }
+
+  // ==========================================
+  // Symbol Container Management
+  // ==========================================
 
   public async updateSymbolContainer(
     container: SymbolContainer,
@@ -95,21 +104,18 @@ export class ReelContainer extends Component {
     const normalSprite = await this.loadSymbolSprite(newSymbolId);
     const blurSprite = await this.loadSymbolSprite(newSymbolId, true);
 
-    if (normalSprite) {
-      container.normalSpriteFrame = normalSprite;
-    }
-    if (blurSprite) {
-      container.blurSpriteFrame = blurSprite;
-    } else if (normalSprite) {
-      container.blurSpriteFrame = normalSprite;
-    }
+    if (normalSprite) container.normalSpriteFrame = normalSprite;
+    if (blurSprite) container.blurSpriteFrame = blurSprite;
+    else container.blurSpriteFrame = normalSprite;
 
-    if (!container.isBlurred && container.normalSpriteFrame) {
-      container.sprite.spriteFrame = container.normalSpriteFrame;
-    } else if (container.isBlurred && container.blurSpriteFrame) {
-      container.sprite.spriteFrame = container.blurSpriteFrame;
-    }
+    container.sprite.spriteFrame = container.isBlurred
+      ? container.blurSpriteFrame
+      : container.normalSpriteFrame;
   }
+
+  // ==========================================
+  // Container Access
+  // ==========================================
 
   public getAllContainers(): SymbolContainer[] {
     return this.containers;

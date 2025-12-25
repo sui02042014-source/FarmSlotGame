@@ -48,6 +48,10 @@ export class GameManager extends Component {
 
   private static instance: GameManager = null!;
 
+  // ==========================================
+  // Lifecycle Methods
+  // ==========================================
+
   public static getInstance(): GameManager {
     return this.instance;
   }
@@ -70,6 +74,10 @@ export class GameManager extends Component {
   protected start(): void {
     this.initGame();
   }
+
+  // ==========================================
+  // Initialization
+  // ==========================================
 
   private async initGame(): Promise<void> {
     const bundleManager = AssetBundleManager.getInstance();
@@ -98,15 +106,9 @@ export class GameManager extends Component {
     this.winCounter.decimalPlaces = 2;
   }
 
-  private savePlayerData(): void {
-    PlayerDataStorage.save(this.playerCoins, this.currentBet);
-  }
-
-  private updateUI(): void {
-    if (this.coinLabel) this.coinLabel.string = this.playerCoins.toFixed(2);
-    if (this.betLabel) this.betLabel.string = this.currentBet.toFixed(2);
-    if (this.winLabel) this.winLabel.string = this.lastWin.toFixed(2);
-  }
+  // ==========================================
+  // State Management
+  // ==========================================
 
   public setState(state: GameState): void {
     const audioManager = AudioManager.getInstance();
@@ -153,9 +155,9 @@ export class GameManager extends Component {
     });
   }
 
-  // ---------------------------------------------------------------------------
-  // Bet controls
-  // ---------------------------------------------------------------------------
+  // ==========================================
+  // Bet Controls
+  // ==========================================
 
   public increaseBet(): void {
     if (!this.isIdle()) return;
@@ -185,9 +187,9 @@ export class GameManager extends Component {
     this.savePlayerData();
   }
 
-  // ---------------------------------------------------------------------------
-  // Spin flow
-  // ---------------------------------------------------------------------------
+  // ==========================================
+  // Spin Flow
+  // ==========================================
 
   public startSpin(): void {
     const modalManager = ModalManager.getInstance();
@@ -210,12 +212,10 @@ export class GameManager extends Component {
     this.setState(GameConfig.GAME_STATES.SPINNING);
 
     const slot = this.getSlotMachine();
-    if (!slot) {
-      this.setState(GameConfig.GAME_STATES.IDLE);
-      return;
+    if (slot) {
+      slot.resetAllReels();
+      slot.spin();
     }
-
-    slot.spin();
   }
 
   public onSpinComplete(): void {
@@ -236,16 +236,18 @@ export class GameManager extends Component {
     return this.slotMachine.getComponent(SlotMachine);
   }
 
-  // ---------------------------------------------------------------------------
-  // Win / Lose handling
-  // ---------------------------------------------------------------------------
+  // ==========================================
+  // Win / Lose Handling
+  // ==========================================
 
   private handleWinResult(
     slot: SlotMachine,
     totalWin: number,
-    winLines: ReturnType<SlotMachine["checkWin"]>["winLines"]
+    winLines: any[]
   ): void {
     if (totalWin > 0) {
+      slot.showWinEffects(winLines);
+
       this.onWin(totalWin);
     } else {
       this.onLose();
@@ -269,11 +271,12 @@ export class GameManager extends Component {
 
     this.updateUI();
     this.savePlayerData();
-
     this.handleWinPresentation(amount);
 
-    this.setState(GameConfig.GAME_STATES.IDLE);
-    this.continueAutoPlay();
+    this.scheduleOnce(() => {
+      this.setState(GameConfig.GAME_STATES.IDLE);
+      this.continueAutoPlay();
+    }, 2.0);
   }
 
   private shouldShowWinModal(amount: number): boolean {
@@ -304,9 +307,9 @@ export class GameManager extends Component {
     this.continueAutoPlay();
   }
 
-  // ---------------------------------------------------------------------------
-  // Coin fly effect
-  // ---------------------------------------------------------------------------
+  // ==========================================
+  // Coin Fly Effect
+  // ==========================================
 
   private getCoinEffectParent(): Node | null {
     const modalManager = ModalManager.getInstance();
@@ -358,9 +361,9 @@ export class GameManager extends Component {
     });
   }
 
-  // ---------------------------------------------------------------------------
-  // Auto play
-  // ---------------------------------------------------------------------------
+  // ==========================================
+  // Auto Play
+  // ==========================================
 
   private continueAutoPlay(): void {
     if (this.isAutoPlay) {
@@ -379,9 +382,23 @@ export class GameManager extends Component {
     return this.isAutoPlay;
   }
 
-  // ---------------------------------------------------------------------------
-  // External helpers
-  // ---------------------------------------------------------------------------
+  // ==========================================
+  // Data Management
+  // ==========================================
+
+  private savePlayerData(): void {
+    PlayerDataStorage.save(this.playerCoins, this.currentBet);
+  }
+
+  private updateUI(): void {
+    if (this.coinLabel) this.coinLabel.string = this.playerCoins.toFixed(2);
+    if (this.betLabel) this.betLabel.string = this.currentBet.toFixed(2);
+    if (this.winLabel) this.winLabel.string = this.lastWin.toFixed(2);
+  }
+
+  // ==========================================
+  // Public API - External Helpers
+  // ==========================================
 
   public addCoins(amount: number): void {
     if (amount <= 0) return;

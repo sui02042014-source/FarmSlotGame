@@ -1,12 +1,17 @@
 import { _decorator, Component, Node } from "cc";
 import { GameConfig } from "../data/GameConfig";
-import { ReelController } from "./ReelController";
+import { SlotLogic, SpinResult } from "../logic/SlotLogic";
 import { GameManager } from "./GameManager";
-import { SlotLogic, WinLine, SpinResult } from "../logic/SlotLogic";
+import { ReelController } from "./ReelController";
 
 const { ccclass, property } = _decorator;
 
-export type { WinLine };
+export interface WinLine {
+  lineIndex: number;
+  symbolId: string;
+  count: number;
+  positions: number[][];
+}
 
 @ccclass("SlotMachine")
 export class SlotMachine extends Component {
@@ -14,102 +19,95 @@ export class SlotMachine extends Component {
   reels: Node[] = [];
 
   private reelControllers: ReelController[] = [];
-  private isSpinning: boolean = false;
-  private currentSymbols: string[][] = [];
-  private pendingSpinResult: SpinResult | null = null;
+  private lastSpinResult: SpinResult | null = null;
 
-  // ============================================================================
-  // Lifecycle
-  // ============================================================================
+  // ==========================================
+  // Lifecycle Methods
+  // ==========================================
 
   protected start(): void {
     this.reelControllers = this.reels
-      .map((reel) => reel?.getComponent(ReelController))
-      .filter(
-        (controller): controller is ReelController => controller !== null
-      );
+      .map((reel) => reel.getComponent(ReelController))
+      .filter((c): c is ReelController => !!c);
   }
 
-  // ============================================================================
-  // Spin Control
-  // ============================================================================
+  // ==========================================
+  // Public API - Spin Control
+  // ==========================================
 
   public spin(): void {
-    if (this.isSpinning || this.reelControllers.length === 0) {
-      return;
-    }
-
-    this.isSpinning = true;
-    this.unschedule(() => void this.stopSpin());
-
-    const bet = GameManager.getInstance()?.getCurrentBet() || 1;
-    this.pendingSpinResult = SlotLogic.calculateSpinResult(
+    const bet = GameManager.getInstance().getCurrentBet();
+    const result = SlotLogic.calculateSpinResult(
       GameConfig.REEL_COUNT,
       GameConfig.SYMBOL_PER_REEL,
       bet
     );
 
-    const targetSymbols = this.pendingSpinResult.symbolGrid;
-    console.log("targetSymbols", targetSymbols);
-    this.startReelSpins(targetSymbols);
-    this.currentSymbols = targetSymbols;
+    this.lastSpinResult = result;
 
-    this.scheduleOnce(() => void this.stopSpin(), GameConfig.SPIN_DURATION);
+    let finishedReels = 0;
+    this.reelControllers.forEach((controller, col) => {
+      controller.startSpin(result.symbolGrid[col], col * 0.1);
+
+      controller.node.once("REEL_STOPPED", () => {
+        finishedReels++;
+        if (finishedReels === this.reelControllers.length) {
+          GameManager.getInstance().onSpinComplete();
+        }
+      });
+    });
+
+    this.scheduleOnce(() => {
+      this.reelControllers.forEach((c, i) => {
+        this.scheduleOnce(() => c.stopSpin(), i * 0.2);
+      });
+    }, 2.5);
   }
 
-  private startReelSpins(targetSymbols: string[][]): void {
-    targetSymbols.forEach((reelSymbols, col) => {
-      this.reelControllers[col]?.spin(reelSymbols, 0);
+  // ==========================================
+  // Public API - Win Checking
+  // ==========================================
+
+  public checkWin(): { totalWin: number; winLines: SpinResult["winLines"] } {
+    if (!this.lastSpinResult) {
+      return { totalWin: 0, winLines: [] };
+    }
+    return {
+      totalWin: this.lastSpinResult.totalWin,
+      winLines: this.lastSpinResult.winLines,
+    };
+  }
+
+  // ==========================================
+  // Public API - Visual Effects
+  // ==========================================
+
+  public resetAllReels(): void {
+    this.reelControllers.forEach((reel) => {
+      if (reel && reel.resetSymbolsScale) {
+        reel.resetSymbolsScale();
+      }
     });
   }
 
-  private async stopSpin(): Promise<void> {
-    await this.stopReelsSequentially();
-    this.isSpinning = false;
+  public showWinEffects(winLines: any[]): void {
+    this.resetAllReels();
 
-    this.currentSymbols = this.buildSymbolGrid();
-    if (this.pendingSpinResult) {
-      this.pendingSpinResult.symbolGrid = this.currentSymbols;
-    }
+    if (!winLines || winLines.length === 0) return;
 
-    GameManager.getInstance()?.onSpinComplete();
-  }
+    winLines.forEach((line) => {
+      const positions = line.positions || line;
 
-  private async stopReelsSequentially(): Promise<void> {
-    const stopPromises = this.reelControllers
-      .slice(0, GameConfig.REEL_COUNT)
-      .map((controller, col) => {
-        if (!controller) return Promise.resolve();
+      if (Array.isArray(positions)) {
+        positions.forEach((pos: any) => {
+          const col = typeof pos.col !== "undefined" ? pos.col : pos[0];
+          const row = typeof pos.row !== "undefined" ? pos.row : pos[1];
 
-        return new Promise<void>((resolve) => {
-          this.scheduleOnce(() => {
-            controller.stop().then(() => resolve());
-          }, col * GameConfig.REEL_STOP_DELAY);
+          if (this.reelControllers[col]) {
+            this.reelControllers[col].highlightSymbol(row);
+          }
         });
-      });
-
-    await Promise.all(stopPromises);
-  }
-
-  private buildSymbolGrid(): string[][] {
-    return this.reelControllers
-      .slice(0, GameConfig.REEL_COUNT)
-      .map((controller) => controller?.getVisibleSymbols() || []);
-  }
-
-  // ============================================================================
-  // Win Detection
-  // ============================================================================
-
-  public checkWin(): { totalWin: number; winLines: WinLine[] } {
-    if (this.pendingSpinResult) {
-      return {
-        totalWin: this.pendingSpinResult.totalWin,
-        winLines: this.pendingSpinResult.winLines,
-      };
-    }
-
-    const bet = GameManager.getInstance()?.getCurrentBet() || 1;
-    return SlotLogic.checkWin(this.currentSymbols, bet);
+      }
+    });
   }
 }
