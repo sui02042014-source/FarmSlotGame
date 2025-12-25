@@ -1,26 +1,45 @@
-import { _decorator, Component, Node, tween, Vec3, UIOpacity } from "cc";
+import {
+  _decorator,
+  Component,
+  Node,
+  tween,
+  Vec3,
+  UIOpacity,
+  CCInteger,
+  v3,
+  Tween,
+} from "cc";
 import { GameConfig } from "../data/GameConfig";
 import { SymbolData } from "../data/SymbolData";
 import { ReelContainer, SymbolContainer } from "./ReelContainer";
 import { ReelState, ReelStateMachine } from "./ReelStateMachine";
 
-const { ccclass } = _decorator;
+const { ccclass, property } = _decorator;
 
 @ccclass("ReelController")
 export class ReelController extends Component {
+  @property({ type: CCInteger, tooltip: "Extra symbols for smooth wrapping" })
+  private bufferSymbols: number = 2;
+
+  @property({ type: CCInteger, tooltip: "Wrap threshold in symbols" })
+  private wrapThreshold: number = 1;
+
   private reelContainer!: ReelContainer;
   private stateMachine!: ReelStateMachine;
 
   private readonly symbolSpacing =
     GameConfig.SYMBOL_SIZE + GameConfig.SYMBOL_SPACING;
   private readonly symbolSize = GameConfig.SYMBOL_SIZE;
-  private readonly minSymbolCount = 5;
+  private totalSymbols = 0;
 
-  private bottomThreshold = 0;
+  private topBoundary = 0;
+  private bottomBoundary = 0;
+  private wrapHeight = 0;
 
   private currentSpeed = 0;
   private targetSpeed = 0;
   private acceleration = 0;
+  private isAccelerating = false;
 
   private targetSymbols: string[] = [];
   private readonly allSymbols = SymbolData.getAllSymbols();
@@ -28,18 +47,25 @@ export class ReelController extends Component {
   private stopDeceleration = 0;
   private isStoppingByTarget = false;
   private highlightedContainers: Set<SymbolContainer> = new Set();
+  private activeTweens: Tween<Node>[] = [];
+
+  // Track position offsets for smooth infinite scroll
+  private positionOffset = 0;
+  private previousOffset = 0;
+  private wrapCount = 0;
 
   // ============================================================================
   // Lifecycle
   // ============================================================================
 
   protected onLoad(): void {
-    this.setupThresholds();
+    this.setupDimensions();
     this.setupComponents();
-    this.initializeSymbols();
+    this.initializeReel();
   }
 
   protected onDestroy(): void {
+    this.stopAllTweens();
     this.reelContainer.clearContainers();
   }
 
@@ -47,7 +73,10 @@ export class ReelController extends Component {
     if (this.stateMachine.isIdle() || this.stateMachine.isResult()) return;
 
     this.updateSpeed(dt);
-    this.updateSymbolPositions(dt);
+
+    if (this.currentSpeed > 0) {
+      this.updateReelMovement(dt);
+    }
   }
 
   // ============================================================================
@@ -58,6 +87,8 @@ export class ReelController extends Component {
     if (!this.stateMachine.canSpin()) return;
 
     this.targetSymbols = targetSymbols;
+    this.clearHighlight();
+    this.resetMovementState();
 
     delay > 0
       ? this.scheduleOnce(() => this.stateMachine.startSpin(), delay)
@@ -69,39 +100,53 @@ export class ReelController extends Component {
 
     this.isStoppingByTarget = true;
     this.stateMachine.startStopping();
-
     this.prepareStopByTarget();
   }
 
   public getVisibleSymbols(): string[] {
-    const sorted = this.reelContainer.getSortedContainers();
+    const containers = this.reelContainer.getAllContainers();
     const visible = GameConfig.SYMBOL_PER_REEL;
-    const centerIndex = Math.floor((sorted.length - visible) / 2);
-    const symbols: string[] = [];
+    const symbols: string[] = new Array(visible);
 
-    for (let i = 0; i < visible; i++) {
-      const container = sorted[centerIndex + i];
-      if (container) {
-        symbols.push(container.symbolId);
+    // Find the symbol closest to center position (0)
+    let closestIndex = 0;
+    let closestDistance = Infinity;
+
+    for (let i = 0; i < containers.length; i++) {
+      const distance = Math.abs(containers[i].node.position.y);
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestIndex = i;
       }
+    }
+
+    // Get symbols around the center
+    const startIndex = closestIndex - Math.floor(visible / 2);
+    for (let i = 0; i < visible; i++) {
+      const idx = (startIndex + i + containers.length) % containers.length;
+      symbols[i] = containers[idx].symbolId;
     }
 
     return symbols;
   }
 
   public highlightSymbols(rows: Set<number>): void {
-    // Clear existing highlights first
     this.clearHighlight();
 
-    // Get visible containers sorted by position (top to bottom)
-    const sorted = this.reelContainer.getSortedContainers();
+    const visibleSymbols = this.getVisibleSymbols();
+    const containers = this.reelContainer.getAllContainers();
     const visible = GameConfig.SYMBOL_PER_REEL;
-    const centerIndex = Math.floor((sorted.length - visible) / 2);
 
-    // Highlight containers at the specified row indices
-    for (let i = 0; i < visible; i++) {
-      if (rows.has(i)) {
-        const container = sorted[centerIndex + i];
+    for (let row = 0; row < visible; row++) {
+      if (rows.has(row)) {
+        const symbolId = visibleSymbols[row];
+        const container = containers.find(
+          (c) =>
+            c.symbolId === symbolId &&
+            Math.abs(c.node.position.y + row * this.symbolSpacing) <
+              this.symbolSpacing / 2
+        );
+
         if (container) {
           this.applyHighlight(container);
           this.highlightedContainers.add(container);
@@ -111,7 +156,6 @@ export class ReelController extends Component {
   }
 
   public clearHighlight(): void {
-    // Remove highlight from all previously highlighted containers
     this.highlightedContainers.forEach((container) => {
       if (container.node?.isValid) {
         this.removeHighlight(container);
@@ -120,59 +164,22 @@ export class ReelController extends Component {
     this.highlightedContainers.clear();
   }
 
-  private applyHighlight(container: SymbolContainer): void {
-    if (!container.node?.isValid) return;
-
-    // Add or get UIOpacity component
-    let uiOpacity = container.node.getComponent(UIOpacity);
-    if (!uiOpacity) {
-      uiOpacity = container.node.addComponent(UIOpacity);
-    }
-
-    // Animate scale and opacity for highlight effect
-    tween(container.node)
-      .to(0.2, { scale: new Vec3(1.15, 1.15, 1) }, { easing: "sineOut" })
-      .start();
-
-    tween(uiOpacity).to(0.2, { opacity: 255 }, { easing: "sineOut" }).start();
-  }
-
-  private removeHighlight(container: SymbolContainer): void {
-    if (!container.node?.isValid) return;
-
-    const uiOpacity = container.node.getComponent(UIOpacity);
-
-    // Animate back to normal scale
-    tween(container.node)
-      .to(0.2, { scale: new Vec3(1, 1, 1) }, { easing: "sineIn" })
-      .start();
-
-    // Remove UIOpacity component if it exists (it was added for highlighting)
-    if (uiOpacity) {
-      tween(uiOpacity)
-        .to(0.2, { opacity: 255 }, { easing: "sineIn" })
-        .call(() => {
-          if (container.node?.isValid && uiOpacity) {
-            uiOpacity.destroy();
-          }
-        })
-        .start();
-    }
-  }
-
   // ============================================================================
   // Setup
   // ============================================================================
 
-  private setupThresholds(): void {
-    const halfVisible = (GameConfig.SYMBOL_PER_REEL * this.symbolSpacing) / 2;
-    this.bottomThreshold = -halfVisible - this.symbolSpacing;
+  private setupDimensions(): void {
+    const visibleHeight = GameConfig.SYMBOL_PER_REEL * this.symbolSpacing;
+    this.topBoundary =
+      visibleHeight / 2 + this.symbolSpacing * this.bufferSymbols;
+    this.bottomBoundary = -this.topBoundary;
+    this.wrapHeight = this.topBoundary - this.bottomBoundary;
+    this.totalSymbols = GameConfig.SYMBOL_PER_REEL + this.bufferSymbols * 2;
   }
 
   private setupComponents(): void {
     this.reelContainer =
       this.getComponent(ReelContainer) || this.addComponent(ReelContainer);
-
     this.stateMachine =
       this.getComponent(ReelStateMachine) ||
       this.addComponent(ReelStateMachine);
@@ -182,29 +189,35 @@ export class ReelController extends Component {
     });
   }
 
-  private async initializeSymbols(): Promise<void> {
-    const shuffled = this.shuffleArray([...SymbolData.getAllSymbols()]);
-    const count = Math.max(this.minSymbolCount, GameConfig.SYMBOL_PER_REEL + 2);
-
-    const topY = ((GameConfig.SYMBOL_PER_REEL - 1) / 2) * this.symbolSpacing;
+  private async initializeReel(): Promise<void> {
+    const symbols = [...this.allSymbols];
+    this.shuffleArray(symbols);
 
     this.reelContainer.clearContainers();
+    this.stopAllTweens();
 
-    for (let i = 0; i < count; i++) {
-      const c = await this.reelContainer.createSymbolContainer(
-        shuffled[i % shuffled.length].id,
+    const centerIndex = Math.floor(this.totalSymbols / 2);
+
+    for (let i = 0; i < this.totalSymbols; i++) {
+      const symbol = symbols[i % symbols.length];
+      const container = await this.reelContainer.createSymbolContainer(
+        symbol.id,
         this.symbolSize
       );
-      if (!c) continue;
 
-      c.node.setParent(this.node);
-      c.node.setPosition(0, topY - i * this.symbolSpacing);
-      this.reelContainer.addContainer(c);
+      if (!container) continue;
+
+      container.node.setParent(this.node);
+      const positionY = (centerIndex - i) * this.symbolSpacing;
+      container.node.setPosition(0, positionY);
+      this.reelContainer.addContainer(container);
     }
+
+    this.sortContainers();
   }
 
   // ============================================================================
-  // State
+  // State Management
   // ============================================================================
 
   private onStateEnter(state: ReelState): void {
@@ -222,10 +235,7 @@ export class ReelController extends Component {
         break;
 
       case ReelState.RESULT:
-        this.scheduleOnce(() => {
-          this.isStoppingByTarget = false;
-          this.stateMachine.reset();
-        }, 0.1);
+        this.finalizeStop();
         break;
     }
   }
@@ -235,103 +245,209 @@ export class ReelController extends Component {
     const minSpeed = GameConfig.SPIN_SPEED_MIN;
     const maxSpeed = GameConfig.SPIN_SPEED_MAX;
     this.targetSpeed = minSpeed + Math.random() * (maxSpeed - minSpeed);
-    this.acceleration = this.targetSpeed / 0.3;
+
+    // Non-linear acceleration for more natural feel
+    this.acceleration = this.targetSpeed / 0.4;
+    this.isAccelerating = true;
 
     this.scheduleOnce(() => {
       if (this.stateMachine.isState(ReelState.SPINNING_ACCEL)) {
         this.stateMachine.startConstantSpin();
       }
-    }, 0.3);
+    }, 0.4);
   }
 
   private startConstantSpin(): void {
-    this.currentSpeed = this.targetSpeed;
+    this.isAccelerating = false;
     this.acceleration = 0;
   }
 
   private startStopping(): void {
     this.stopDeceleration = this.currentSpeed;
-    this.acceleration = -this.stopDeceleration;
+    // Gentle deceleration curve
+    this.acceleration = -(this.currentSpeed / 0.6);
+  }
+
+  private finalizeStop(): void {
+    this.scheduleOnce(() => {
+      this.isStoppingByTarget = false;
+      this.stateMachine.reset();
+    }, 0.2);
   }
 
   // ============================================================================
-  // Update
+  // Movement & Wrapping
   // ============================================================================
+
+  private resetMovementState(): void {
+    this.positionOffset = 0;
+    this.previousOffset = 0;
+    this.wrapCount = 0;
+  }
 
   private updateSpeed(dt: number): void {
     if (this.stateMachine.isStopping()) {
       this.currentSpeed += this.acceleration * dt;
 
+      // Ease out at the end
+      if (this.currentSpeed < 50) {
+        this.currentSpeed = Math.max(0, this.currentSpeed - 100 * dt);
+      }
+
       if (this.currentSpeed <= 0) {
         this.currentSpeed = 0;
         this.acceleration = 0;
-        this.snapFinal();
+        this.snapToFinalPositions();
         this.stateMachine.setResult();
       }
-      return;
-    }
-
-    if (this.acceleration !== 0) {
+    } else if (this.isAccelerating) {
       this.currentSpeed += this.acceleration * dt;
       this.currentSpeed = Math.min(this.currentSpeed, this.targetSpeed);
+
+      // Apply easing at the end of acceleration
+      if (this.currentSpeed > this.targetSpeed * 0.8) {
+        this.acceleration *= 0.9;
+      }
     }
   }
 
-  private updateSymbolPositions(dt: number): void {
-    if (this.currentSpeed <= 0) return;
+  private updateReelMovement(dt: number): void {
+    const deltaY = this.currentSpeed * dt;
+    this.positionOffset += deltaY;
 
-    const move = this.currentSpeed * dt;
+    // Check if we need to wrap symbols
+    const wrapDelta =
+      Math.floor(this.positionOffset / this.symbolSpacing) -
+      Math.floor(this.previousOffset / this.symbolSpacing);
 
-    for (const c of this.reelContainer.getAllContainers()) {
-      const y = c.node.position.y - move;
-      c.node.setPosition(0, y);
+    if (Math.abs(wrapDelta) > 0) {
+      this.wrapSymbols(wrapDelta);
+      this.previousOffset = this.positionOffset;
+    }
 
-      if (y < this.bottomThreshold) {
-        this.handleInfiniteScroll(c);
+    // Update all symbol positions based on offset
+    this.updateSymbolPositions();
+  }
+
+  private updateSymbolPositions(): void {
+    const containers = this.reelContainer.getAllContainers();
+
+    for (const container of containers) {
+      const baseY = container.node.position.y;
+      const wrappedY =
+        this.modulo(baseY - this.positionOffset, this.wrapHeight) -
+        this.wrapHeight / 2;
+      container.node.setPosition(0, wrappedY);
+    }
+  }
+
+  private wrapSymbols(wrapDelta: number): void {
+    const containers = this.reelContainer.getAllContainers();
+    this.wrapCount += wrapDelta;
+
+    // Wrap symbols that are out of bounds
+    for (const container of containers) {
+      const currentY = container.node.position.y;
+
+      // If symbol has wrapped around
+      if (Math.abs(wrapDelta) > 0) {
+        // Update symbol image for wrapped symbols during spin
+        if (this.stateMachine.isSpinning() && !this.stateMachine.isStopping()) {
+          const randomSymbol =
+            this.allSymbols[Math.floor(Math.random() * this.allSymbols.length)];
+          this.reelContainer.updateSymbolContainer(container, randomSymbol.id);
+        }
       }
     }
+
+    this.sortContainers();
+  }
+
+  private sortContainers(): void {
+    const containers = this.reelContainer.getAllContainers();
+    containers.sort((a, b) => b.node.position.y - a.node.position.y);
   }
 
   // ============================================================================
-  // Stop logic
+  // Stop Logic
   // ============================================================================
 
   private prepareStopByTarget(): void {
-    const sorted = this.reelContainer.getSortedContainers();
+    const containers = this.reelContainer.getAllContainers();
     const visible = GameConfig.SYMBOL_PER_REEL;
-    const centerIndex = Math.floor((sorted.length - visible) / 2);
 
+    // Sort by current Y position
+    const sorted = [...containers].sort(
+      (a, b) => b.node.position.y - a.node.position.y
+    );
+
+    // Apply target symbols to visible positions
     for (let i = 0; i < visible; i++) {
-      this.reelContainer.updateSymbolContainer(
-        sorted[centerIndex + i],
-        this.targetSymbols[i]
-      );
+      const idx = Math.floor(sorted.length / 2) - Math.floor(visible / 2) + i;
+      if (idx >= 0 && idx < sorted.length && i < this.targetSymbols.length) {
+        this.reelContainer.updateSymbolContainer(
+          sorted[idx],
+          this.targetSymbols[i]
+        );
+      }
     }
   }
 
-  private snapFinal(): void {
-    const sorted = this.reelContainer.getSortedContainers();
+  private snapToFinalPositions(): void {
+    const containers = this.reelContainer.getAllContainers();
     const visible = GameConfig.SYMBOL_PER_REEL;
-    const centerIndex = Math.floor((sorted.length - visible) / 2);
-    const middleVisibleIndex = centerIndex + Math.floor((visible - 1) / 2);
-    const centerY = 0;
+
+    // Calculate target positions for each symbol
+    const targetPositions: Map<SymbolContainer, number> = new Map();
+
+    // Sort containers by current Y position
+    const sorted = [...containers].sort(
+      (a, b) => b.node.position.y - a.node.position.y
+    );
+
+    // Determine center index for alignment
+    const centerIndex = Math.floor(sorted.length / 2);
 
     for (let i = 0; i < sorted.length; i++) {
       const container = sorted[i];
-      const offset = i - middleVisibleIndex;
-      const targetY = centerY - offset * this.symbolSpacing;
+      const offset = i - centerIndex;
+      const targetY = -offset * this.symbolSpacing;
+      targetPositions.set(container, targetY);
+    }
+
+    // Animate to final positions with rubber band effect
+    this.stopAllTweens();
+
+    for (const container of containers) {
       const currentY = container.node.position.y;
+      const targetY = targetPositions.get(container) || 0;
       const distance = Math.abs(currentY - targetY);
 
-      if (distance > 0.05) {
-        const duration = Math.min(0.5 + distance / 120, 0.8);
-        tween(container.node)
+      if (distance > 0.1) {
+        // Calculate animation parameters
+        const overshoot = Math.min(distance / 100, 0.3);
+        const duration = Math.min(0.4 + distance / 200, 0.8);
+
+        const tweenInstance = tween(container.node)
           .to(
-            duration,
-            { position: new Vec3(0, targetY, container.node.position.z) },
-            { easing: "quartOut" }
+            duration * 0.7,
+            {
+              position: v3(
+                0,
+                targetY + (currentY > targetY ? overshoot : -overshoot),
+                0
+              ),
+            },
+            { easing: "quadOut" }
+          )
+          .to(
+            duration * 0.3,
+            { position: v3(0, targetY, 0) },
+            { easing: "quadIn" }
           )
           .start();
+
+        this.activeTweens.push(tweenInstance);
       } else {
         container.node.setPosition(0, targetY);
       }
@@ -339,29 +455,58 @@ export class ReelController extends Component {
   }
 
   // ============================================================================
-  // Infinite scroll
+  // Utility Methods
   // ============================================================================
 
-  private handleInfiniteScroll(container: SymbolContainer): void {
-    let highest = -Infinity;
-
-    for (const c of this.reelContainer.getAllContainers()) {
-      if (c !== container) {
-        highest = Math.max(highest, c.node.position.y);
-      }
-    }
-
-    container.node.setPosition(0, highest + this.symbolSpacing);
-
-    this.reelContainer.updateSymbolContainer(
-      container,
-      this.allSymbols[Math.floor(Math.random() * this.allSymbols.length)].id
-    );
+  private modulo(value: number, modulus: number): number {
+    return ((value % modulus) + modulus) % modulus;
   }
 
-  // ============================================================================
-  // Utils
-  // ============================================================================
+  private stopAllTweens(): void {
+    this.activeTweens.forEach((tween) => {
+      if (tween && typeof tween.stop === "function") {
+        tween.stop();
+      }
+    });
+    this.activeTweens = [];
+  }
+
+  private applyHighlight(container: SymbolContainer): void {
+    if (!container.node?.isValid) return;
+
+    const originalScale = container.node.scale.clone();
+
+    tween(container.node)
+      .repeatForever(
+        tween(container.node)
+          .to(0.3, { scale: v3(1.2, 1.2, 1) }, { easing: "sineOut" })
+          .to(0.3, { scale: v3(1.1, 1.1, 1) }, { easing: "sineIn" })
+      )
+      .start();
+
+    // Add glow effect with UIOpacity
+    let uiOpacity = container.node.getComponent(UIOpacity);
+    if (!uiOpacity) {
+      uiOpacity = container.node.addComponent(UIOpacity);
+      uiOpacity.opacity = 255;
+    }
+  }
+
+  private removeHighlight(container: SymbolContainer): void {
+    if (!container.node?.isValid) return;
+
+    tween(container.node).stop();
+
+    const uiOpacity = container.node.getComponent(UIOpacity);
+    if (uiOpacity) {
+      uiOpacity.destroy();
+    }
+
+    // Return to original scale
+    tween(container.node)
+      .to(0.2, { scale: v3(1, 1, 1) }, { easing: "sineIn" })
+      .start();
+  }
 
   private shuffleArray<T>(arr: T[]): T[] {
     for (let i = arr.length - 1; i > 0; i--) {
