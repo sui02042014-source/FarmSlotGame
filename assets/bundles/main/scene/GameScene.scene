@@ -2641,7 +2641,6 @@
     "_enabled": true,
     "__prefab": null,
     "bufferSymbols": 3,
-    "wrapThreshold": 1,
     "_id": "c5kTgmFlVMZZPnflcFuccC"
   },
   {
@@ -2873,7 +2872,6 @@
     "_enabled": true,
     "__prefab": null,
     "bufferSymbols": 3,
-    "wrapThreshold": 1,
     "_id": "71c9EyHNFPl6Er96Krhij6"
   },
   {
@@ -3105,7 +3103,6 @@
     "_enabled": true,
     "__prefab": null,
     "bufferSymbols": 3,
-    "wrapThreshold": 1,
     "_id": "42vCIMD3xMC456tFEIvG6w"
   },
   {
@@ -3337,7 +3334,6 @@
     "_enabled": true,
     "__prefab": null,
     "bufferSymbols": 3,
-    "wrapThreshold": 1,
     "_id": "f3Dw1PzGdEv6aSBPt1L/M4"
   },
   {
@@ -3569,7 +3565,6 @@
     "_enabled": true,
     "__prefab": null,
     "bufferSymbols": 3,
-    "wrapThreshold": 1,
     "_id": "39bRsObHJDVY+rz+QILe3F"
   },
   {
