@@ -1,166 +1,143 @@
-import { Asset, AssetManager, assetManager, JsonAsset } from "cc";
+import { Asset, AssetManager, assetManager } from "cc";
+
+export enum BundleName {
+  MAIN = "main",
+  SYMBOLS = "symbols",
+  AUDIO = "audio",
+  GAME = "game",
+}
 
 export class AssetBundleManager {
-  private static instance: AssetBundleManager | null = null;
-  private loadedBundles: Map<string, AssetManager.Bundle> = new Map();
+  private static _instance: AssetBundleManager | null = null;
+
+  private _loadedBundles = new Map<string, AssetManager.Bundle>();
+  private _loadingPromises = new Map<
+    string,
+    Promise<AssetManager.Bundle | null>
+  >();
 
   private constructor() {}
 
   public static getInstance(): AssetBundleManager {
-    if (!AssetBundleManager.instance) {
-      AssetBundleManager.instance = new AssetBundleManager();
+    if (!this._instance) {
+      this._instance = new AssetBundleManager();
     }
-    return AssetBundleManager.instance;
+    return this._instance;
   }
 
-  /**
-   * Load a bundle by name
-   * @param bundleName Name of the bundle to load
-   * @returns Promise that resolves when bundle is loaded
-   */
   public async loadBundle(
     bundleName: string
   ): Promise<AssetManager.Bundle | null> {
-    // Check if already loaded
-    if (this.loadedBundles.has(bundleName)) {
-      return this.loadedBundles.get(bundleName)!;
+    if (this._loadedBundles.has(bundleName)) {
+      return this._loadedBundles.get(bundleName)!;
     }
 
-    try {
-      const bundle = await new Promise<AssetManager.Bundle>(
-        (resolve, reject) => {
-          assetManager.loadBundle(bundleName, (err, bundle) => {
-            if (err || !bundle) {
-              reject(err || new Error(`Failed to load bundle: ${bundleName}`));
-              return;
-            }
-            resolve(bundle);
-          });
+    if (this._loadingPromises.has(bundleName)) {
+      return this._loadingPromises.get(bundleName)!;
+    }
+
+    const loadPromise = new Promise<AssetManager.Bundle | null>((resolve) => {
+      assetManager.loadBundle(bundleName, (err, bundle) => {
+        if (err) {
+          console.error(
+            `[AssetBundleManager] Failed to load bundle: ${bundleName}`,
+            err
+          );
+          resolve(null);
+        } else {
+          this._loadedBundles.set(bundleName, bundle);
+          resolve(bundle);
         }
-      );
+        this._loadingPromises.delete(bundleName);
+      });
+    });
 
-      this.loadedBundles.set(bundleName, bundle);
-      return bundle;
-    } catch (error) {
-      console.error(
-        `[AssetBundleManager] Failed to load bundle ${bundleName}:`,
-        error
-      );
-      return null;
-    }
+    this._loadingPromises.set(bundleName, loadPromise);
+    return loadPromise;
   }
 
-  /**
-   * Load multiple bundles at once
-   * @param bundleNames Array of bundle names to load
-   * @returns Promise that resolves when all bundles are loaded
-   */
   public async loadBundles(bundleNames: string[]): Promise<void> {
     await Promise.all(bundleNames.map((name) => this.loadBundle(name)));
   }
 
-  /**
-   * Get a loaded bundle
-   * @param bundleName Name of the bundle
-   * @returns Bundle if loaded, null otherwise
-   */
-  public getBundle(bundleName: string): AssetManager.Bundle | null {
-    return this.loadedBundles.get(bundleName) || null;
-  }
-
-  /**
-   * Load a resource from a specific bundle
-   * @param bundleName Name of the bundle
-   * @param path Path to the resource within the bundle
-   * @param type Type of asset to load
-   * @returns Promise that resolves with the loaded asset
-   */
-  public async load<T extends typeof Asset>(
+  public async load<T extends Asset>(
     bundleName: string,
     path: string,
-    type: T
-  ): Promise<InstanceType<T> | null> {
+    type: { new (): T } | null = null
+  ): Promise<T | null> {
     const bundle = await this.loadBundle(bundleName);
-    if (!bundle) {
-      return null;
-    }
+    if (!bundle) return null;
 
-    try {
-      return await new Promise<InstanceType<T> | null>((resolve) => {
-        bundle.load(path, type, (err, asset) => {
-          if (err || !asset) {
-            console.warn(
-              `[AssetBundleManager] Failed to load ${path} from ${bundleName}:`,
-              err
-            );
-            resolve(null);
-            return;
-          }
-          resolve(asset as InstanceType<T>);
-        });
+    return new Promise((resolve) => {
+      // Nếu type null, engine sẽ tự đoán type
+      bundle.load(path, type as any, (err, asset) => {
+        if (err) {
+          console.warn(
+            `[AssetBundleManager] Load failed: ${path} in ${bundleName}`,
+            err
+          );
+          resolve(null);
+        } else {
+          resolve(asset as T);
+        }
       });
-    } catch (error) {
-      console.error(
-        `[AssetBundleManager] Error loading ${path} from ${bundleName}:`,
-        error
-      );
-      return null;
-    }
+    });
   }
 
-  /**
-   * Preload critical bundles for game start
-   * Should be called during game initialization
-   */
+  public async loadDir<T extends Asset>(
+    bundleName: string,
+    path: string,
+    type: { new (): T }
+  ): Promise<T[] | null> {
+    const bundle = await this.loadBundle(bundleName);
+    if (!bundle) return null;
+
+    return new Promise((resolve) => {
+      bundle.loadDir(path, type, (err, assets) => {
+        if (err) {
+          console.error(`[AssetBundleManager] LoadDir failed: ${path}`, err);
+          resolve(null);
+        } else {
+          resolve(assets as T[]);
+        }
+      });
+    });
+  }
+
   public async preloadCriticalBundles(): Promise<void> {
-    const criticalBundles = ["main", "symbols", "audio"];
-    await this.loadBundles(criticalBundles);
+    const critical = [
+      BundleName.MAIN,
+      BundleName.SYMBOLS,
+      BundleName.AUDIO,
+      BundleName.GAME,
+    ];
+    await this.loadBundles(critical);
   }
 
-  /**
-   * Preload all bundles (for offline mode or full preload)
-   */
-  public async preloadAllBundles(): Promise<void> {
-    const allBundles = ["main", "symbols", "audio"];
-    await this.loadBundles(allBundles);
-  }
-
-  /**
-   * Release a bundle from memory
-   * @param bundleName Name of the bundle to release
-   */
   public releaseBundle(bundleName: string): void {
-    const bundle = this.loadedBundles.get(bundleName);
+    const bundle = this._loadedBundles.get(bundleName);
     if (bundle) {
+      bundle.releaseAll();
       assetManager.removeBundle(bundle);
-      this.loadedBundles.delete(bundleName);
+      this._loadedBundles.delete(bundleName);
+      console.log(`[AssetBundleManager] Released bundle: ${bundleName}`);
     }
   }
 
-  /**
-   * Release all bundles
-   */
   public releaseAllBundles(): void {
-    const bundleNames = Array.from(this.loadedBundles.keys());
-    bundleNames.forEach((name) => this.releaseBundle(name));
+    const names = Array.from(this._loadedBundles.keys());
+    names.forEach((name) => this.releaseBundle(name));
   }
 
-  /**
-   * Check if a bundle is loaded
-   * @param bundleName Name of the bundle
-   * @returns True if bundle is loaded
-   */
+  public getBundle(bundleName: string): AssetManager.Bundle | null {
+    return (
+      assetManager.getBundle(bundleName) ||
+      this._loadedBundles.get(bundleName) ||
+      null
+    );
+  }
+
   public isBundleLoaded(bundleName: string): boolean {
-    return this.loadedBundles.has(bundleName);
-  }
-
-  /**
-   * Get bundle loading statistics
-   */
-  public getStats(): { loaded: number; bundleNames: string[] } {
-    return {
-      loaded: this.loadedBundles.size,
-      bundleNames: Array.from(this.loadedBundles.keys()),
-    };
+    return this._loadedBundles.has(bundleName);
   }
 }

@@ -31,8 +31,8 @@ export class GameManager extends Component {
   @property(Node)
   winLabelNode: Node = null!;
 
-  @property([Node])
-  spinButtons: Node[] = [];
+  @property(SpinButtonController)
+  spinButton: SpinButtonController = null!;
 
   private currentState: GameState = GameConfig.GAME_STATES.IDLE;
   private playerCoins: number = 1000;
@@ -138,21 +138,12 @@ export class GameManager extends Component {
   }
 
   private updateSpinButtonsInteractable(): void {
-    let enabled = this.isIdle();
+    const canSpin = this.currentState === GameConfig.GAME_STATES.IDLE;
+    const hasMoney = this.playerCoins >= this.currentBet;
 
-    if (!enabled && this.currentState === GameConfig.GAME_STATES.WIN_SHOW) {
-      const modalManager = ModalManager.getInstance();
-      enabled = !modalManager || !modalManager.isAnyModalActive();
+    if (this.spinButton?.isValid) {
+      this.spinButton.setEnabled(canSpin && hasMoney);
     }
-
-    if (!this.spinButtons?.length) return;
-
-    this.spinButtons.forEach((node) => {
-      if (!node?.isValid) return;
-      node
-        .getComponentsInChildren(SpinButtonController)
-        .forEach((c) => c?.setEnabled(enabled));
-    });
   }
 
   // ==========================================

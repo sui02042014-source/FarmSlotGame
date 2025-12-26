@@ -6,6 +6,7 @@ import {
   tween,
   UIOpacity,
   Vec3,
+  BlockInputEvents,
 } from "cc";
 const { ccclass, property } = _decorator;
 
@@ -29,59 +30,59 @@ export class BaseModal extends Component {
   @property
   enableAnimation: boolean = true;
 
+  @property({
+    tooltip: "Nếu bật, modal sẽ chặn mọi tương tác chuột/touch xuống phía dưới",
+  })
+  blockInputUnderneath: boolean = true;
+
   protected modalData: any = {};
   protected closeCallback: (() => void) | null = null;
-  private readonly debugLogs: boolean = false;
   private isClosing: boolean = false;
-  private boundCloseBtn: boolean = false;
-  private boundBackground: boolean = false;
 
   protected onLoad(): void {
-    if (this.closeButton) {
-      const button = this.closeButton.getComponent(Button);
-      if (button) {
-        this.closeButton.on(
-          Button.EventType.CLICK,
-          this.onCloseButtonClick,
-          this
-        );
-        this.boundCloseBtn = true;
+    if (this.blockInputUnderneath) {
+      if (!this.getComponent(BlockInputEvents)) {
+        this.addComponent(BlockInputEvents);
       }
     }
 
+    // 2. Setup Close Button
+    if (this.closeButton) {
+      this.closeButton.on(
+        Button.EventType.CLICK,
+        this.onCloseButtonClick,
+        this
+      );
+    }
+
+    // 3. Setup Background Click
     if (this.background && this.enableBackgroundClose) {
-      const button = this.background.getComponent(Button);
+      let button = this.background.getComponent(Button);
       if (!button) {
-        this.background.addComponent(Button);
+        button = this.background.addComponent(Button);
+        button.transition = Button.Transition.NONE;
       }
       this.background.on(Button.EventType.CLICK, this.onBackgroundClick, this);
-      this.boundBackground = true;
     }
 
     this.node.active = false;
   }
 
   protected onDestroy(): void {
-    try {
-      if (this.boundCloseBtn && this.closeButton?.isValid) {
-        this.closeButton.off(
-          Button.EventType.CLICK,
-          this.onCloseButtonClick,
-          this
-        );
-      }
-    } catch (e) {}
+    if (this.closeButton?.isValid) {
+      this.closeButton.off(
+        Button.EventType.CLICK,
+        this.onCloseButtonClick,
+        this
+      );
+    }
 
-    try {
-      if (this.boundBackground && this.background?.isValid) {
-        this.background.off(
-          Button.EventType.CLICK,
-          this.onBackgroundClick,
-          this
-        );
-      }
-    } catch (e) {}
+    if (this.background?.isValid) {
+      this.background.off(Button.EventType.CLICK, this.onBackgroundClick, this);
+    }
   }
+
+  // --- Public API ---
 
   public setData(data: any): void {
     this.modalData = data;
@@ -89,83 +90,70 @@ export class BaseModal extends Component {
   }
 
   public show(closeCallback?: () => void): void {
-    if (closeCallback) {
-      this.closeCallback = closeCallback;
-    }
+    if (this.isClosing) return;
 
+    this.closeCallback = closeCallback || null;
     this.isClosing = false;
     this.node.active = true;
+
     this.onBeforeShow();
 
     if (this.enableAnimation) {
-      this.playShowAnimation(() => {
-        this.onAfterShow();
-      });
+      this.playShowAnimation(() => this.onAfterShow());
     } else {
       this.onAfterShow();
     }
-
-    if (this.debugLogs)
-      console.log(`[BaseModal] Showing modal: ${this.node.name}`);
   }
 
   public hide(): void {
-    if (this.isClosing) return;
+    if (this.isClosing || !this.node.active) return;
     this.isClosing = true;
 
     this.unscheduleAllCallbacks();
-
     this.onBeforeHide();
 
-    if (this.enableAnimation) {
-      this.playHideAnimation(() => {
-        if (!this.node?.isValid) return;
-        this.node.active = false;
-        this.onAfterHide();
-        const cb = this.closeCallback;
-        this.closeCallback = null;
-        if (cb) cb();
-      });
-    } else {
-      if (!this.node?.isValid) return;
+    const finishHide = () => {
       this.node.active = false;
+      this.isClosing = false;
       this.onAfterHide();
-      const cb = this.closeCallback;
-      this.closeCallback = null;
-      if (cb) cb();
-    }
 
-    if (this.debugLogs)
-      console.log(`[BaseModal] Hiding modal: ${this.node.name}`);
+      if (this.closeCallback) {
+        this.closeCallback();
+        this.closeCallback = null;
+      }
+    };
+
+    if (this.enableAnimation) {
+      this.playHideAnimation(finishHide);
+    } else {
+      finishHide();
+    }
   }
+
+  // --- Animation Logic ---
 
   protected playShowAnimation(callback?: () => void): void {
     if (this.background) {
-      const bgOpacity = this.background.getComponent(UIOpacity);
-      if (!bgOpacity) {
+      const opacity =
+        this.background.getComponent(UIOpacity) ||
         this.background.addComponent(UIOpacity);
-      }
-      const opacity = this.background.getComponent(UIOpacity)!;
       opacity.opacity = 0;
-
       tween(opacity).to(this.animationDuration, { opacity: 200 }).start();
     }
 
+    // Animation cho nội dung (Scale Up + Back Out)
     if (this.modalContent) {
       this.modalContent.setScale(new Vec3(0.5, 0.5, 1));
-
       tween(this.modalContent)
         .to(
           this.animationDuration,
           { scale: new Vec3(1, 1, 1) },
           { easing: "backOut" }
         )
-        .call(() => {
-          if (callback) callback();
-        })
+        .call(() => callback?.())
         .start();
-    } else if (callback) {
-      callback();
+    } else {
+      callback?.();
     }
   }
 
@@ -186,32 +174,26 @@ export class BaseModal extends Component {
           { scale: new Vec3(0.5, 0.5, 1) },
           { easing: "backIn" }
         )
-        .call(() => {
-          if (callback) callback();
-        })
+        .call(() => callback?.())
         .start();
-    } else if (callback) {
-      callback();
+    } else {
+      callback?.();
     }
   }
+
+  // --- Event Handlers ---
 
   protected onCloseButtonClick(): void {
     this.hide();
   }
 
   protected onBackgroundClick(): void {
-    if (this.enableBackgroundClose) {
-      this.hide();
-    }
+    if (this.enableBackgroundClose) this.hide();
   }
 
   protected onDataSet(data: any): void {}
-
   protected onBeforeShow(): void {}
-
   protected onAfterShow(): void {}
-
   protected onBeforeHide(): void {}
-
   protected onAfterHide(): void {}
 }

@@ -138,7 +138,6 @@ export class ReelController extends Component {
     this.isFinalizing = false;
     this.stateMachine.setResult();
     this.forceShowNormalSymbols();
-    this.checkFinalResult();
     this.node.emit("REEL_STOPPED");
   }
 
@@ -240,30 +239,6 @@ export class ReelController extends Component {
     const randomSymbol =
       allSymbols[Math.floor(Math.random() * allSymbols.length)];
     this.reelContainer.updateSymbolContainer(container, randomSymbol.id);
-  }
-
-  // ==========================================
-  // Result Checking
-  // ==========================================
-
-  private checkFinalResult(): void {
-    const visibleSymbols = this.getVisibleSymbols();
-    const isMatch = this.compareSymbols(visibleSymbols, this.targetSymbols);
-  }
-
-  private getVisibleSymbols(): string[] {
-    const containers = this.reelContainer.getAllContainers();
-    const visibilityThreshold =
-      this.symbolSpacing + REEL_CONSTANTS.VISIBILITY_TOLERANCE;
-
-    return containers
-      .filter((c) => Math.abs(c.node.position.y) <= visibilityThreshold)
-      .sort((a, b) => b.node.position.y - a.node.position.y)
-      .map((c) => c.symbolId);
-  }
-
-  private compareSymbols(actual: string[], expected: string[]): boolean {
-    return JSON.stringify(actual) === JSON.stringify(expected);
   }
 
   // ==========================================

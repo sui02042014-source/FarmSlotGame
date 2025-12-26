@@ -1,4 +1,4 @@
-import { _decorator, Component, Label, tween, Tween } from "cc";
+import { _decorator, CCInteger, Component, Label, tween, Tween } from "cc";
 const { ccclass, property } = _decorator;
 
 @ccclass("NumberCounter")
@@ -6,11 +6,14 @@ export class NumberCounter extends Component {
   @property(Label)
   label: Label = null!;
 
-  @property
+  @property({ tooltip: "Thời gian chạy hiệu ứng mặc định" })
   duration: number = 2.0;
 
-  @property
+  @property({ type: CCInteger, tooltip: "Số chữ số thập phân" })
   decimalPlaces: number = 2;
+
+  @property({ tooltip: "Sử dụng dấu phẩy ngăn cách hàng nghìn (vd: 1,000.00)" })
+  useThousandSeparator: boolean = true;
 
   @property
   prefix: string = "";
@@ -18,37 +21,38 @@ export class NumberCounter extends Component {
   @property
   suffix: string = "";
 
-  private currentValue: number = 0;
-  private targetValue: number = 0;
-  private isAnimating: boolean = false;
+  @property
+  public currentValue: number = 0;
+  private _targetValue: number = 0;
+  private _activeTween: Tween<any> | null = null;
 
   public countTo(target: number, duration?: number): Promise<void> {
     return new Promise((resolve) => {
-      this.targetValue = target;
-      const animDuration = duration !== undefined ? duration : this.duration;
-      const startValue = this.currentValue;
+      this._targetValue = target;
+      const animDuration = duration ?? this.duration;
 
-      if (this.isAnimating) {
-        Tween.stopAllByTarget(this);
+      this.stopCurrentAnimation();
+
+      if (animDuration <= 0) {
+        this.setValue(target);
+        return resolve();
       }
 
-      this.isAnimating = true;
-
-      const progress = { value: 0 };
-      tween(progress)
+      const tweenObject = { value: this.currentValue };
+      this._activeTween = tween(tweenObject)
         .to(
           animDuration,
-          { value: 1 },
+          { value: target },
           {
+            easing: "sineOut",
             onUpdate: () => {
-              this.currentValue =
-                startValue + (target - startValue) * progress.value;
+              this.currentValue = tweenObject.value;
               this.updateLabel();
             },
           }
         )
         .call(() => {
-          this.isAnimating = false;
+          this._activeTween = null;
           this.currentValue = target;
           this.updateLabel();
           resolve();
@@ -58,36 +62,55 @@ export class NumberCounter extends Component {
   }
 
   public setValue(value: number): void {
-    if (this.isAnimating) {
-      Tween.stopAllByTarget(this);
-      this.isAnimating = false;
-    }
-
+    this.stopCurrentAnimation();
     this.currentValue = value;
-    this.targetValue = value;
+    this._targetValue = value;
     this.updateLabel();
   }
 
+  public addValue(amount: number, duration?: number): Promise<void> {
+    return this.countTo(this._targetValue + amount, duration);
+  }
+
+  public subtractValue(amount: number, duration?: number): Promise<void> {
+    return this.countTo(this._targetValue - amount, duration);
+  }
+
+  private stopCurrentAnimation(): void {
+    if (this._activeTween) {
+      this._activeTween.stop();
+      this._activeTween = null;
+    }
+  }
+
   private updateLabel(): void {
-    if (!this.label) return;
+    if (!this.label?.isValid) return;
 
     const formatted = this.formatNumber(this.currentValue);
     this.label.string = `${this.prefix}${formatted}${this.suffix}`;
   }
 
   private formatNumber(value: number): string {
-    return value.toFixed(this.decimalPlaces);
+    let numStr = value.toFixed(this.decimalPlaces);
+
+    if (this.useThousandSeparator) {
+      const parts = numStr.split(".");
+      parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+      numStr = parts.join(".");
+    }
+
+    return numStr;
   }
 
   public getCurrentValue(): number {
     return this.currentValue;
   }
 
-  public addValue(amount: number, duration?: number): Promise<void> {
-    return this.countTo(this.currentValue + amount, duration);
+  public get targetValue(): number {
+    return this._targetValue;
   }
 
-  public subtractValue(amount: number, duration?: number): Promise<void> {
-    return this.countTo(this.currentValue - amount, duration);
+  protected onDestroy(): void {
+    this.stopCurrentAnimation();
   }
 }

@@ -1,94 +1,79 @@
-import { SpriteFrame, resources } from "cc";
+import { SpriteFrame, resources, AssetManager } from "cc";
 import { AssetBundleManager } from "./AssetBundleManager";
 
 export class SpriteFrameCache {
-  private static instance: SpriteFrameCache | null = null;
-  private cache: Map<string, SpriteFrame> = new Map();
-  private loading: Map<string, Promise<SpriteFrame | null>> = new Map();
+  private static _instance: SpriteFrameCache | null = null;
+  private _cache = new Map<string, SpriteFrame>();
+  private _loadingPromises = new Map<string, Promise<SpriteFrame | null>>();
 
   private constructor() {}
 
   public static getInstance(): SpriteFrameCache {
-    if (!SpriteFrameCache.instance) {
-      SpriteFrameCache.instance = new SpriteFrameCache();
+    if (!this._instance) {
+      this._instance = new SpriteFrameCache();
     }
-    return SpriteFrameCache.instance;
+    return this._instance;
   }
 
   public async getSpriteFrameFromBundle(
     bundleName: string,
     path: string
   ): Promise<SpriteFrame | null> {
-    const cached = this.cache.get(`${bundleName}:${path}`);
-    if (cached) return cached;
+    const key = `${bundleName}:${path}`;
+    if (this._cache.has(key)) return this._cache.get(key)!;
+    if (this._loadingPromises.has(key)) return this._loadingPromises.get(key)!;
 
-    const existing = this.loading.get(`${bundleName}:${path}`);
-    if (existing) return existing;
-
-    const loader = new Promise<SpriteFrame | null>(async (resolve) => {
-      const manager = AssetBundleManager.getInstance();
-      const sf = await manager.load(bundleName, path, SpriteFrame);
-      if (!sf) {
-        resolve(null);
-        return;
+    const promise = (async () => {
+      try {
+        const manager = AssetBundleManager.getInstance();
+        const sf = await manager.load(bundleName, path, SpriteFrame);
+        if (sf) this._cache.set(key, sf);
+        return sf;
+      } catch {
+        return null;
+      } finally {
+        this._loadingPromises.delete(key);
       }
-      this.cache.set(`${bundleName}:${path}`, sf);
-      resolve(sf);
-    });
+    })();
 
-    this.loading.set(`${bundleName}:${path}`, loader);
-    loader.then(
-      () => this.loading.delete(`${bundleName}:${path}`),
-      () => this.loading.delete(`${bundleName}:${path}`)
-    );
-
-    return loader;
+    this._loadingPromises.set(key, promise);
+    return promise;
   }
 
   public async getSpriteFrame(path: string): Promise<SpriteFrame | null> {
-    const cached = this.cache.get(path);
-    if (cached) {
-      return cached;
-    }
+    if (this._cache.has(path)) return this._cache.get(path)!;
+    if (this._loadingPromises.has(path))
+      return this._loadingPromises.get(path)!;
 
-    const existing = this.loading.get(path);
-    if (existing) {
-      return existing;
-    }
-
-    const loader = new Promise<SpriteFrame | null>((resolve) => {
-      resources.load(path, SpriteFrame, (err, spriteFrame) => {
-        if (err || !spriteFrame) {
+    const promise = new Promise<SpriteFrame | null>((resolve) => {
+      resources.load(path, SpriteFrame, (err, sf) => {
+        if (err || !sf) {
           resolve(null);
-          return;
+        } else {
+          this._cache.set(path, sf);
+          resolve(sf);
         }
-        this.cache.set(path, spriteFrame);
-        resolve(spriteFrame);
+        this._loadingPromises.delete(path);
       });
     });
 
-    this.loading.set(path, loader);
-    loader.then(
-      () => this.loading.delete(path),
-      () => this.loading.delete(path)
-    );
-
-    return loader;
+    this._loadingPromises.set(path, promise);
+    return promise;
   }
 
   public async preloadSpriteFrames(paths: string[]): Promise<void> {
-    await Promise.all(paths.map((path) => this.getSpriteFrame(path)));
+    await Promise.all(paths.map((p) => this.getSpriteFrame(p)));
   }
 
   public clearCache(): void {
-    this.cache.clear();
-    this.loading.clear();
+    this._cache.clear();
+    this._loadingPromises.clear();
   }
 
   public getCacheStats(): { cached: number; loading: number } {
     return {
-      cached: this.cache.size,
-      loading: this.loading.size,
+      cached: this._cache.size,
+      loading: this._loadingPromises.size,
     };
   }
 }

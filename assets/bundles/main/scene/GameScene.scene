@@ -5848,7 +5848,6 @@
     "_enabled": true,
     "__prefab": null,
     "holdDuration": 1,
-    "useStateSprites": true,
     "targetSprite": null,
     "normalSprite": {
       "__uuid__": "b43f4077-4001-452b-ad7d-d48ce01dc548@f9941",
@@ -5866,10 +5865,8 @@
       "__uuid__": "28ba8270-879b-4b9c-a89d-e8fa1cec77f5@f9941",
       "__expectedType__": "cc.SpriteFrame"
     },
-    "enableHover": true,
     "hoverScale": 1.05,
     "disabledOpacity": 120,
-    "hideWhenDisabled": false,
     "enableBreathing": true,
     "_id": "52EjCQdzhO646OB2gWRd15"
   },
@@ -6401,7 +6398,9 @@
     "winLabelNode": {
       "__id__": 144
     },
-    "spinButtons": [],
+    "spinButton": {
+      "__id__": 165
+    },
     "_id": "85hYY01BFMVJQC3VjthzBu"
   },
   {

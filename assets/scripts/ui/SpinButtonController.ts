@@ -10,19 +10,17 @@ import {
   tween,
   Tween,
   UIOpacity,
+  math,
 } from "cc";
 import { GameManager } from "../game/GameManager";
 import { GameConfig } from "../data/GameConfig";
-import { AudioManager } from "../utils/AudioManager";
+
 const { ccclass, property } = _decorator;
 
 @ccclass("SpinButtonController")
 export class SpinButtonController extends Component {
-  @property
+  @property({ tooltip: "Time to hold for Auto Play activation" })
   holdDuration: number = 1.0;
-
-  @property
-  useStateSprites: boolean = true;
 
   @property(Sprite)
   targetSprite: Sprite = null!;
@@ -40,146 +38,121 @@ export class SpinButtonController extends Component {
   disabledSprite: SpriteFrame = null!;
 
   @property
-  enableHover: boolean = true;
-
-  @property
   hoverScale: number = 1.05;
 
   @property
   disabledOpacity: number = 120;
 
   @property
-  hideWhenDisabled: boolean = false;
-
-  @property
   enableBreathing: boolean = true;
 
-  private isHolding: boolean = false;
-  private holdTime: number = 0;
-  private autoPlayActivated: boolean = false;
-  private originalScale: Vec3 = new Vec3(1, 1, 1);
-  private isEnabled: boolean = true;
-  private isHovering: boolean = false;
-  private button: Button | null = null;
+  private _isHolding: boolean = false;
+  private _holdTime: number = 0;
+  private _autoPlayActivated: boolean = false;
+  private _originalScale: Vec3 = new Vec3(1, 1, 1);
+  private _isEnabled: boolean = true;
+  private _isHovering: boolean = false;
+  private _button: Button | null = null;
 
   protected onLoad(): void {
-    this.originalScale = this.node.scale.clone();
+    this._originalScale = this.node.scale.clone();
+    this._button = this.node.getComponent(Button);
 
-    this.button = this.node.getComponent(Button);
-
-    if (
-      this.useStateSprites &&
-      this.button &&
-      (this.button as any)?.transition !== undefined
-    ) {
-      try {
-        (this.button as any).transition = (Button as any).Transition?.NONE ?? 0;
-      } catch {}
-    }
-
-    if (!this.targetSprite) {
-      const btnTarget: Node | null = (this.button as any)?.target?.isValid
-        ? (this.button as any).target
-        : null;
-
-      this.targetSprite =
-        btnTarget?.getComponent(Sprite) ??
-        btnTarget?.getComponentInChildren(Sprite) ??
-        this.node.getComponent(Sprite) ??
-        this.node.getComponentInChildren(Sprite) ??
-        null!;
+    if (this._button) {
+      this._button.transition = Button.Transition.NONE;
+      if (!this.targetSprite) {
+        this.targetSprite =
+          this._button.target?.getComponent(Sprite) ||
+          this.node.getComponent(Sprite)!;
+      }
     }
 
     this.node.on(Node.EventType.TOUCH_START, this.onTouchStart, this);
     this.node.on(Node.EventType.TOUCH_END, this.onTouchEnd, this);
     this.node.on(Node.EventType.TOUCH_CANCEL, this.onTouchCancel, this);
-
-    if (this.enableHover) {
-      this.node.on(Node.EventType.MOUSE_ENTER, this.onMouseEnter, this);
-      this.node.on(Node.EventType.MOUSE_LEAVE, this.onMouseLeave, this);
-    }
+    this.node.on(Node.EventType.MOUSE_ENTER, this.onMouseEnter, this);
+    this.node.on(Node.EventType.MOUSE_LEAVE, this.onMouseLeave, this);
 
     this.updateVisualState();
     this.playBreathingAnimation();
   }
 
   protected onDestroy(): void {
-    this.node.off(Node.EventType.TOUCH_START, this.onTouchStart, this);
-    this.node.off(Node.EventType.TOUCH_END, this.onTouchEnd, this);
-    this.node.off(Node.EventType.TOUCH_CANCEL, this.onTouchCancel, this);
-    this.node.off(Node.EventType.MOUSE_ENTER, this.onMouseEnter, this);
-    this.node.off(Node.EventType.MOUSE_LEAVE, this.onMouseLeave, this);
+    this.node.targetOff(this);
   }
 
   protected update(dt: number): void {
-    if (this.isHolding) {
-      this.holdTime += dt;
+    if (!this._isHolding || this._autoPlayActivated) return;
 
-      const scale = 1 + (this.holdTime / this.holdDuration) * 0.1;
-      this.node.setScale(
-        this.originalScale.x * scale,
-        this.originalScale.y * scale,
-        1
-      );
+    this._holdTime += dt;
+    const progress = math.clamp01(this._holdTime / this.holdDuration);
+    const scaleEffect = 1 + progress * 0.1;
 
-      if (this.holdTime >= this.holdDuration && !this.autoPlayActivated) {
-        this.onAutoPlayActivated();
-      }
+    this.node.setScale(
+      this._originalScale.x * scaleEffect,
+      this._originalScale.y * scaleEffect,
+      1
+    );
+
+    if (this._holdTime >= this.holdDuration) {
+      this.onAutoPlayActivated();
     }
   }
 
   private onTouchStart(event: EventTouch): void {
-    if (!this.isEnabled) return;
-    const gameManager = GameManager.getInstance();
-    if (!gameManager) return;
-
-    if (gameManager.getState() !== GameConfig.GAME_STATES.IDLE) {
+    const gm = GameManager.getInstance();
+    if (
+      !this._isEnabled ||
+      !gm ||
+      gm.getState() !== GameConfig.GAME_STATES.IDLE
+    )
       return;
-    }
 
-    this.isHolding = true;
-    this.isHovering = false;
-    this.holdTime = 0;
-    this.autoPlayActivated = false;
+    this._isHolding = true;
+    this._isHovering = false;
+    this._holdTime = 0;
+    this._autoPlayActivated = false;
 
     Tween.stopAllByTarget(this.node);
     this.updateVisualState();
   }
 
   private onTouchEnd(event: EventTouch): void {
-    if (!this.isHolding) return;
+    if (!this._isHolding) return;
 
-    const wasAutoPlayActivated = this.autoPlayActivated;
+    const activatedAuto = this._autoPlayActivated;
+    const timeHeld = this._holdTime;
+
     this.resetHoldState();
 
-    if (this.holdTime < this.holdDuration && !wasAutoPlayActivated) {
-      this.onSpinClick();
+    if (timeHeld < this.holdDuration && !activatedAuto) {
+      GameManager.getInstance()?.startSpin();
     }
 
     this.updateVisualState();
-    if (this.isEnabled) this.playBreathingAnimation();
+    if (this._isEnabled) this.playBreathingAnimation();
   }
 
-  private onTouchCancel(event: EventTouch): void {
+  private onTouchCancel(): void {
     this.resetHoldState();
     this.updateVisualState();
-    if (this.isEnabled) this.playBreathingAnimation();
+    if (this._isEnabled) this.playBreathingAnimation();
   }
 
   private onMouseEnter(): void {
-    if (!this.enableHover || !this.isEnabled) return;
-    if (this.isHolding) return;
+    if (!this._isEnabled || this._isHolding) return;
 
-    this.isHovering = true;
+    this._isHovering = true;
     Tween.stopAllByTarget(this.node);
     this.updateVisualState();
+
     tween(this.node)
       .to(
-        0.08,
+        0.1,
         {
           scale: new Vec3(
-            this.originalScale.x * this.hoverScale,
-            this.originalScale.y * this.hoverScale,
+            this._originalScale.x * this.hoverScale,
+            this._originalScale.y * this.hoverScale,
             1
           ),
         },
@@ -189,119 +162,102 @@ export class SpinButtonController extends Component {
   }
 
   private onMouseLeave(): void {
-    if (!this.enableHover) return;
-    this.isHovering = false;
-    if (!this.isEnabled || this.isHolding) return;
+    this._isHovering = false;
+    if (!this._isEnabled || this._isHolding) return;
 
     Tween.stopAllByTarget(this.node);
-    this.node.setScale(this.originalScale);
+    this.node.setScale(this._originalScale);
     this.updateVisualState();
     this.playBreathingAnimation();
   }
 
   private updateVisualState(): void {
-    if (!this.useStateSprites) return;
-
-    if (!this.targetSprite?.isValid) {
-      this.targetSprite =
-        this.node.getComponent(Sprite) ??
-        this.node.getComponentInChildren(Sprite) ??
-        null!;
-    }
     if (!this.targetSprite?.isValid) return;
 
-    const frame =
-      (!this.isEnabled && this.disabledSprite) ||
-      (this.isHolding && this.pressedSprite) ||
-      (this.isHovering && this.hoverSprite) ||
-      this.normalSprite;
+    let frame: SpriteFrame | null = this.normalSprite;
 
-    if (frame) this.targetSprite.spriteFrame = frame;
+    if (!this._isEnabled) {
+      if (this.disabledSprite) {
+        frame = this.disabledSprite;
+      } else {
+        frame = this.normalSprite;
+      }
+    } else if (this._isHolding) {
+      frame = this.pressedSprite || this.normalSprite;
+    } else if (this._isHovering) {
+      frame = this.hoverSprite || this.normalSprite;
+    }
+
+    if (frame) {
+      this.targetSprite.spriteFrame = frame;
+    }
   }
 
   private resetHoldState(): void {
-    this.isHolding = false;
-    this.autoPlayActivated = false;
-    this.node.setScale(this.originalScale);
-  }
-
-  private onSpinClick(): void {
-    GameManager.getInstance()?.startSpin();
+    this._isHolding = false;
+    this._autoPlayActivated = false;
+    this.node.setScale(this._originalScale);
   }
 
   private onAutoPlayActivated(): void {
-    if (this.autoPlayActivated) return;
-    this.autoPlayActivated = true;
+    this._autoPlayActivated = true;
+    const gm = GameManager.getInstance();
+    if (!gm) return;
 
-    const gameManager = GameManager.getInstance();
-    if (!gameManager) return;
-
-    if (!gameManager.isAutoPlayActive()) {
-      gameManager.toggleAutoPlay();
-    }
-
-    if (gameManager.getState() === GameConfig.GAME_STATES.IDLE) {
-      gameManager.startSpin();
-    }
-
-    console.log("[SpinButton] Auto play activated");
+    if (!gm.isAutoPlayActive()) gm.toggleAutoPlay();
+    if (gm.getState() === GameConfig.GAME_STATES.IDLE) gm.startSpin();
   }
 
   private playBreathingAnimation(): void {
-    if (!this.isEnabled || this.isHolding || this.isHovering) return;
-    if (!this.enableBreathing) return;
-    const breatheScale = 1.03;
+    if (
+      !this._isEnabled ||
+      this._isHolding ||
+      this._isHovering ||
+      !this.enableBreathing
+    )
+      return;
 
     Tween.stopAllByTarget(this.node);
+    const breatheScale = 1.03;
+
     tween(this.node)
       .to(
         0.8,
         {
           scale: new Vec3(
-            this.originalScale.x * breatheScale,
-            this.originalScale.y * breatheScale,
+            this._originalScale.x * breatheScale,
+            this._originalScale.y * breatheScale,
             1
           ),
         },
         { easing: "sineInOut" }
       )
-      .to(0.8, { scale: this.originalScale }, { easing: "sineInOut" })
+      .to(0.8, { scale: this._originalScale }, { easing: "sineInOut" })
       .union()
       .repeatForever()
       .start();
   }
 
   public setEnabled(enabled: boolean): void {
-    this.isEnabled = enabled;
+    this._isEnabled = enabled;
 
-    if (this.button && this.button.isValid) {
-      this.button.interactable = enabled;
+    if (this._button?.isValid) {
+      this._button.interactable = enabled;
     }
 
-    if (this.hideWhenDisabled) {
-      this.node.active = enabled;
-      if (!enabled) return;
-    } else {
-      this.node.active = true;
-    }
-
-    const opacity = enabled ? 255 : this.disabledOpacity;
     const uiOpacity =
-      this.node.getComponent(UIOpacity) ?? this.node.addComponent(UIOpacity);
-    uiOpacity.opacity = opacity;
+      this.node.getComponent(UIOpacity) || this.node.addComponent(UIOpacity);
+    uiOpacity.opacity = enabled ? 255 : this.disabledOpacity;
 
     if (!enabled) {
       Tween.stopAllByTarget(this.node);
-      this.isHovering = false;
-      this.resetHoldState();
+      this._isHovering = false;
+      this._isHolding = false;
+      this._holdTime = 0;
+      this._autoPlayActivated = false;
+      this.node.setScale(this._originalScale);
     } else {
       this.playBreathingAnimation();
-    }
-
-    if (this.useStateSprites && !enabled && !this.disabledSprite) {
-      console.warn(
-        "[SpinButtonController] disabledSprite is not assigned, so disabled state will not show a different image."
-      );
     }
     this.updateVisualState();
   }
