@@ -164,14 +164,9 @@ export class LoadingScreen extends Component {
 
     tween(this.playButton).stop();
 
-    tween(this.playButton)
-      .to(0.2, { scale: Vec3.ZERO }, { easing: "backIn" })
-      .call(() => {
-        if (this._onComplete) {
-          this._onComplete();
-          this._onComplete = null;
-        }
-      })
-      .start();
+    if (this._onComplete) {
+      this._onComplete();
+      this._onComplete = null;
+    }
   }
 }

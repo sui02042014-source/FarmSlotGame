@@ -19,9 +19,6 @@ export class SceneManager {
     return this._instance;
   }
 
-  /**
-   * Khởi động Flow: Tải hết -> Hiện nút -> Click vào Game
-   */
   public async bootstrapApp(): Promise<void> {
     if (this._isLoading) return;
     this._isLoading = true;
@@ -32,13 +29,11 @@ export class SceneManager {
     if (loadingUI) {
       loadingUI.startLoading();
 
-      // Đăng ký: Khi nào click Play mới gọi hàm đổi Scene
       loadingUI.setOnComplete(async () => {
         await this.loadGameScene();
       });
     }
 
-    // Tiến hành tải tài nguyên
     const bundles = [BundleName.GAME, BundleName.SYMBOLS, BundleName.AUDIO];
     const manager = AssetBundleManager.getInstance();
 
@@ -47,11 +42,8 @@ export class SceneManager {
       loadingUI?.updateProgress((i + 1) / bundles.length);
     }
 
-    // Preload Scene Game để khi click nút Play là vào ngay lập tức
     const gameBundle = manager.getBundle(BundleName.GAME);
     gameBundle?.preloadScene(`scene/${SceneName.GAME}`, () => {
-      console.log("[SceneManager] Game Scene Preloaded");
-      // Đảm bảo progress visual đạt 100%
       loadingUI?.updateProgress(1.0);
     });
   }
@@ -65,6 +57,15 @@ export class SceneManager {
         director.runScene(sceneAsset);
         this._isLoading = false;
       }
+    });
+  }
+
+  public loadLobbyScene(): void {
+    if (this._isLoading) return;
+    this._isLoading = true;
+
+    director.loadScene(SceneName.LOADING, () => {
+      this._isLoading = false;
     });
   }
 }

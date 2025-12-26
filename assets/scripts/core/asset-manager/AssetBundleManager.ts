@@ -68,7 +68,6 @@ export class AssetBundleManager {
     if (!bundle) return null;
 
     return new Promise((resolve) => {
-      // Nếu type null, engine sẽ tự đoán type
       bundle.load(path, type as any, (err, asset) => {
         if (err) {
           console.warn(
