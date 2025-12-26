@@ -31,5 +31,21 @@
         }
       }
     }
+  },
+  "splash-setting": {
+    "background": {
+      "image": "project://settings/loading_back.jpg",
+      "type": "default",
+      "color": {
+        "x": 0.01568627450980392,
+        "y": 0.03529411764705882,
+        "z": 0.0392156862745098,
+        "w": 0
+      }
+    },
+    "logo": {
+      "type": "default",
+      "image": "project://settings/loading_back.jpg"
+    }
   }
 }

@@ -1,7 +1,6 @@
 import { Asset, AssetManager, assetManager } from "cc";
 
 export enum BundleName {
-  MAIN = "main",
   SYMBOLS = "symbols",
   AUDIO = "audio",
   GAME = "game",
@@ -105,12 +104,7 @@ export class AssetBundleManager {
   }
 
   public async preloadCriticalBundles(): Promise<void> {
-    const critical = [
-      BundleName.MAIN,
-      BundleName.SYMBOLS,
-      BundleName.AUDIO,
-      BundleName.GAME,
-    ];
+    const critical = [BundleName.SYMBOLS, BundleName.AUDIO, BundleName.GAME];
     await this.loadBundles(critical);
   }
 
