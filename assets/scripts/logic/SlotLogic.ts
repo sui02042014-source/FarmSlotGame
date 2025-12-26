@@ -1,4 +1,5 @@
-import { GameConfig } from "../data/GameConfig";
+import { GameConfig } from "../data/config/GameConfig";
+import { WinLine, SpinResult } from "../types";
 
 /**
  * Win line direction vectors for pattern matching
@@ -6,25 +7,6 @@ import { GameConfig } from "../data/GameConfig";
 interface WinDirection {
   colDelta: number;
   rowDelta: number;
-}
-
-/**
- * Represents a winning line on the slot machine
- */
-export interface WinLine {
-  symbol: string;
-  count: number;
-  positions: { col: number; row: number }[];
-  win: number;
-}
-
-/**
- * Result of a spin calculation
- */
-export interface SpinResult {
-  symbolGrid: string[][];
-  totalWin: number;
-  winLines: WinLine[];
 }
 
 export class SlotLogic {

@@ -6270,7 +6270,7 @@
     "_priority": 0,
     "_fov": 45,
     "_fovAxis": 0,
-    "_orthoHeight": 1072.490013315579,
+    "_orthoHeight": 746.7588591184096,
     "_near": 0,
     "_far": 2000,
     "_color": {
@@ -6401,7 +6401,7 @@
     "spinButton": {
       "__id__": 165
     },
-    "_id": "85hYY01BFMVJQC3VjthzBu"
+    "_id": "17KhTvUINJX4lfzyUUPP4l"
   },
   {
     "__type__": "cc.PrefabInfo",
