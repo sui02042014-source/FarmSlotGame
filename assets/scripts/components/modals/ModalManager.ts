@@ -1,5 +1,6 @@
 import { _decorator, Component, Node, instantiate, Prefab, Widget } from "cc";
 import { BaseModal } from "../modals/BaseModal";
+import { GameManager } from "../../core/game-manager/GameManager";
 
 const { ccclass, property } = _decorator;
 
@@ -7,6 +8,7 @@ export enum ModalType {
   WIN = "WinModal",
   NOT_ENOUGH_COINS = "NotEnoughCoinsModal",
   SETTINGS = "SettingsModal",
+  PAYTABLE = "PaytableModal",
 }
 
 interface ModalQueueItem {
@@ -27,6 +29,9 @@ export class ModalManager extends Component {
 
   @property(Prefab)
   settingsModalPrefab: Prefab = null!;
+
+  @property(Prefab)
+  paytableModalPrefab: Prefab = null!;
 
   private static _instance: ModalManager = null!;
   private _activeModals = new Map<ModalType, Node>();
@@ -56,6 +61,7 @@ export class ModalManager extends Component {
       this.notEnoughCoinsModalPrefab
     );
     this._prefabMap.set(ModalType.SETTINGS, this.settingsModalPrefab);
+    this._prefabMap.set(ModalType.PAYTABLE, this.paytableModalPrefab);
   }
 
   private ensureContainer(): void {
@@ -89,6 +95,12 @@ export class ModalManager extends Component {
 
   public showSettingsModal(): void {
     this.showModal(ModalType.SETTINGS);
+  }
+
+  public showPaytableModal(): void {
+    const gm = GameManager.getInstance();
+    const currentBet = gm ? gm.getCurrentBet() : 1.0;
+    this.showModal(ModalType.PAYTABLE, { currentBet });
   }
 
   public showModal(type: ModalType, data: any = {}): void {

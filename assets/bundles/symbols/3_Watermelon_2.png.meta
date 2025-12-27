@@ -2,7 +2,7 @@
   "ver": "1.0.27",
   "importer": "image",
   "imported": true,
-  "uuid": "92717c26-6b0a-4136-bc13-b15a939708c4",
+  "uuid": "be80732a-1a3e-4c8e-bb18-7ee4ebcb297c",
   "files": [
     ".json",
     ".png"
@@ -10,14 +10,14 @@
   "subMetas": {
     "6c48a": {
       "importer": "texture",
-      "uuid": "92717c26-6b0a-4136-bc13-b15a939708c4@6c48a",
+      "uuid": "be80732a-1a3e-4c8e-bb18-7ee4ebcb297c@6c48a",
       "displayName": "3_Watermelon_2",
       "id": "6c48a",
       "name": "texture",
       "userData": {
         "wrapModeS": "clamp-to-edge",
         "wrapModeT": "clamp-to-edge",
-        "imageUuidOrDatabaseUri": "92717c26-6b0a-4136-bc13-b15a939708c4",
+        "imageUuidOrDatabaseUri": "be80732a-1a3e-4c8e-bb18-7ee4ebcb297c",
         "isUuid": true,
         "visible": false,
         "minfilter": "linear",
@@ -34,7 +34,7 @@
     },
     "f9941": {
       "importer": "sprite-frame",
-      "uuid": "92717c26-6b0a-4136-bc13-b15a939708c4@f9941",
+      "uuid": "be80732a-1a3e-4c8e-bb18-7ee4ebcb297c@f9941",
       "displayName": "3_Watermelon_2",
       "id": "f9941",
       "name": "spriteFrame",
@@ -113,7 +113,7 @@
           ]
         },
         "isUuid": true,
-        "imageUuidOrDatabaseUri": "92717c26-6b0a-4136-bc13-b15a939708c4@6c48a",
+        "imageUuidOrDatabaseUri": "be80732a-1a3e-4c8e-bb18-7ee4ebcb297c@6c48a",
         "atlasUuid": "",
         "trimType": "auto"
       },
@@ -129,6 +129,6 @@
     "type": "sprite-frame",
     "hasAlpha": true,
     "fixAlphaTransparencyArtifacts": false,
-    "redirect": "92717c26-6b0a-4136-bc13-b15a939708c4@6c48a"
+    "redirect": "be80732a-1a3e-4c8e-bb18-7ee4ebcb297c@6c48a"
   }
 }

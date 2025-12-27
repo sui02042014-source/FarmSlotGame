@@ -2,7 +2,7 @@
   "ver": "1.0.27",
   "importer": "image",
   "imported": true,
-  "uuid": "17a3827e-46c1-4000-83e6-ef656a85f081",
+  "uuid": "476f02d5-dd92-4b1c-aea8-2cadddb995f2",
   "files": [
     ".json",
     ".png"
@@ -10,14 +10,14 @@
   "subMetas": {
     "6c48a": {
       "importer": "texture",
-      "uuid": "17a3827e-46c1-4000-83e6-ef656a85f081@6c48a",
+      "uuid": "476f02d5-dd92-4b1c-aea8-2cadddb995f2@6c48a",
       "displayName": "1_Pumpkin",
       "id": "6c48a",
       "name": "texture",
       "userData": {
         "wrapModeS": "clamp-to-edge",
         "wrapModeT": "clamp-to-edge",
-        "imageUuidOrDatabaseUri": "17a3827e-46c1-4000-83e6-ef656a85f081",
+        "imageUuidOrDatabaseUri": "476f02d5-dd92-4b1c-aea8-2cadddb995f2",
         "isUuid": true,
         "visible": false,
         "minfilter": "linear",
@@ -34,7 +34,7 @@
     },
     "f9941": {
       "importer": "sprite-frame",
-      "uuid": "17a3827e-46c1-4000-83e6-ef656a85f081@f9941",
+      "uuid": "476f02d5-dd92-4b1c-aea8-2cadddb995f2@f9941",
       "displayName": "1_Pumpkin",
       "id": "f9941",
       "name": "spriteFrame",
@@ -113,7 +113,7 @@
           ]
         },
         "isUuid": true,
-        "imageUuidOrDatabaseUri": "17a3827e-46c1-4000-83e6-ef656a85f081@6c48a",
+        "imageUuidOrDatabaseUri": "476f02d5-dd92-4b1c-aea8-2cadddb995f2@6c48a",
         "atlasUuid": "",
         "trimType": "auto"
       },
@@ -129,6 +129,6 @@
     "type": "sprite-frame",
     "hasAlpha": true,
     "fixAlphaTransparencyArtifacts": false,
-    "redirect": "17a3827e-46c1-4000-83e6-ef656a85f081@6c48a"
+    "redirect": "476f02d5-dd92-4b1c-aea8-2cadddb995f2@6c48a"
   }
 }

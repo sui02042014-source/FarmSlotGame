@@ -2,12 +2,12 @@
   "ver": "1.1.50",
   "importer": "prefab",
   "imported": true,
-  "uuid": "1d3bd82c-17cd-4a62-8df4-961b6c15c194",
+  "uuid": "1ade1034-005a-4f97-bde1-08845fba0953",
   "files": [
     ".json"
   ],
   "subMetas": {},
   "userData": {
-    "syncNodeName": "WinModal"
+    "syncNodeName": "PaytableModal"
   }
 }

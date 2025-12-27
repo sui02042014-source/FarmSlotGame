@@ -2,7 +2,7 @@
   "ver": "1.0.27",
   "importer": "image",
   "imported": true,
-  "uuid": "b362a259-8c3a-44e3-b567-ffd17baffa12",
+  "uuid": "9e465123-9913-403a-9a14-2f71d428c731",
   "files": [
     ".json",
     ".png"
@@ -10,14 +10,14 @@
   "subMetas": {
     "6c48a": {
       "importer": "texture",
-      "uuid": "b362a259-8c3a-44e3-b567-ffd17baffa12@6c48a",
+      "uuid": "9e465123-9913-403a-9a14-2f71d428c731@6c48a",
       "displayName": "13_Bonus_Mill",
       "id": "6c48a",
       "name": "texture",
       "userData": {
         "wrapModeS": "clamp-to-edge",
         "wrapModeT": "clamp-to-edge",
-        "imageUuidOrDatabaseUri": "b362a259-8c3a-44e3-b567-ffd17baffa12",
+        "imageUuidOrDatabaseUri": "9e465123-9913-403a-9a14-2f71d428c731",
         "isUuid": true,
         "visible": false,
         "minfilter": "linear",
@@ -34,7 +34,7 @@
     },
     "f9941": {
       "importer": "sprite-frame",
-      "uuid": "b362a259-8c3a-44e3-b567-ffd17baffa12@f9941",
+      "uuid": "9e465123-9913-403a-9a14-2f71d428c731@f9941",
       "displayName": "13_Bonus_Mill",
       "id": "f9941",
       "name": "spriteFrame",
@@ -113,7 +113,7 @@
           ]
         },
         "isUuid": true,
-        "imageUuidOrDatabaseUri": "b362a259-8c3a-44e3-b567-ffd17baffa12@6c48a",
+        "imageUuidOrDatabaseUri": "9e465123-9913-403a-9a14-2f71d428c731@6c48a",
         "atlasUuid": "",
         "trimType": "auto"
       },
@@ -129,6 +129,6 @@
     "type": "sprite-frame",
     "hasAlpha": true,
     "fixAlphaTransparencyArtifacts": false,
-    "redirect": "b362a259-8c3a-44e3-b567-ffd17baffa12@6c48a"
+    "redirect": "9e465123-9913-403a-9a14-2f71d428c731@6c48a"
   }
 }

@@ -2,7 +2,7 @@
   "ver": "1.0.27",
   "importer": "image",
   "imported": true,
-  "uuid": "8bf41cf9-b3fa-4b8a-9b2e-e989117c9e31",
+  "uuid": "135975e8-b806-40fb-bbdf-0d86aff1aad8",
   "files": [
     ".json",
     ".png"
@@ -10,14 +10,14 @@
   "subMetas": {
     "6c48a": {
       "importer": "texture",
-      "uuid": "8bf41cf9-b3fa-4b8a-9b2e-e989117c9e31@6c48a",
+      "uuid": "135975e8-b806-40fb-bbdf-0d86aff1aad8@6c48a",
       "displayName": "5_Tomato_2",
       "id": "6c48a",
       "name": "texture",
       "userData": {
         "wrapModeS": "clamp-to-edge",
         "wrapModeT": "clamp-to-edge",
-        "imageUuidOrDatabaseUri": "8bf41cf9-b3fa-4b8a-9b2e-e989117c9e31",
+        "imageUuidOrDatabaseUri": "135975e8-b806-40fb-bbdf-0d86aff1aad8",
         "isUuid": true,
         "visible": false,
         "minfilter": "linear",
@@ -34,7 +34,7 @@
     },
     "f9941": {
       "importer": "sprite-frame",
-      "uuid": "8bf41cf9-b3fa-4b8a-9b2e-e989117c9e31@f9941",
+      "uuid": "135975e8-b806-40fb-bbdf-0d86aff1aad8@f9941",
       "displayName": "5_Tomato_2",
       "id": "f9941",
       "name": "spriteFrame",
@@ -113,7 +113,7 @@
           ]
         },
         "isUuid": true,
-        "imageUuidOrDatabaseUri": "8bf41cf9-b3fa-4b8a-9b2e-e989117c9e31@6c48a",
+        "imageUuidOrDatabaseUri": "135975e8-b806-40fb-bbdf-0d86aff1aad8@6c48a",
         "atlasUuid": "",
         "trimType": "auto"
       },
@@ -129,6 +129,6 @@
     "type": "sprite-frame",
     "hasAlpha": true,
     "fixAlphaTransparencyArtifacts": false,
-    "redirect": "8bf41cf9-b3fa-4b8a-9b2e-e989117c9e31@6c48a"
+    "redirect": "135975e8-b806-40fb-bbdf-0d86aff1aad8@6c48a"
   }
 }

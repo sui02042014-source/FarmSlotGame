@@ -2,7 +2,7 @@
   "ver": "1.0.27",
   "importer": "image",
   "imported": true,
-  "uuid": "a5910efa-5d92-49e0-813d-ca4bb8fcc563",
+  "uuid": "7f0324aa-6211-4011-8b62-10f4c1c7129b",
   "files": [
     ".json",
     ".png"
@@ -10,14 +10,14 @@
   "subMetas": {
     "6c48a": {
       "importer": "texture",
-      "uuid": "a5910efa-5d92-49e0-813d-ca4bb8fcc563@6c48a",
+      "uuid": "7f0324aa-6211-4011-8b62-10f4c1c7129b@6c48a",
       "displayName": "12_Wild_Girl_2",
       "id": "6c48a",
       "name": "texture",
       "userData": {
         "wrapModeS": "clamp-to-edge",
         "wrapModeT": "clamp-to-edge",
-        "imageUuidOrDatabaseUri": "a5910efa-5d92-49e0-813d-ca4bb8fcc563",
+        "imageUuidOrDatabaseUri": "7f0324aa-6211-4011-8b62-10f4c1c7129b",
         "isUuid": true,
         "visible": false,
         "minfilter": "linear",
@@ -34,7 +34,7 @@
     },
     "f9941": {
       "importer": "sprite-frame",
-      "uuid": "a5910efa-5d92-49e0-813d-ca4bb8fcc563@f9941",
+      "uuid": "7f0324aa-6211-4011-8b62-10f4c1c7129b@f9941",
       "displayName": "12_Wild_Girl_2",
       "id": "f9941",
       "name": "spriteFrame",
@@ -113,7 +113,7 @@
           ]
         },
         "isUuid": true,
-        "imageUuidOrDatabaseUri": "a5910efa-5d92-49e0-813d-ca4bb8fcc563@6c48a",
+        "imageUuidOrDatabaseUri": "7f0324aa-6211-4011-8b62-10f4c1c7129b@6c48a",
         "atlasUuid": "",
         "trimType": "auto"
       },
@@ -129,6 +129,6 @@
     "type": "sprite-frame",
     "hasAlpha": true,
     "fixAlphaTransparencyArtifacts": false,
-    "redirect": "a5910efa-5d92-49e0-813d-ca4bb8fcc563@6c48a"
+    "redirect": "7f0324aa-6211-4011-8b62-10f4c1c7129b@6c48a"
   }
 }

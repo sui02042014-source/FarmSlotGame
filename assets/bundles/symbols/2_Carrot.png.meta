@@ -2,7 +2,7 @@
   "ver": "1.0.27",
   "importer": "image",
   "imported": true,
-  "uuid": "27404806-e4e3-43db-a64d-a6f2180ce6e6",
+  "uuid": "0a81f711-ee8a-40a9-923a-9499a04dd281",
   "files": [
     ".json",
     ".png"
@@ -10,14 +10,14 @@
   "subMetas": {
     "6c48a": {
       "importer": "texture",
-      "uuid": "27404806-e4e3-43db-a64d-a6f2180ce6e6@6c48a",
+      "uuid": "0a81f711-ee8a-40a9-923a-9499a04dd281@6c48a",
       "displayName": "2_Carrot",
       "id": "6c48a",
       "name": "texture",
       "userData": {
         "wrapModeS": "clamp-to-edge",
         "wrapModeT": "clamp-to-edge",
-        "imageUuidOrDatabaseUri": "27404806-e4e3-43db-a64d-a6f2180ce6e6",
+        "imageUuidOrDatabaseUri": "0a81f711-ee8a-40a9-923a-9499a04dd281",
         "isUuid": true,
         "visible": false,
         "minfilter": "linear",
@@ -34,7 +34,7 @@
     },
     "f9941": {
       "importer": "sprite-frame",
-      "uuid": "27404806-e4e3-43db-a64d-a6f2180ce6e6@f9941",
+      "uuid": "0a81f711-ee8a-40a9-923a-9499a04dd281@f9941",
       "displayName": "2_Carrot",
       "id": "f9941",
       "name": "spriteFrame",
@@ -113,7 +113,7 @@
           ]
         },
         "isUuid": true,
-        "imageUuidOrDatabaseUri": "27404806-e4e3-43db-a64d-a6f2180ce6e6@6c48a",
+        "imageUuidOrDatabaseUri": "0a81f711-ee8a-40a9-923a-9499a04dd281@6c48a",
         "atlasUuid": "",
         "trimType": "auto"
       },
@@ -129,6 +129,6 @@
     "type": "sprite-frame",
     "hasAlpha": true,
     "fixAlphaTransparencyArtifacts": false,
-    "redirect": "27404806-e4e3-43db-a64d-a6f2180ce6e6@6c48a"
+    "redirect": "0a81f711-ee8a-40a9-923a-9499a04dd281@6c48a"
   }
 }
