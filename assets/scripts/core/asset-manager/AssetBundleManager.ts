@@ -88,4 +88,8 @@ export class AssetBundleManager {
   ): Promise<SpriteAtlas | null> {
     return this.load(bundleName, path, SpriteAtlas);
   }
+
+  public getBundle(bundleName: string): AssetManager.Bundle | null {
+    return this._loadedBundles.get(bundleName) || null;
+  }
 }
