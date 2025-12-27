@@ -1,4 +1,5 @@
 import { SpriteFrame, SpriteAtlas } from "cc";
+import { AssetBundleManager } from "../../core/asset-manager/AssetBundleManager";
 
 export class SpriteFrameCache {
   private static _instance: SpriteFrameCache | null = null;
@@ -27,6 +28,27 @@ export class SpriteFrameCache {
 
   public getSpriteFrame(bundle: string, path: string): SpriteFrame | null {
     return this._cache.get(this.makeKey(bundle, path)) || null;
+  }
+
+  public async getSpriteFrameFromBundle(
+    bundleName: string,
+    path: string
+  ): Promise<SpriteFrame | null> {
+    const key = this.makeKey(bundleName, path);
+    
+    // Check cache first
+    const cached = this._cache.get(key);
+    if (cached) return cached;
+
+    // Load from bundle if not cached
+    const bundleManager = AssetBundleManager.getInstance();
+    const sf = await bundleManager.load(bundleName, path, SpriteFrame);
+    
+    if (sf) {
+      this._cache.set(key, sf);
+    }
+    
+    return sf;
   }
 
   public clear(): void {

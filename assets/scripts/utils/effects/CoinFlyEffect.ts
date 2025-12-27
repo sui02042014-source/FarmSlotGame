@@ -98,11 +98,14 @@ export class CoinFlyEffect {
     const cache = SpriteFrameCache.getInstance();
     const spritePath = "ui/win/coin_icon/spriteFrame";
 
-    const sf = await cache.getSpriteFrame(BundleName.GAME, spritePath);
+    const sf = await cache.getSpriteFrameFromBundle(
+      BundleName.GAME,
+      spritePath
+    );
 
     if (!sf) {
       console.error(
-        `[CoinFly] Không thể load icon từ bundle 'game' tại: ${spritePath}`
+        `[CoinFlyEffect] Failed to load sprite frame: ${spritePath}`
       );
       return;
     }
