@@ -122,11 +122,18 @@ export class SpinButtonController extends Component {
 
     const activatedAuto = this._autoPlayActivated;
     const timeHeld = this._holdTime;
+    const gm = GameManager.getInstance();
 
     this.resetHoldState();
 
+    // If auto play is active, stop it when button is clicked
+    if (gm && gm.isAutoPlayActive() && timeHeld < this.holdDuration && !activatedAuto) {
+      gm.toggleAutoPlay();
+      return;
+    }
+
     if (timeHeld < this.holdDuration && !activatedAuto) {
-      GameManager.getInstance()?.startSpin();
+      gm?.startSpin();
     }
 
     this.updateVisualState();

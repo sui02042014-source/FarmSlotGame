@@ -335,13 +335,24 @@ export class GameManager extends Component {
 
   private continueAutoPlay(): void {
     if (this.isAutoPlay) {
-      this.scheduleOnce(() => this.startSpin(), this.AUTO_PLAY_DELAY);
+      this.scheduleOnce(this.onAutoPlaySpin, this.AUTO_PLAY_DELAY);
     }
   }
 
+  private onAutoPlaySpin = (): void => {
+    // Double check auto play is still active before spinning
+    if (this.isAutoPlay && this.isIdle()) {
+      this.startSpin();
+    }
+  };
+
   public toggleAutoPlay(): void {
     this.isAutoPlay = !this.isAutoPlay;
-    if (this.isAutoPlay && this.isIdle()) {
+    
+    // Cancel any pending auto play spins when turning off
+    if (!this.isAutoPlay) {
+      this.unschedule(this.onAutoPlaySpin);
+    } else if (this.isIdle()) {
       this.startSpin();
     }
   }
