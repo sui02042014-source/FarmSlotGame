@@ -35,7 +35,7 @@ export class SpriteFrameCache {
     path: string
   ): Promise<SpriteFrame | null> {
     const key = this.makeKey(bundleName, path);
-    
+
     // Check cache first
     const cached = this._cache.get(key);
     if (cached) return cached;
@@ -43,11 +43,11 @@ export class SpriteFrameCache {
     // Load from bundle if not cached
     const bundleManager = AssetBundleManager.getInstance();
     const sf = await bundleManager.load(bundleName, path, SpriteFrame);
-    
+
     if (sf) {
       this._cache.set(key, sf);
     }
-    
+
     return sf;
   }
 
