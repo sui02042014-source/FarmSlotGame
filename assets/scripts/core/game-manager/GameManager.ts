@@ -1,12 +1,25 @@
-import { _decorator, Component, Label, Node, tween, Vec3 } from "cc";
-import { GameConfig, GameState } from "../../data/config/GameConfig";
+import {
+  _decorator,
+  Component,
+  Label,
+  Node,
+  SpriteAtlas,
+  SpriteFrame,
+  tween,
+  Vec3,
+} from "cc";
 import { ModalManager } from "../../components/modals/ModalManager";
 import { SpinButtonController } from "../../components/spin-button/SpinButtonController";
-import { AssetBundleManager } from "../asset-manager/AssetBundleManager";
 import { AudioManager } from "../../core/audio/AudioManager";
+import { GameConfig, GameState } from "../../data/config/GameConfig";
 import { CoinFlyEffect } from "../../utils/effects/CoinFlyEffect";
 import { NumberCounter } from "../../utils/helpers/NumberCounter";
+import { SpriteFrameCache } from "../../utils/helpers/SpriteFrameCache";
 import { PlayerDataStorage } from "../../utils/storage/PlayerDataStorage";
+import {
+  AssetBundleManager,
+  BundleName,
+} from "../asset-manager/AssetBundleManager";
 import { SlotMachine } from "../slot-machine/SlotMachine";
 
 const { ccclass, property } = _decorator;
@@ -56,12 +69,14 @@ export class GameManager extends Component {
     return this.instance;
   }
 
-  protected onLoad(): void {
+  protected async onLoad(): Promise<void> {
     if (GameManager.instance) {
       this.node.destroy();
       return;
     }
     GameManager.instance = this;
+
+    await this.initGame();
   }
 
   protected onDestroy(): void {
@@ -71,23 +86,38 @@ export class GameManager extends Component {
     CoinFlyEffect.clearPool();
   }
 
-  protected start(): void {
-    this.initGame();
-  }
-
   // ==========================================
   // Initialization
   // ==========================================
-
   private async initGame(): Promise<void> {
     const bundleManager = AssetBundleManager.getInstance();
-    await bundleManager.preloadCriticalBundles();
+    const cache = SpriteFrameCache.getInstance();
+
+    const [symbolAtlas, _audio, _game] = await Promise.all([
+      bundleManager.loadAtlas(BundleName.SYMBOLS, "SymbolsAtlas"),
+      bundleManager.loadBundle(BundleName.AUDIO),
+      bundleManager.loadBundle(BundleName.GAME),
+    ]);
+
+    if (symbolAtlas) {
+      cache.cacheAtlas(BundleName.SYMBOLS, symbolAtlas);
+    } else {
+      const frames = await bundleManager.loadDir(
+        BundleName.SYMBOLS,
+        "",
+        SpriteFrame
+      );
+      frames.forEach((f) =>
+        cache.setStaticCache(BundleName.SYMBOLS, f.name, f)
+      );
+    }
+
+    const slotSct = this.getSlotMachine();
+    if (slotSct) slotSct.initializeSlot();
 
     const loaded = PlayerDataStorage.load(this.playerCoins, this.currentBet);
-
     this.playerCoins = loaded.coins;
     this.currentBet = loaded.bet;
-    this.currentBetIndex = loaded.betIndex;
 
     this.setupWinCounter();
     this.updateUI();
@@ -340,7 +370,6 @@ export class GameManager extends Component {
   }
 
   private onAutoPlaySpin = (): void => {
-    // Double check auto play is still active before spinning
     if (this.isAutoPlay && this.isIdle()) {
       this.startSpin();
     }
@@ -348,8 +377,7 @@ export class GameManager extends Component {
 
   public toggleAutoPlay(): void {
     this.isAutoPlay = !this.isAutoPlay;
-    
-    // Cancel any pending auto play spins when turning off
+
     if (!this.isAutoPlay) {
       this.unschedule(this.onAutoPlaySpin);
     } else if (this.isIdle()) {

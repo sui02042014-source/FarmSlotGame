@@ -36,6 +36,16 @@ export class SlotMachine extends Component {
   // Public API - Spin Control
   // ==========================================
 
+  public initializeSlot(): void {
+    this.reelControllers = this.reels
+      .map((reel) => reel.getComponent(ReelController))
+      .filter((c): c is ReelController => !!c);
+
+    this.reelControllers.forEach((controller) => {
+      controller.initializeReel();
+    });
+  }
+
   public spin(): void {
     const bet = GameManager.getInstance().getCurrentBet();
     const result = SlotLogic.calculateSpinResult(

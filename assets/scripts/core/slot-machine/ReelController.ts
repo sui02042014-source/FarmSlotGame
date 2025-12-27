@@ -56,7 +56,6 @@ export class ReelController extends Component {
   protected onLoad(): void {
     this.setupDimensions();
     this.setupComponents();
-    this.initializeReel();
   }
 
   protected update(dt: number): void {
@@ -344,7 +343,7 @@ export class ReelController extends Component {
     this.stateMachine.initialize({});
   }
 
-  private async initializeReel(): Promise<void> {
+  public async initializeReel(): Promise<void> {
     const symbols = SymbolData.getAllSymbols();
     this.reelContainer.clearContainers();
     const centerIndex = Math.floor(this.totalSymbols / 2);

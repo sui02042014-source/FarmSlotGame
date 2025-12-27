@@ -10,6 +10,7 @@ import {
   Vec3,
 } from "cc";
 import { SpriteFrameCache } from "../../utils/helpers/SpriteFrameCache";
+import { BundleName } from "../../core/asset-manager/AssetBundleManager";
 
 export type CoinFlyEffectOptions = {
   parent: Node;
@@ -97,7 +98,7 @@ export class CoinFlyEffect {
     const cache = SpriteFrameCache.getInstance();
     const spritePath = "ui/win/coin_icon/spriteFrame";
 
-    const sf = await cache.getSpriteFrameFromBundle("game", spritePath);
+    const sf = await cache.getSpriteFrame(BundleName.GAME, spritePath);
 
     if (!sf) {
       console.error(

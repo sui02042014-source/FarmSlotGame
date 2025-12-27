@@ -11,6 +11,7 @@ import {
 import { GameConfig } from "../../data/config/GameConfig";
 import { SpriteFrameCache } from "../../utils/helpers/SpriteFrameCache";
 import { BaseModal } from "./BaseModal";
+import { BundleName } from "../../core/asset-manager/AssetBundleManager";
 
 const { ccclass, property } = _decorator;
 
@@ -66,8 +67,7 @@ export class PaytableModal extends BaseModal {
       const iconSprite = itemNode.getChildByName("Icon")?.getComponent(Sprite);
       if (iconSprite) {
         const actualName = SYMBOL_NAME_MAP[symbolKey] || symbolKey;
-        const path = `${actualName}/spriteFrame`;
-        const sf = await cache.getSpriteFrameFromBundle("symbols", path);
+        const sf = cache.getSpriteFrame(BundleName.SYMBOLS, actualName);
 
         if (sf && iconSprite.isValid) {
           iconSprite.spriteFrame = sf;

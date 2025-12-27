@@ -3,12 +3,14 @@ import {
   Component,
   Node,
   Sprite,
-  UITransform,
+  SpriteAtlas,
   SpriteFrame,
+  UITransform,
 } from "cc";
 import { GameConfig } from "../../data/config/GameConfig";
 import { SymbolData } from "../../data/models/SymbolData";
 import { SpriteFrameCache } from "../../utils/helpers/SpriteFrameCache";
+import { BundleName } from "../asset-manager/AssetBundleManager";
 const { ccclass } = _decorator;
 
 export interface SymbolContainer {
@@ -22,41 +24,52 @@ export interface SymbolContainer {
 
 @ccclass("ReelContainer")
 export class ReelContainer extends Component {
-  private readonly spriteFrameCache = SpriteFrameCache.getInstance();
   private containers: SymbolContainer[] = [];
+  private _symbolAtlas: SpriteAtlas | null = null;
 
   // ==========================================
   // Symbol Container Creation
   // ==========================================
 
+  public initAtlas(atlas: SpriteAtlas) {
+    this._symbolAtlas = atlas;
+  }
+
   public async createSymbolContainer(
-    symbolId: string,
-    symbolSize?: number
+    symbolId: string
   ): Promise<SymbolContainer | null> {
-    const size = symbolSize || GameConfig.SYMBOL_SIZE;
-    const node = new Node(`Symbol_${symbolId}_${Date.now()}`);
-    const uiTransform = node.addComponent(UITransform);
-    uiTransform.setContentSize(size, size);
-    uiTransform.setAnchorPoint(0.5, 0.5);
+    const node = new Node(`Symbol_${symbolId}`);
+    const ui = node.addComponent(UITransform);
+    ui.setContentSize(GameConfig.SYMBOL_SIZE, GameConfig.SYMBOL_SIZE);
 
     const sprite = node.addComponent(Sprite);
     sprite.sizeMode = Sprite.SizeMode.CUSTOM;
 
-    const normalSpriteFrame = await this.loadSymbolSprite(symbolId);
-    if (normalSpriteFrame) {
-      sprite.spriteFrame = normalSpriteFrame;
-    }
+    const symbolData = SymbolData.getSymbol(symbolId);
+    const spritePath = symbolData?.spritePath || symbolId;
 
-    const blurSpriteFrame = await this.loadSymbolSprite(symbolId, true);
+    const normalSF = SpriteFrameCache.getInstance().getSpriteFrame(
+      BundleName.SYMBOLS,
+      spritePath
+    );
+    const blurSF = SpriteFrameCache.getInstance().getSpriteFrame(
+      BundleName.SYMBOLS,
+      `${spritePath}_blur`
+    );
 
-    return {
+    sprite.spriteFrame = normalSF;
+
+    const container: SymbolContainer = {
       node,
       sprite,
       symbolId,
-      normalSpriteFrame,
-      blurSpriteFrame: blurSpriteFrame || normalSpriteFrame,
+      normalSpriteFrame: normalSF,
+      blurSpriteFrame: blurSF || normalSF,
       isBlurred: false,
     };
+
+    this.containers.push(container);
+    return container;
   }
 
   // ==========================================
@@ -67,46 +80,38 @@ export class ReelContainer extends Component {
     symbolId: string,
     isBlur: boolean = false
   ): Promise<SpriteFrame | null> {
-    const symbolData = SymbolData.getSymbol(symbolId);
-    if (!symbolData) return null;
+    const frameName = isBlur ? `${symbolId}_blur` : symbolId;
 
-    try {
-      const path = isBlur
-        ? `${symbolData.spritePath}_2/spriteFrame`
-        : `${symbolData.spritePath}/spriteFrame`;
+    const cache = SpriteFrameCache.getInstance();
+    let sf = cache.getSpriteFrame(BundleName.SYMBOLS, frameName);
 
-      const spriteFrame = await this.spriteFrameCache.getSpriteFrameFromBundle(
-        "symbols",
-        path
-      );
-
-      if (!spriteFrame && isBlur) {
-        return null;
-      }
-
-      return spriteFrame;
-    } catch (error) {
-      return null;
+    if (!sf && isBlur) {
+      sf = cache.getSpriteFrame(BundleName.SYMBOLS, symbolId);
     }
-  }
 
+    return sf;
+  }
   // ==========================================
   // Symbol Container Management
   // ==========================================
 
-  public async updateSymbolContainer(
+  public updateSymbolContainer(
     container: SymbolContainer,
-    newSymbolId: string
-  ): Promise<void> {
-    if (container.symbolId === newSymbolId) return;
+    newId: string
+  ): void {
+    const cache = SpriteFrameCache.getInstance();
+    container.symbolId = newId;
 
-    container.symbolId = newSymbolId;
-    const normalSprite = await this.loadSymbolSprite(newSymbolId);
-    const blurSprite = await this.loadSymbolSprite(newSymbolId, true);
+    const symbolData = SymbolData.getSymbol(newId);
+    const spritePath = symbolData?.spritePath || newId;
 
-    if (normalSprite) container.normalSpriteFrame = normalSprite;
-    if (blurSprite) container.blurSpriteFrame = blurSprite;
-    else container.blurSpriteFrame = normalSprite;
+    container.normalSpriteFrame = cache.getSpriteFrame(
+      BundleName.SYMBOLS,
+      spritePath
+    );
+    container.blurSpriteFrame =
+      cache.getSpriteFrame(BundleName.SYMBOLS, `${spritePath}_blur`) ||
+      container.normalSpriteFrame;
 
     container.sprite.spriteFrame = container.isBlurred
       ? container.blurSpriteFrame

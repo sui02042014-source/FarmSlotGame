@@ -1,4 +1,10 @@
-import { Asset, AssetManager, assetManager } from "cc";
+import {
+  Asset,
+  AssetManager,
+  assetManager,
+  Constructor,
+  SpriteAtlas,
+} from "cc";
 
 export enum BundleName {
   SYMBOLS = "symbols",
@@ -8,38 +14,31 @@ export enum BundleName {
 
 export class AssetBundleManager {
   private static _instance: AssetBundleManager | null = null;
-
   private _loadedBundles = new Map<string, AssetManager.Bundle>();
   private _loadingPromises = new Map<
     string,
     Promise<AssetManager.Bundle | null>
   >();
 
-  private constructor() {}
-
   public static getInstance(): AssetBundleManager {
-    if (!this._instance) {
-      this._instance = new AssetBundleManager();
-    }
+    if (!this._instance) this._instance = new AssetBundleManager();
     return this._instance;
   }
 
   public async loadBundle(
     bundleName: string
   ): Promise<AssetManager.Bundle | null> {
-    if (this._loadedBundles.has(bundleName)) {
+    if (this._loadedBundles.has(bundleName))
       return this._loadedBundles.get(bundleName)!;
-    }
-
-    if (this._loadingPromises.has(bundleName)) {
+    if (this._loadingPromises.has(bundleName))
       return this._loadingPromises.get(bundleName)!;
-    }
 
-    const loadPromise = new Promise<AssetManager.Bundle | null>((resolve) => {
+    const promise = new Promise<AssetManager.Bundle | null>((resolve) => {
       assetManager.loadBundle(bundleName, (err, bundle) => {
+        this._loadingPromises.delete(bundleName);
         if (err) {
           console.error(
-            `[AssetBundleManager] Failed to load bundle: ${bundleName}`,
+            `[AssetBundleManager] Load bundle failed: ${bundleName}`,
             err
           );
           resolve(null);
@@ -47,37 +46,23 @@ export class AssetBundleManager {
           this._loadedBundles.set(bundleName, bundle);
           resolve(bundle);
         }
-        this._loadingPromises.delete(bundleName);
       });
     });
-
-    this._loadingPromises.set(bundleName, loadPromise);
-    return loadPromise;
-  }
-
-  public async loadBundles(bundleNames: string[]): Promise<void> {
-    await Promise.all(bundleNames.map((name) => this.loadBundle(name)));
+    this._loadingPromises.set(bundleName, promise);
+    return promise;
   }
 
   public async load<T extends Asset>(
     bundleName: string,
     path: string,
-    type: { new (): T } | null = null
+    type: Constructor<T>
   ): Promise<T | null> {
     const bundle = await this.loadBundle(bundleName);
     if (!bundle) return null;
-
     return new Promise((resolve) => {
-      bundle.load(path, type as any, (err, asset) => {
-        if (err) {
-          console.warn(
-            `[AssetBundleManager] Load failed: ${path} in ${bundleName}`,
-            err
-          );
-          resolve(null);
-        } else {
-          resolve(asset as T);
-        }
+      bundle.load(path, type, (err, asset) => {
+        if (err) resolve(null);
+        else resolve(asset as T);
       });
     });
   }
@@ -85,52 +70,22 @@ export class AssetBundleManager {
   public async loadDir<T extends Asset>(
     bundleName: string,
     path: string,
-    type: { new (): T }
-  ): Promise<T[] | null> {
+    type: Constructor<T>
+  ): Promise<T[]> {
     const bundle = await this.loadBundle(bundleName);
-    if (!bundle) return null;
-
+    if (!bundle) return [];
     return new Promise((resolve) => {
       bundle.loadDir(path, type, (err, assets) => {
-        if (err) {
-          console.error(`[AssetBundleManager] LoadDir failed: ${path}`, err);
-          resolve(null);
-        } else {
-          resolve(assets as T[]);
-        }
+        if (err) resolve([]);
+        else resolve(assets as T[]);
       });
     });
   }
 
-  public async preloadCriticalBundles(): Promise<void> {
-    const critical = [BundleName.SYMBOLS, BundleName.AUDIO, BundleName.GAME];
-    await this.loadBundles(critical);
-  }
-
-  public releaseBundle(bundleName: string): void {
-    const bundle = this._loadedBundles.get(bundleName);
-    if (bundle) {
-      bundle.releaseAll();
-      assetManager.removeBundle(bundle);
-      this._loadedBundles.delete(bundleName);
-      console.log(`[AssetBundleManager] Released bundle: ${bundleName}`);
-    }
-  }
-
-  public releaseAllBundles(): void {
-    const names = Array.from(this._loadedBundles.keys());
-    names.forEach((name) => this.releaseBundle(name));
-  }
-
-  public getBundle(bundleName: string): AssetManager.Bundle | null {
-    return (
-      assetManager.getBundle(bundleName) ||
-      this._loadedBundles.get(bundleName) ||
-      null
-    );
-  }
-
-  public isBundleLoaded(bundleName: string): boolean {
-    return this._loadedBundles.has(bundleName);
+  public async loadAtlas(
+    bundleName: string,
+    path: string
+  ): Promise<SpriteAtlas | null> {
+    return this.load(bundleName, path, SpriteAtlas);
   }
 }
