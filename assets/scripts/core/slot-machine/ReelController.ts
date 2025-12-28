@@ -3,6 +3,7 @@ import { GameConfig } from "../../data/config/GameConfig";
 import { SymbolData } from "../../data/models/SymbolData";
 import { ReelContainer, SymbolContainer } from "./ReelContainer";
 import { ReelStateMachine, ReelState } from "./ReelStateMachine";
+import { SymbolHighlightEffect } from "../../utils/effects/SymbolHighlightEffect";
 
 const { ccclass, property } = _decorator;
 
@@ -53,9 +54,11 @@ export class ReelController extends Component {
   // Lifecycle Methods
   // ==========================================
 
-  protected onLoad(): void {
+  protected async onLoad(): Promise<void> {
     this.setupDimensions();
     this.setupComponents();
+
+    await SymbolHighlightEffect.initialize();
   }
 
   protected update(dt: number): void {
@@ -262,41 +265,23 @@ export class ReelController extends Component {
     const container = this.getContainerAtRow(row);
     if (!container) return;
 
-    this.stopContainerTweens(container);
-    this.startPulseAnimation(container);
+    SymbolHighlightEffect.stop(container.node);
+
+    SymbolHighlightEffect.play({
+      targetNode: container.node,
+      duration: 1,
+      loop: true,
+      scale: 1.2,
+      brightness: 1.2,
+    });
   }
 
   public resetSymbolsScale(): void {
     this.reelContainer.getAllContainers().forEach((container) => {
+      SymbolHighlightEffect.stop(container.node);
       container.node.setScale(1, 1, 1);
       container.sprite.color = new Color(255, 255, 255, 255);
     });
-  }
-
-  // ==========================================
-  // Animation Helpers
-  // ==========================================
-
-  private stopContainerTweens(container: SymbolContainer): void {
-    tween(container.node).stop();
-    tween(container.sprite).stop();
-  }
-
-  private startPulseAnimation(container: SymbolContainer): void {
-    const pulseScale = 1.15;
-    const pulseDuration = 0.25;
-    const pulseRepeat = 2;
-
-    tween(container.node)
-      .to(
-        pulseDuration,
-        { scale: new Vec3(pulseScale, pulseScale, 1) },
-        { easing: "quadOut" }
-      )
-      .to(pulseDuration, { scale: new Vec3(1.0, 1.0, 1) }, { easing: "quadIn" })
-      .union()
-      .repeat(pulseRepeat)
-      .start();
   }
 
   // ==========================================
