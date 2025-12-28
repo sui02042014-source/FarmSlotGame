@@ -1,6 +1,5 @@
 import {
   Color,
-  math,
   Node,
   Sprite,
   SpriteFrame,
@@ -19,7 +18,6 @@ export type SymbolHighlightOptions = {
   targetNode: Node;
   duration?: number;
   loop?: boolean;
-  scale?: number;
   brightness?: number;
   onComplete?: () => void;
   onFrameChange?: (frameIndex: number) => void;
@@ -91,6 +89,10 @@ class HighlightPool {
     let highlightNode: Node;
     if (this.pool.length > 0) {
       highlightNode = this.pool.pop()!;
+      const uiTransform = highlightNode.getComponent(UITransform);
+      if (uiTransform) {
+        uiTransform.setContentSize(size, size);
+      }
     } else {
       highlightNode = new Node("SymbolHighlight");
       highlightNode.addComponent(UITransform).setContentSize(size, size);
@@ -151,7 +153,6 @@ export class SymbolHighlightEffect {
       targetNode,
       duration = 1.0,
       loop = true,
-      scale = 1.125,
       brightness = 1,
       onComplete,
       onFrameChange,
@@ -162,9 +163,13 @@ export class SymbolHighlightEffect {
     const uiTransform = targetNode.getComponent(UITransform);
     if (!uiTransform) return;
 
-    const highlightSize =
-      Math.max(uiTransform.contentSize.width, uiTransform.contentSize.height) *
-      scale;
+    // Set size to 110% of symbol size (no scaling animation)
+    const symbolSize = Math.max(
+      uiTransform.contentSize.width,
+      uiTransform.contentSize.height
+    );
+    const highlightSize = symbolSize * 1.1;
+
     const highlightNode = this.highlightPool.get(targetNode, highlightSize);
     const sprite = highlightNode.getComponent(Sprite)!;
 
@@ -174,7 +179,9 @@ export class SymbolHighlightEffect {
       255 * brightness,
       255
     );
-    highlightNode.setScale(new Vec3(scale, scale, 1));
+
+    // No scale animation - keep at 1:1 scale
+    highlightNode.setScale(Vec3.ONE);
 
     const frames = RoundAnimationController.getAllFrames();
     if (frames.length === 0) {
@@ -183,6 +190,7 @@ export class SymbolHighlightEffect {
       return;
     }
 
+    // Frame animation only - no movement or scaling
     const frameDuration = duration / frames.length;
     let currentFrame = 0;
     let isPlaying = true;

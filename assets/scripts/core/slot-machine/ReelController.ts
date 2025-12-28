@@ -271,7 +271,6 @@ export class ReelController extends Component {
       targetNode: container.node,
       duration: 1,
       loop: true,
-      scale: 1.2,
       brightness: 1.2,
     });
   }
