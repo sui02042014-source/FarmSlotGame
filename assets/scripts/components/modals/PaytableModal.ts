@@ -12,25 +12,9 @@ import { GameConfig } from "../../data/config/GameConfig";
 import { SpriteFrameCache } from "../../utils/helpers/SpriteFrameCache";
 import { BaseModal } from "./BaseModal";
 import { BundleName } from "../../core/asset-manager/AssetBundleManager";
+import { SymbolData } from "../../data/models/SymbolData";
 
 const { ccclass, property } = _decorator;
-
-const SYMBOL_NAME_MAP: Record<string, string> = {
-  pig: "9_Pig",
-  cow: "10_Cow",
-  chicken: "7_Hen",
-  rabbit: "8_Rabbit",
-  hay: "6_Cart_with_hay",
-  truck: "11_Truck",
-  barn: "13_Bonus_Mill",
-  symbol_a: "5_Tomato",
-  symbol_k: "2_Carrot",
-  symbol_q: "4_Eggplant",
-  symbol_j: "3_Watermelon",
-  symbol_10: "1_Pumpkin",
-  wild: "12_Wild_Girl",
-  scatter: "Experience_star",
-};
 
 @ccclass("PaytableModal")
 export class PaytableModal extends BaseModal {
@@ -44,6 +28,8 @@ export class PaytableModal extends BaseModal {
   itemPrefab: Prefab = null!;
 
   private _currentBet: number = 1.0;
+  private _itemPool: Node[] = [];
+  private _activeItems: Node[] = [];
 
   public setData(data: any): void {
     if (data && data.currentBet) {
@@ -52,37 +38,77 @@ export class PaytableModal extends BaseModal {
     this.renderPaytable();
   }
 
+  private getFromPool(): Node {
+    let node = this._itemPool.pop();
+    if (!node) {
+      node = instantiate(this.itemPrefab);
+    }
+    node.active = true;
+    return node;
+  }
+
+  private returnToPool(node: Node) {
+    node.active = false;
+    node.removeFromParent();
+    this._itemPool.push(node);
+  }
+
   private async renderPaytable() {
     if (!this.contentContainer || !this.itemPrefab) return;
 
-    this.contentContainer.removeAllChildren();
+    this._activeItems.forEach((item) => this.returnToPool(item));
+    this._activeItems = [];
+
     const paytableData = GameConfig.PAYTABLE;
     const cache = SpriteFrameCache.getInstance();
 
     for (const symbolKey in paytableData) {
       const payouts = paytableData[symbolKey as keyof typeof paytableData];
-      const itemNode = instantiate(this.itemPrefab);
+      const itemNode = this.getFromPool();
       this.contentContainer.addChild(itemNode);
+      this._activeItems.push(itemNode);
+
+      const symbolInfo = SymbolData.getSymbol(symbolKey);
+      const spritePath = symbolInfo?.spritePath || symbolKey;
 
       const iconSprite = itemNode.getChildByName("Icon")?.getComponent(Sprite);
       if (iconSprite) {
-        const actualName = SYMBOL_NAME_MAP[symbolKey] || symbolKey;
-        const sf = cache.getSpriteFrame(BundleName.SYMBOLS, actualName);
+        const sf = cache.getSpriteFrame(BundleName.SYMBOLS, spritePath);
 
         if (sf && iconSprite.isValid) {
+          // Optimization: Enable packable to allow batching with labels in dynamic atlas
+          sf.packable = true;
+
           iconSprite.spriteFrame = sf;
-          iconSprite.getComponent(UITransform).setContentSize(80, 80);
+          iconSprite.sizeMode = Sprite.SizeMode.CUSTOM;
+          iconSprite.trim = false;
+          const ui = iconSprite.getComponent(UITransform);
+          if (ui) ui.setContentSize(80, 80);
         }
       }
 
       const labelComp = itemNode.getChildByName("Label")?.getComponent(Label);
       if (labelComp) {
-        labelComp.string = `${symbolKey} x ${payouts[3]} x ${
-          this._currentBet
-        } = ${payouts[3] * this._currentBet}`;
+        // Optimization: Use BITMAP cache mode to batch labels into dynamic atlas
+        labelComp.cacheMode = Label.CacheMode.BITMAP;
+
+        const x3 = payouts[3] * this._currentBet;
+        const x4 = (payouts as any)[4] * this._currentBet;
+        const x5 = (payouts as any)[5] * this._currentBet;
+
+        labelComp.string = `${
+          symbolInfo?.name || symbolKey
+        }\n\nx5: ${x5.toFixed(2)} | x4: ${x4.toFixed(2)} | x3: ${x3.toFixed(
+          2
+        )}`;
       }
     }
 
     this.scrollView.scrollToTop(0);
+  }
+
+  protected onDisable(): void {
+    this._activeItems.forEach((item) => this.returnToPool(item));
+    this._activeItems = [];
   }
 }

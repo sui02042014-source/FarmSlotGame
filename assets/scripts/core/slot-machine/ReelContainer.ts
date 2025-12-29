@@ -25,37 +25,43 @@ export interface SymbolContainer {
 @ccclass("ReelContainer")
 export class ReelContainer extends Component {
   private containers: SymbolContainer[] = [];
-  private _symbolAtlas: SpriteAtlas | null = null;
+  private _pool: Node[] = [];
 
   // ==========================================
   // Symbol Container Creation
   // ==========================================
 
-  public initAtlas(atlas: SpriteAtlas) {
-    this._symbolAtlas = atlas;
+  private getFromPool(symbolId: string): Node {
+    let node: Node;
+    if (this._pool.length > 0) {
+      node = this._pool.pop()!;
+      node.name = `Symbol_${symbolId}`;
+    } else {
+      node = new Node(`Symbol_${symbolId}`);
+      node.layer = this.node.layer; // Ensure it's on the same layer as the Reel
+      node
+        .addComponent(UITransform)
+        .setContentSize(GameConfig.SYMBOL_SIZE, GameConfig.SYMBOL_SIZE);
+      const sprite = node.addComponent(Sprite);
+      sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+      sprite.trim = false; // Disable trim for better batching stability
+    }
+    node.active = true;
+    return node;
   }
 
   public async createSymbolContainer(
     symbolId: string
   ): Promise<SymbolContainer | null> {
-    const node = new Node(`Symbol_${symbolId}`);
-    const ui = node.addComponent(UITransform);
-    ui.setContentSize(GameConfig.SYMBOL_SIZE, GameConfig.SYMBOL_SIZE);
-
-    const sprite = node.addComponent(Sprite);
-    sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+    const node = this.getFromPool(symbolId);
+    const sprite = node.getComponent(Sprite)!;
 
     const symbolData = SymbolData.getSymbol(symbolId);
     const spritePath = symbolData?.spritePath || symbolId;
 
-    const normalSF = SpriteFrameCache.getInstance().getSpriteFrame(
-      BundleName.SYMBOLS,
-      spritePath
-    );
-    const blurSF = SpriteFrameCache.getInstance().getSpriteFrame(
-      BundleName.SYMBOLS,
-      `${spritePath}_blur`
-    );
+    const cache = SpriteFrameCache.getInstance();
+    const normalSF = cache.getSpriteFrame(BundleName.SYMBOLS, spritePath);
+    const blurSF = cache.getSpriteFrame(BundleName.SYMBOLS, `${spritePath}_2`);
 
     sprite.spriteFrame = normalSF;
 
@@ -80,7 +86,7 @@ export class ReelContainer extends Component {
     symbolId: string,
     isBlur: boolean = false
   ): Promise<SpriteFrame | null> {
-    const frameName = isBlur ? `${symbolId}_blur` : symbolId;
+    const frameName = isBlur ? `${symbolId}_2` : symbolId;
 
     const cache = SpriteFrameCache.getInstance();
     let sf = cache.getSpriteFrame(BundleName.SYMBOLS, frameName);
@@ -110,7 +116,7 @@ export class ReelContainer extends Component {
       spritePath
     );
     container.blurSpriteFrame =
-      cache.getSpriteFrame(BundleName.SYMBOLS, `${spritePath}_blur`) ||
+      cache.getSpriteFrame(BundleName.SYMBOLS, `${spritePath}_2`) ||
       container.normalSpriteFrame;
 
     container.sprite.spriteFrame = container.isBlurred
@@ -133,7 +139,9 @@ export class ReelContainer extends Component {
   public clearContainers(): void {
     this.containers.forEach((container) => {
       if (container.node?.isValid) {
-        container.node.destroy();
+        container.node.active = false;
+        container.node.removeFromParent();
+        this._pool.push(container.node);
       }
     });
     this.containers = [];

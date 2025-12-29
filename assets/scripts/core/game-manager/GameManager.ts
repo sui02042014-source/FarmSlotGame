@@ -93,23 +93,29 @@ export class GameManager extends Component {
     const bundleManager = AssetBundleManager.getInstance();
     const cache = SpriteFrameCache.getInstance();
 
-    const [symbolAtlas, _audio, _game] = await Promise.all([
-      bundleManager.loadAtlas(BundleName.SYMBOLS, "SymbolsAtlas"),
+    // Load bundles and symbols
+    const [_symbolsBundle, _audio, _game] = await Promise.all([
+      bundleManager.loadBundle(BundleName.SYMBOLS),
       bundleManager.loadBundle(BundleName.AUDIO),
       bundleManager.loadBundle(BundleName.GAME),
     ]);
 
-    if (symbolAtlas) {
-      cache.cacheAtlas(BundleName.SYMBOLS, symbolAtlas);
+    // Load all SpriteFrames from symbols bundle
+    const symbolFrames = await bundleManager.loadDir(
+      BundleName.SYMBOLS,
+      "",
+      SpriteFrame
+    );
+
+    if (symbolFrames && symbolFrames.length > 0) {
+      symbolFrames.forEach((f) => {
+        cache.setStaticCache(BundleName.SYMBOLS, f.name, f);
+      });
+      console.log(
+        `[GameManager] Loaded ${symbolFrames.length} symbols into cache`
+      );
     } else {
-      const frames = await bundleManager.loadDir(
-        BundleName.SYMBOLS,
-        "",
-        SpriteFrame
-      );
-      frames.forEach((f) =>
-        cache.setStaticCache(BundleName.SYMBOLS, f.name, f)
-      );
+      console.error("[GameManager] Failed to load symbols from bundle!");
     }
 
     const slotSct = this.getSlotMachine();

@@ -176,6 +176,13 @@ export class ReelController extends Component {
       this.modulo(originY - this.positionOffset + halfWrap, this.wrapHeight) -
       halfWrap;
     container.node.setPosition(0, y);
+
+    const visibleHalfHeight =
+      (GameConfig.SYMBOL_PER_REEL * this.symbolSpacing) / 2;
+    const isVisible = Math.abs(y) <= visibleHalfHeight + this.symbolSpacing;
+    if (container.node.active !== isVisible) {
+      container.node.active = isVisible;
+    }
   }
 
   private handleSymbolWrapping(container: SymbolContainer): void {
@@ -341,6 +348,9 @@ export class ReelController extends Component {
       if (container) {
         const posY = (centerIndex - i) * this.symbolSpacing;
         this.setupContainer(container, posY);
+        console.log(
+          `[ReelController] Initialized symbol ${symbol.id} at posY ${posY}`
+        );
       }
     }
   }

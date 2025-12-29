@@ -18,12 +18,6 @@ export class SlotLogic {
     { colDelta: 1, rowDelta: -1 }, // Diagonal up-right
   ];
 
-  /**
-   * Generate target symbols for all reels
-   * @param reelCount Number of reels
-   * @param symbolsPerReel Number of visible symbols per reel
-   * @returns 2D array of symbol IDs [col][row]
-   */
   public static generateTargetSymbols(
     reelCount: number = GameConfig.REEL_COUNT,
     symbolsPerReel: number = GameConfig.SYMBOL_PER_REEL
@@ -38,11 +32,6 @@ export class SlotLogic {
     return targetSymbols;
   }
 
-  /**
-   * Generate symbols for a single reel
-   * @param symbolsPerReel Number of symbols to generate
-   * @returns Array of symbol IDs
-   */
   private static generateReelSymbols(symbolsPerReel: number): string[] {
     const weights = GameConfig.SYMBOL_WEIGHTS;
     const symbols = Object.keys(weights);
@@ -57,13 +46,6 @@ export class SlotLogic {
     return reelSymbols;
   }
 
-  /**
-   * Select a symbol based on weighted random
-   * @param symbols Array of symbol IDs
-   * @param weights Weight map for each symbol
-   * @param totalWeight Sum of all weights
-   * @returns Selected symbol ID
-   */
   private static selectWeightedSymbol(
     symbols: string[],
     weights: Record<string, number>,
@@ -79,12 +61,6 @@ export class SlotLogic {
     return symbols[0];
   }
 
-  /**
-   * Check for winning lines in a symbol grid
-   * @param symbolGrid 2D array of symbol IDs [col][row]
-   * @param bet Current bet amount
-   * @returns Object containing total win and win lines
-   */
   public static checkWin(
     symbolGrid: string[][],
     bet: number
@@ -111,9 +87,6 @@ export class SlotLogic {
     return { totalWin, winLines };
   }
 
-  /**
-   * Check for wins starting from a specific position
-   */
   private static checkWinFromPosition(
     symbolGrid: string[][],
     startCol: number,
@@ -142,9 +115,6 @@ export class SlotLogic {
     return winLines;
   }
 
-  /**
-   * Check for a win in a specific direction
-   */
   private static checkWinInDirection(
     symbolGrid: string[][],
     startCol: number,
@@ -155,43 +125,41 @@ export class SlotLogic {
     bet: number
   ): WinLine | null {
     const { colDelta, rowDelta } = direction;
-    const endCol = startCol + (SlotLogic.MIN_WIN_LENGTH - 1) * colDelta;
-    const endRow = startRow + (SlotLogic.MIN_WIN_LENGTH - 1) * rowDelta;
 
-    if (endCol < 0 || endCol >= maxCols || endRow < 0 || endRow >= maxRows) {
-      return null;
+    for (let len = maxCols; len >= SlotLogic.MIN_WIN_LENGTH; len--) {
+      const endCol = startCol + (len - 1) * colDelta;
+      const endRow = startRow + (len - 1) * rowDelta;
+
+      if (endCol < 0 || endCol >= maxCols || endRow < 0 || endRow >= maxRows) {
+        continue;
+      }
+
+      const symbols = this.getSymbolsInLine(
+        symbolGrid,
+        startCol,
+        startRow,
+        direction,
+        len
+      );
+
+      if (this.isValidWinLine(symbols)) {
+        const win = this.calculateWin(symbols[0], len, bet);
+        if (win > 0) {
+          return this.createWinLine(
+            symbols[0],
+            startCol,
+            startRow,
+            direction,
+            len,
+            win
+          );
+        }
+      }
     }
 
-    const symbols = this.getSymbolsInLine(
-      symbolGrid,
-      startCol,
-      startRow,
-      direction,
-      SlotLogic.MIN_WIN_LENGTH
-    );
-
-    if (!this.isValidWinLine(symbols)) {
-      return null;
-    }
-
-    const win = this.calculateWin(symbols[0], bet);
-    if (win <= 0) {
-      return null;
-    }
-
-    return this.createWinLine(
-      symbols[0],
-      startCol,
-      startRow,
-      direction,
-      SlotLogic.MIN_WIN_LENGTH,
-      win
-    );
+    return null;
   }
 
-  /**
-   * Get symbols in a line
-   */
   private static getSymbolsInLine(
     symbolGrid: string[][],
     startCol: number,
@@ -212,38 +180,33 @@ export class SlotLogic {
     return symbols;
   }
 
-  /**
-   * Check if a line of symbols is a valid win
-   */
   private static isValidWinLine(symbols: string[]): boolean {
     if (symbols.length < SlotLogic.MIN_WIN_LENGTH) {
       return false;
     }
 
     const firstSymbol = symbols[0];
-    if (!firstSymbol) {
+    if (!firstSymbol || firstSymbol === "") {
       return false;
     }
 
     return symbols.every((symbol) => symbol === firstSymbol);
   }
 
-  /**
-   * Calculate win amount for a symbol
-   */
-  private static calculateWin(symbol: string, bet: number): number {
-    const paytable = GameConfig.PAYTABLE[symbol];
+  private static calculateWin(
+    symbol: string,
+    length: number,
+    bet: number
+  ): number {
+    const paytable = (GameConfig.PAYTABLE as any)[symbol];
     if (!paytable) {
       return 0;
     }
 
-    const multiplier = paytable[SlotLogic.MIN_WIN_LENGTH];
+    const multiplier = paytable[length];
     return multiplier ? multiplier * bet : 0;
   }
 
-  /**
-   * Create a WinLine object
-   */
   private static createWinLine(
     symbol: string,
     startCol: number,
@@ -270,13 +233,6 @@ export class SlotLogic {
     };
   }
 
-  /**
-   * Calculate a complete spin result
-   * @param reelCount Number of reels
-   * @param symbolsPerReel Number of visible symbols per reel
-   * @param bet Current bet amount
-   * @returns Complete spin result with symbol grid and win information
-   */
   public static calculateSpinResult(
     reelCount: number = GameConfig.REEL_COUNT,
     symbolsPerReel: number = GameConfig.SYMBOL_PER_REEL,
