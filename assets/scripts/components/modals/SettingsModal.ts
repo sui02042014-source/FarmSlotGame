@@ -1,89 +1,119 @@
 import { _decorator, Label, Toggle, Slider } from "cc";
 import { BaseModal } from "./BaseModal";
 import { AudioManager } from "../../core/audio/AudioManager";
+import { GameManager } from "../../core/game-manager/GameManager";
 const { ccclass, property } = _decorator;
 
 @ccclass("SettingsModal")
 export class SettingsModal extends BaseModal {
   @property(Toggle)
-  soundToggle: Toggle = null!;
-
-  @property(Toggle)
   musicToggle: Toggle = null!;
-
-  @property(Slider)
-  soundVolumeSlider: Slider = null!;
 
   @property(Slider)
   musicVolumeSlider: Slider = null!;
 
-  @property(Label)
-  versionLabel: Label = null!;
+  @property(Toggle)
+  soundToggle: Toggle = null!;
+
+  @property(Slider)
+  soundVolumeSlider: Slider = null!;
+
+  @property(Toggle)
+  pauseToggle: Toggle = null!;
+
+  private didModalPauseGame: boolean = false;
 
   protected onLoad(): void {
     super.onLoad();
 
-    if (this.soundToggle) {
-      this.soundToggle.node.on("toggle", this.onSoundToggle, this);
-    }
-
     if (this.musicToggle) {
       this.musicToggle.node.on("toggle", this.onMusicToggle, this);
+    }
+
+    if (this.musicVolumeSlider) {
+      this.musicVolumeSlider.node.on("slide", this.onMusicVolumeChange, this);
+    }
+
+    // Setup Sound Controls
+    if (this.soundToggle) {
+      this.soundToggle.node.on("toggle", this.onSoundToggle, this);
     }
 
     if (this.soundVolumeSlider) {
       this.soundVolumeSlider.node.on("slide", this.onSoundVolumeChange, this);
     }
 
-    if (this.musicVolumeSlider) {
-      this.musicVolumeSlider.node.on("slide", this.onMusicVolumeChange, this);
+    // Setup Pause Controls
+    if (this.pauseToggle) {
+      this.pauseToggle.node.on("toggle", this.onPauseToggle, this);
     }
   }
 
   protected onDestroy(): void {
     super.onDestroy();
 
-    if (this.soundToggle) {
-      this.soundToggle.node.off("toggle", this.onSoundToggle, this);
-    }
-
-    if (this.musicToggle) {
+    // Cleanup Music Controls
+    if (this.musicToggle?.isValid) {
       this.musicToggle.node.off("toggle", this.onMusicToggle, this);
     }
 
-    if (this.soundVolumeSlider) {
+    if (this.musicVolumeSlider?.isValid) {
+      this.musicVolumeSlider.node.off("slide", this.onMusicVolumeChange, this);
+    }
+
+    // Cleanup Sound Controls
+    if (this.soundToggle?.isValid) {
+      this.soundToggle.node.off("toggle", this.onSoundToggle, this);
+    }
+
+    if (this.soundVolumeSlider?.isValid) {
       this.soundVolumeSlider.node.off("slide", this.onSoundVolumeChange, this);
     }
 
-    if (this.musicVolumeSlider) {
-      this.musicVolumeSlider.node.off("slide", this.onMusicVolumeChange, this);
+    // Cleanup Pause Controls
+    if (this.pauseToggle?.isValid) {
+      this.pauseToggle.node.off("toggle", this.onPauseToggle, this);
     }
   }
 
   protected onBeforeShow(): void {
     super.onBeforeShow();
     this.loadSettings();
+
+    // Reset flag
+    this.didModalPauseGame = false;
+
+    const pauseEnabled = localStorage.getItem("pauseEnabled") !== "false";
+    if (pauseEnabled) {
+      const gameManager = GameManager.getInstance();
+      if (gameManager && !gameManager.isGamePaused()) {
+        gameManager.pauseGame();
+        this.didModalPauseGame = true;
+      }
+    }
+  }
+
+  protected onAfterHide(): void {
+    super.onAfterHide();
+
+    // Only resume if modal was the one who paused the game
+    const gameManager = GameManager.getInstance();
+    if (gameManager && this.didModalPauseGame && gameManager.isGamePaused()) {
+      gameManager.resumeGame();
+    }
+
+    // Reset flag
+    this.didModalPauseGame = false;
   }
 
   private loadSettings(): void {
     const audioManager = AudioManager.getInstance();
     if (!audioManager) return;
 
-    if (this.soundToggle) {
-      const soundEnabled = localStorage.getItem("soundEnabled") !== "false";
-      this.soundToggle.isChecked = soundEnabled;
-    }
-
+    // Load Music Settings
     if (this.musicToggle) {
       const musicEnabled = localStorage.getItem("musicEnabled") !== "false";
       this.musicToggle.isChecked = musicEnabled;
-    }
-
-    if (this.soundVolumeSlider) {
-      const soundVolume = parseFloat(
-        localStorage.getItem("soundVolume") || "1.0"
-      );
-      this.soundVolumeSlider.progress = soundVolume;
     }
 
     if (this.musicVolumeSlider) {
@@ -93,20 +123,24 @@ export class SettingsModal extends BaseModal {
       this.musicVolumeSlider.progress = musicVolume;
     }
 
-    if (this.versionLabel) {
-      this.versionLabel.string = "Version 1.0.0";
-    }
-  }
-
-  private onSoundToggle(toggle: Toggle): void {
-    const enabled = toggle.isChecked;
-    localStorage.setItem("soundEnabled", enabled.toString());
-
-    const audioManager = AudioManager.getInstance();
-    if (audioManager) {
+    // Load Sound Settings
+    if (this.soundToggle) {
+      const soundEnabled = localStorage.getItem("soundEnabled") !== "false";
+      this.soundToggle.isChecked = soundEnabled;
     }
 
-    console.log(`[SettingsModal] Sound ${enabled ? "enabled" : "disabled"}`);
+    if (this.soundVolumeSlider) {
+      const soundVolume = parseFloat(
+        localStorage.getItem("soundVolume") || "1.0"
+      );
+      this.soundVolumeSlider.progress = soundVolume;
+    }
+
+    // Load Pause Settings
+    if (this.pauseToggle) {
+      const pauseEnabled = localStorage.getItem("pauseEnabled") !== "false";
+      this.pauseToggle.isChecked = pauseEnabled;
+    }
   }
 
   private onMusicToggle(toggle: Toggle): void {
@@ -115,9 +149,40 @@ export class SettingsModal extends BaseModal {
 
     const audioManager = AudioManager.getInstance();
     if (audioManager) {
+      audioManager.setMusicEnabled(enabled);
     }
 
     console.log(`[SettingsModal] Music ${enabled ? "enabled" : "disabled"}`);
+  }
+
+  private onSoundToggle(toggle: Toggle): void {
+    const enabled = toggle.isChecked;
+    localStorage.setItem("soundEnabled", enabled.toString());
+
+    const audioManager = AudioManager.getInstance();
+    if (audioManager) {
+      audioManager.setSoundEnabled(enabled);
+    }
+
+    console.log(`[SettingsModal] Sound ${enabled ? "enabled" : "disabled"}`);
+  }
+
+  private onPauseToggle(toggle: Toggle): void {
+    const enabled = toggle.isChecked;
+    localStorage.setItem("pauseEnabled", enabled.toString());
+
+    this.didModalPauseGame = false;
+
+    const gameManager = GameManager.getInstance();
+    if (gameManager) {
+      if (enabled) {
+        gameManager.pauseGame();
+      } else {
+        gameManager.resumeGame();
+      }
+    }
+
+    console.log(`[SettingsModal] Pause ${enabled ? "enabled" : "disabled"}`);
   }
 
   private onSoundVolumeChange(slider: Slider): void {
@@ -126,6 +191,7 @@ export class SettingsModal extends BaseModal {
 
     const audioManager = AudioManager.getInstance();
     if (audioManager) {
+      audioManager.setSFXVolume(volume);
     }
 
     console.log(`[SettingsModal] Sound volume: ${volume.toFixed(2)}`);
@@ -137,25 +203,9 @@ export class SettingsModal extends BaseModal {
 
     const audioManager = AudioManager.getInstance();
     if (audioManager) {
+      audioManager.setBGMVolume(volume);
     }
 
     console.log(`[SettingsModal] Music volume: ${volume.toFixed(2)}`);
-  }
-
-  public onResetClick(): void {
-    console.log("[SettingsModal] Reset clicked");
-    localStorage.removeItem("soundEnabled");
-    localStorage.removeItem("musicEnabled");
-    localStorage.removeItem("soundVolume");
-    localStorage.removeItem("musicVolume");
-    this.loadSettings();
-  }
-
-  public onPrivacyPolicyClick(): void {
-    console.log("[SettingsModal] Privacy Policy clicked");
-  }
-
-  public onTermsClick(): void {
-    console.log("[SettingsModal] Terms clicked");
   }
 }

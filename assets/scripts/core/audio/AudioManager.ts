@@ -22,6 +22,8 @@ export class AudioManager extends Component {
   private _bgmVolume: number = 0.5;
   private _sfxVolume: number = 0.8;
   private _isMuted: boolean = false;
+  private _isMusicEnabled: boolean = true;
+  private _isSoundEnabled: boolean = true;
 
   private readonly _audioCache = new Map<string, AudioClip>();
   private readonly _loadingPromises = new Map<
@@ -64,6 +66,8 @@ export class AudioManager extends Component {
       localStorage.getItem(AUDIO_STORAGE_KEYS.SFX_VOLUME) ?? "0.8"
     );
     this._isMuted = localStorage.getItem(AUDIO_STORAGE_KEYS.MUTED) === "true";
+    this._isMusicEnabled = localStorage.getItem("musicEnabled") !== "false";
+    this._isSoundEnabled = localStorage.getItem("soundEnabled") !== "false";
   }
 
   // ==========================================
@@ -72,7 +76,7 @@ export class AudioManager extends Component {
 
   public async playBGM(path: string): Promise<void> {
     const clip = await this.getOrLoadClip(path);
-    if (!clip || this._isMuted) return;
+    if (!clip || this._isMuted || !this._isMusicEnabled) return;
 
     this._bgmSource.clip = clip;
     this._bgmSource.play();
@@ -83,7 +87,7 @@ export class AudioManager extends Component {
   }
 
   public async playSFX(path: string): Promise<void> {
-    if (this._isMuted) return;
+    if (this._isMuted || !this._isSoundEnabled) return;
     const clip = await this.getOrLoadClip(path);
     if (clip) {
       this._sfxSource.playOneShot(clip, this._sfxVolume);
@@ -91,7 +95,7 @@ export class AudioManager extends Component {
   }
 
   public async playSpinSound(path: string): Promise<void> {
-    if (this._isMuted) return;
+    if (this._isMuted || !this._isSoundEnabled) return;
     const clip = await this.getOrLoadClip(path);
     if (clip) {
       this._spinSource.clip = clip;
@@ -136,6 +140,45 @@ export class AudioManager extends Component {
     } else if (this._bgmSource.clip) {
       this._bgmSource.play();
     }
+  }
+
+  public setMusicEnabled(enabled: boolean): void {
+    this._isMusicEnabled = enabled;
+    localStorage.setItem("musicEnabled", enabled.toString());
+
+    if (enabled) {
+      if (this._bgmSource.clip && !this._bgmSource.playing && !this._isMuted) {
+        this._bgmSource.play();
+      }
+    } else {
+      this._bgmSource.pause();
+    }
+  }
+
+  public setSoundEnabled(enabled: boolean): void {
+    this._isSoundEnabled = enabled;
+    localStorage.setItem("soundEnabled", enabled.toString());
+
+    // Stop spin sound nếu đang chạy
+    if (!enabled && this._spinSource.playing) {
+      this._spinSource.stop();
+    }
+  }
+
+  public getBGMVolume(): number {
+    return this._bgmVolume;
+  }
+
+  public getSFXVolume(): number {
+    return this._sfxVolume;
+  }
+
+  public isMusicEnabled(): boolean {
+    return this._isMusicEnabled;
+  }
+
+  public isSoundEnabled(): boolean {
+    return this._isSoundEnabled;
   }
 
   private updateVolumes(): void {

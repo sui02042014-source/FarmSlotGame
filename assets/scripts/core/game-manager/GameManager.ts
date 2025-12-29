@@ -53,6 +53,7 @@ export class GameManager extends Component {
   private currentBetIndex: number = 3;
   private lastWin: number = 0;
   private isAutoPlay: boolean = false;
+  private isPaused: boolean = false;
 
   private winCounter: NumberCounter = null!;
 
@@ -224,6 +225,11 @@ export class GameManager extends Component {
       return;
     }
 
+    if (this.isPaused) {
+      console.log("[GameManager] Cannot spin while game is paused");
+      return;
+    }
+
     if (!this.isIdle()) {
       return;
     }
@@ -370,13 +376,13 @@ export class GameManager extends Component {
   // ==========================================
 
   private continueAutoPlay(): void {
-    if (this.isAutoPlay) {
+    if (this.isAutoPlay && !this.isPaused) {
       this.scheduleOnce(this.onAutoPlaySpin, this.AUTO_PLAY_DELAY);
     }
   }
 
   private onAutoPlaySpin = (): void => {
-    if (this.isAutoPlay && this.isIdle()) {
+    if (this.isAutoPlay && this.isIdle() && !this.isPaused) {
       this.startSpin();
     }
   };
@@ -426,5 +432,34 @@ export class GameManager extends Component {
 
   public getPlayerCoins(): number {
     return this.playerCoins;
+  }
+
+  // ==========================================
+  // Pause / Resume
+  // ==========================================
+
+  public pauseGame(): void {
+    this.isPaused = true;
+    this.unscheduleAllCallbacks();
+
+    const slot = this.getSlotMachine();
+    if (slot) {
+      slot.stopAllReels();
+    }
+
+    if (this.currentState === GameConfig.GAME_STATES.SPINNING) {
+      this.setState(GameConfig.GAME_STATES.IDLE);
+    }
+
+    console.log("[GameManager] Game paused");
+  }
+
+  public resumeGame(): void {
+    this.isPaused = false;
+    console.log("[GameManager] Game resumed");
+  }
+
+  public isGamePaused(): boolean {
+    return this.isPaused;
   }
 }

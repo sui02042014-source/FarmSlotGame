@@ -12,6 +12,9 @@ export class TopBarController extends Component {
   @property(Node)
   infoButton: Node = null!;
 
+  @property(Node)
+  settingsButton: Node = null!;
+
   protected onLoad(): void {
     if (this.lobbyButton) {
       this.lobbyButton.on(
@@ -23,6 +26,14 @@ export class TopBarController extends Component {
 
     if (this.infoButton) {
       this.infoButton.on(Button.EventType.CLICK, this.onInfoButtonClick, this);
+    }
+
+    if (this.settingsButton) {
+      this.settingsButton.on(
+        Button.EventType.CLICK,
+        this.onSettingsButtonClick,
+        this
+      );
     }
   }
 
@@ -38,6 +49,14 @@ export class TopBarController extends Component {
     if (this.infoButton?.isValid) {
       this.infoButton.off(Button.EventType.CLICK, this.onInfoButtonClick, this);
     }
+
+    if (this.settingsButton?.isValid) {
+      this.settingsButton.off(
+        Button.EventType.CLICK,
+        this.onSettingsButtonClick,
+        this
+      );
+    }
   }
 
   private onLobbyButtonClick(): void {
@@ -48,6 +67,13 @@ export class TopBarController extends Component {
     const modalManager = ModalManager.getInstance();
     if (modalManager) {
       modalManager.showPaytableModal();
+    }
+  }
+
+  private onSettingsButtonClick(): void {
+    const modalManager = ModalManager.getInstance();
+    if (modalManager) {
+      modalManager.showSettingsModal();
     }
   }
 }

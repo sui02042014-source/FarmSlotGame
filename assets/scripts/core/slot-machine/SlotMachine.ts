@@ -47,7 +47,14 @@ export class SlotMachine extends Component {
   }
 
   public spin(): void {
-    const bet = GameManager.getInstance().getCurrentBet();
+    // Check if game is paused
+    const gameManager = GameManager.getInstance();
+    if (gameManager?.isGamePaused()) {
+      console.log("[SlotMachine] Cannot spin while game is paused");
+      return;
+    }
+
+    const bet = gameManager.getCurrentBet();
     const result = SlotLogic.calculateSpinResult(
       GameConfig.REEL_COUNT,
       GameConfig.SYMBOL_PER_REEL,
@@ -73,6 +80,15 @@ export class SlotMachine extends Component {
         this.scheduleOnce(() => c.stopSpin(), i * 0.2);
       });
     }, 2.5);
+  }
+
+  public stopAllReels(): void {
+    this.unscheduleAllCallbacks();
+    this.reelControllers.forEach((controller) => {
+      if (controller) {
+        controller.forceStop();
+      }
+    });
   }
 
   // ==========================================

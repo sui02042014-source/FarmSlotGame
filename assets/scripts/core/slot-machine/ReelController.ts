@@ -92,6 +92,15 @@ export class ReelController extends Component {
     }
   }
 
+  public forceStop(): void {
+    this.unscheduleAllCallbacks();
+    tween(this.tweenData).stop();
+    this.currentSpeed = 0;
+    this.isFinalizing = false;
+    this.stateMachine.reset();
+    console.log("[ReelController] Force stopped");
+  }
+
   // ==========================================
   // Spin Control - Internal
   // ==========================================
