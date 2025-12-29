@@ -348,9 +348,6 @@ export class ReelController extends Component {
       if (container) {
         const posY = (centerIndex - i) * this.symbolSpacing;
         this.setupContainer(container, posY);
-        console.log(
-          `[ReelController] Initialized symbol ${symbol.id} at posY ${posY}`
-        );
       }
     }
   }

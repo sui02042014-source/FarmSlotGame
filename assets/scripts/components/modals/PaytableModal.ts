@@ -7,6 +7,7 @@ import {
   ScrollView,
   Sprite,
   UITransform,
+  UIStaticBatch,
 } from "cc";
 import { GameConfig } from "../../data/config/GameConfig";
 import { SpriteFrameCache } from "../../utils/helpers/SpriteFrameCache";
@@ -55,6 +56,12 @@ export class PaytableModal extends BaseModal {
 
   private async renderPaytable() {
     if (!this.contentContainer || !this.itemPrefab) return;
+
+    // Disable StaticBatch while updating content
+    let staticBatch = this.contentContainer.getComponent(UIStaticBatch);
+    if (staticBatch) {
+      staticBatch.enabled = false;
+    }
 
     this._activeItems.forEach((item) => this.returnToPool(item));
     this._activeItems = [];
@@ -105,6 +112,16 @@ export class PaytableModal extends BaseModal {
     }
 
     this.scrollView.scrollToTop(0);
+
+    this.scheduleOnce(() => {
+      if (this.contentContainer?.isValid) {
+        if (!staticBatch) {
+          staticBatch = this.contentContainer.addComponent(UIStaticBatch);
+        }
+        staticBatch.enabled = true;
+        staticBatch.markAsDirty();
+      }
+    }, 0);
   }
 
   protected onDisable(): void {

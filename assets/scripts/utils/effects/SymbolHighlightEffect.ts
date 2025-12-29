@@ -26,39 +26,52 @@ export type SymbolHighlightOptions = {
 class RoundAnimationController {
   private static roundFrames: SpriteFrame[] = [];
   private static isLoaded = false;
+  private static loadingPromise: Promise<void> | null = null;
 
   public static async loadFrames(): Promise<void> {
     if (this.isLoaded) return;
+    if (this.loadingPromise) return this.loadingPromise;
 
-    try {
-      const cache = SpriteFrameCache.getInstance();
-      const frameCount = 90;
+    this.loadingPromise = (async () => {
+      try {
+        const cache = SpriteFrameCache.getInstance();
+        const frameCount = 89;
 
-      for (let i = 0; i < frameCount; i++) {
-        const frameNumber = i.toString().padStart(3, "0");
-        const spritePath = `ui/round/round_${frameNumber}/spriteFrame`;
+        const newFrames: SpriteFrame[] = [];
+        for (let i = 0; i < frameCount; i++) {
+          const frameNumber = i.toString().padStart(3, "0");
+          const spritePath = `ui/round/round_${frameNumber}/spriteFrame`;
 
-        const sf = await cache.getSpriteFrameFromBundle(
-          BundleName.GAME,
-          spritePath
-        );
-
-        if (sf) {
-          this.roundFrames.push(sf);
-        } else {
-          console.warn(
-            `[RoundAnimationController] Failed to load frame: ${spritePath}`
+          const sf = await cache.getSpriteFrameFromBundle(
+            BundleName.GAME,
+            spritePath
           );
-        }
-      }
 
-      this.isLoaded = true;
-      console.log(
-        `[RoundAnimationController] Loaded ${this.roundFrames.length} animation frames`
-      );
-    } catch (error) {
-      console.error("[RoundAnimationController] Error loading frames:", error);
-    }
+          if (sf) {
+            newFrames.push(sf);
+          } else {
+            console.warn(
+              `[RoundAnimationController] Failed to load frame: ${spritePath}`
+            );
+          }
+        }
+
+        this.roundFrames = newFrames;
+        this.isLoaded = true;
+        console.log(
+          `[RoundAnimationController] Loaded ${this.roundFrames.length} animation frames`
+        );
+      } catch (error) {
+        console.error(
+          "[RoundAnimationController] Error loading frames:",
+          error
+        );
+      } finally {
+        this.loadingPromise = null;
+      }
+    })();
+
+    return this.loadingPromise;
   }
 
   public static getFrameCount(): number {
@@ -138,12 +151,19 @@ class HighlightPool {
 export class SymbolHighlightEffect {
   private static highlightPool: HighlightPool = new HighlightPool();
   private static isInitialized = false;
+  private static initPromise: Promise<void> | null = null;
 
   public static async initialize(): Promise<void> {
     if (this.isInitialized) return;
+    if (this.initPromise) return this.initPromise;
 
-    await RoundAnimationController.loadFrames();
-    this.isInitialized = true;
+    this.initPromise = (async () => {
+      await RoundAnimationController.loadFrames();
+      this.isInitialized = true;
+      this.initPromise = null;
+    })();
+
+    return this.initPromise;
   }
 
   public static async play(opts: SymbolHighlightOptions): Promise<void> {
