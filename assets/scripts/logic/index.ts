@@ -1,2 +1,1 @@
-// Pure game logic exports
-export * from "./SlotLogic";
+export * from "./slot-logic";

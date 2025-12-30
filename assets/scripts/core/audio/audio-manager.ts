@@ -1,5 +1,5 @@
 import { _decorator, Component, AudioClip, AudioSource, math } from "cc";
-import { AssetBundleManager } from "../asset-manager/AssetBundleManager";
+import { AssetBundleManager } from "../assets/asset-bundle-manager";
 
 const { ccclass } = _decorator;
 

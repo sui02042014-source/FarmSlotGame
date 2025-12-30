@@ -1,5 +1,5 @@
-import { SpriteFrameCache } from "./SpriteFrameCache";
-import { SymbolData } from "../../data/models/SymbolData";
+import { SpriteFrameCache } from "./sprite-frame-cache";
+import { SymbolData } from "../../data/models/symbol-data";
 
 export class SymbolPreloader {
   public static async preloadAll(): Promise<void> {

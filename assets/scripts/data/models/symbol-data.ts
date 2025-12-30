@@ -1,5 +1,5 @@
 import { _decorator } from "cc";
-import { GameConfig } from "../config/GameConfig";
+import { GameConfig } from "../config/game-config";
 const { ccclass } = _decorator;
 
 export interface ISymbolData {

@@ -1,3 +1,2 @@
-// Visual effects utilities exports
-export { CoinFlyEffect } from "./CoinFlyEffect";
-export { SymbolHighlightEffect } from "./SymbolHighlightEffect";
+export { CoinFlyEffect } from "./coin-fly-effect";
+export { SymbolHighlightEffect } from "./symbol-highlight-effect";

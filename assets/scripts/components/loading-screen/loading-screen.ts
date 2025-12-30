@@ -9,11 +9,11 @@ import {
   tween,
   Vec3,
 } from "cc";
-import { SceneManager } from "../../core/scene-manager/SceneManager";
+import { SceneManager } from "../../core/scenes/scene-manager";
 import {
   AssetBundleManager,
   BundleName,
-} from "../../core/asset-manager/AssetBundleManager";
+} from "../../core/assets/asset-bundle-manager";
 
 const { ccclass, property } = _decorator;
 

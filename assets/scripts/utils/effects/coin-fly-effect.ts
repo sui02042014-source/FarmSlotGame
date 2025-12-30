@@ -9,8 +9,8 @@ import {
   UITransform,
   Vec3,
 } from "cc";
-import { SpriteFrameCache } from "../../utils/helpers/SpriteFrameCache";
-import { BundleName } from "../../core/asset-manager/AssetBundleManager";
+import { SpriteFrameCache } from "../helpers/sprite-frame-cache";
+import { BundleName } from "../../core/assets/asset-bundle-manager";
 
 export type CoinFlyEffectOptions = {
   parent: Node;

@@ -8,11 +8,11 @@ import {
   UITransform,
   Widget,
 } from "cc";
-import { GameConfig } from "../../data/config/GameConfig";
-import { SpriteFrameCache } from "../../utils/helpers/SpriteFrameCache";
-import { BaseModal } from "./BaseModal";
-import { BundleName } from "../../core/asset-manager/AssetBundleManager";
-import { SymbolData } from "../../data/models/SymbolData";
+import { GameConfig } from "../../data/config/game-config";
+import { SpriteFrameCache } from "../../utils/helpers/sprite-frame-cache";
+import { BaseModal } from "./base-modal";
+import { BundleName } from "../../core/assets/asset-bundle-manager";
+import { SymbolData } from "../../data/models/symbol-data";
 
 const { ccclass, property } = _decorator;
 

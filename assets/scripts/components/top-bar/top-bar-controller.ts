@@ -1,7 +1,7 @@
-import { _decorator, Button, Component, Node, Label, Color } from "cc";
-import { SceneManager } from "../../core/scene-manager/SceneManager";
-import { ModalManager } from "../modals/ModalManager";
-import { GameManager } from "../../core/game-manager/GameManager";
+import { _decorator, Component, Label, Node } from "cc";
+import { GameManager } from "../../core/game/game-manager";
+import { SceneManager } from "../../core/scenes/scene-manager";
+import { ModalManager } from "../modals/modal-manager";
 
 const { ccclass, property } = _decorator;
 

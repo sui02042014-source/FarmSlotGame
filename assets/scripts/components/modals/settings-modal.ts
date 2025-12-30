@@ -1,7 +1,6 @@
-import { _decorator, Label, Toggle, Slider } from "cc";
-import { BaseModal } from "./BaseModal";
-import { AudioManager } from "../../core/audio/AudioManager";
-import { GameManager } from "../../core/game-manager/GameManager";
+import { _decorator, Slider, Toggle } from "cc";
+import { AudioManager } from "../../core/audio/audio-manager";
+import { BaseModal } from "./base-modal";
 const { ccclass, property } = _decorator;
 
 @ccclass("SettingsModal")

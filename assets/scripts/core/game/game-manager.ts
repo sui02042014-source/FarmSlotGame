@@ -7,19 +7,16 @@ import {
   tween,
   Vec3,
 } from "cc";
-import { ModalManager } from "../../components/modals/ModalManager";
-import { SpinButtonController } from "../../components/spin-button/SpinButtonController";
-import { AudioManager } from "../../core/audio/AudioManager";
-import { GameConfig, GameState } from "../../data/config/GameConfig";
-import { CoinFlyEffect } from "../../utils/effects/CoinFlyEffect";
-import { NumberCounter } from "../../utils/helpers/NumberCounter";
-import { SpriteFrameCache } from "../../utils/helpers/SpriteFrameCache";
-import { PlayerDataStorage } from "../../utils/storage/PlayerDataStorage";
-import {
-  AssetBundleManager,
-  BundleName,
-} from "../asset-manager/AssetBundleManager";
-import { SlotMachine } from "../slot-machine/SlotMachine";
+import { ModalManager } from "../../components/modals/modal-manager";
+import { SpinButtonController } from "../../components/spin-button/spin-button-controller";
+import { AudioManager } from "../audio/audio-manager";
+import { GameConfig, GameState } from "../../data/config/game-config";
+import { CoinFlyEffect } from "../../utils/effects/coin-fly-effect";
+import { NumberCounter } from "../../utils/helpers/number-counter";
+import { SpriteFrameCache } from "../../utils/helpers/sprite-frame-cache";
+import { PlayerDataStorage } from "../../utils/storage/player-data-storage";
+import { AssetBundleManager, BundleName } from "../assets/asset-bundle-manager";
+import { SlotMachine } from "../slot-machine/slot-machine";
 
 const { ccclass, property } = _decorator;
 

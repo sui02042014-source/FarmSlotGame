@@ -3,14 +3,13 @@ import {
   Component,
   Node,
   Sprite,
-  SpriteAtlas,
   SpriteFrame,
   UITransform,
 } from "cc";
-import { GameConfig } from "../../data/config/GameConfig";
-import { SymbolData } from "../../data/models/SymbolData";
-import { SpriteFrameCache } from "../../utils/helpers/SpriteFrameCache";
-import { BundleName } from "../asset-manager/AssetBundleManager";
+import { BundleName } from "../assets/asset-bundle-manager";
+import { GameConfig } from "../../data/config/game-config";
+import { SymbolData } from "../../data/models/symbol-data";
+import { SpriteFrameCache } from "../../utils/helpers/sprite-frame-cache";
 const { ccclass } = _decorator;
 
 export interface SymbolContainer {

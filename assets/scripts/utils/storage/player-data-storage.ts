@@ -1,4 +1,4 @@
-import { GameConfig } from "../../data/config/GameConfig";
+import { GameConfig } from "../../data/config/game-config";
 import { PlayerData } from "../../types";
 
 const KEYS = {

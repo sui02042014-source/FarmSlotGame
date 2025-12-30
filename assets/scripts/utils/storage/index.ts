@@ -1,2 +1,1 @@
-// Storage utilities exports
-export { PlayerDataStorage } from "./PlayerDataStorage";
+export { PlayerDataStorage } from "./player-data-storage";

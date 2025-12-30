@@ -1,2 +1,1 @@
-// Spin button component exports
-export { SpinButtonController } from "./SpinButtonController";
+export { SpinButtonController } from "./spin-button-controller";

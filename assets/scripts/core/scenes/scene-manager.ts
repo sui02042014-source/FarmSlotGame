@@ -1,9 +1,6 @@
 import { director } from "cc";
-import { LoadingScreen } from "../../components/loading-screen/LoadingScreen";
-import {
-  AssetBundleManager,
-  BundleName,
-} from "../asset-manager/AssetBundleManager";
+import { LoadingScreen } from "../../components/loading-screen/loading-screen";
+import { AssetBundleManager, BundleName } from "../assets/asset-bundle-manager";
 
 export enum SceneName {
   LOADING = "LoadingScene",

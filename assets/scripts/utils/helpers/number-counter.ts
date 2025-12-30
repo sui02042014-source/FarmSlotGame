@@ -6,13 +6,13 @@ export class NumberCounter extends Component {
   @property(Label)
   label: Label = null!;
 
-  @property({ tooltip: "Thời gian chạy hiệu ứng mặc định" })
+  @property
   duration: number = 2.0;
 
-  @property({ type: CCInteger, tooltip: "Số chữ số thập phân" })
+  @property({ type: CCInteger })
   decimalPlaces: number = 2;
 
-  @property({ tooltip: "Sử dụng dấu phẩy ngăn cách hàng nghìn (vd: 1,000.00)" })
+  @property
   useThousandSeparator: boolean = true;
 
   @property

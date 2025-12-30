@@ -1,1 +1,1 @@
-export * from "./TopBarController";
+export { TopBarController } from "./top-bar-controller";

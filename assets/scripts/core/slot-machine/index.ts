@@ -1,7 +1,6 @@
-// Slot machine components exports
-export { SlotMachine } from "./SlotMachine";
-export { ReelController } from "./ReelController";
-export { ReelContainer } from "./ReelContainer";
-export type { SymbolContainer } from "./ReelContainer";
-export { ReelStateMachine } from "./ReelStateMachine";
-export type { ReelState } from "./ReelStateMachine";
+export { SlotMachine } from "./slot-machine";
+export { ReelController } from "./reel-controller";
+export { ReelContainer } from "./reel-container";
+export type { SymbolContainer } from "./reel-container";
+export { ReelStateMachine } from "./reel-state-machine";
+export type { ReelState } from "./reel-state-machine";

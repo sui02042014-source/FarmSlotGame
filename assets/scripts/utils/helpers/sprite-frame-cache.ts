@@ -1,5 +1,5 @@
 import { SpriteFrame, SpriteAtlas } from "cc";
-import { AssetBundleManager } from "../../core/asset-manager/AssetBundleManager";
+import { AssetBundleManager } from "../../core/assets/asset-bundle-manager";
 
 export class SpriteFrameCache {
   private static _instance: SpriteFrameCache | null = null;

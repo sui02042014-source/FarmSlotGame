@@ -12,8 +12,8 @@ import {
   UIOpacity,
   math,
 } from "cc";
-import { GameManager } from "../../core/game-manager/GameManager";
-import { GameConfig } from "../../data/config/GameConfig";
+import { GameManager } from "../../core/game/game-manager";
+import { GameConfig } from "../../data/config/game-config";
 
 const { ccclass, property } = _decorator;
 
@@ -127,7 +127,12 @@ export class SpinButtonController extends Component {
     this.resetHoldState();
 
     // If auto play is active, stop it when button is clicked
-    if (gm && gm.isAutoPlayActive() && timeHeld < this.holdDuration && !activatedAuto) {
+    if (
+      gm &&
+      gm.isAutoPlayActive() &&
+      timeHeld < this.holdDuration &&
+      !activatedAuto
+    ) {
       gm.toggleAutoPlay();
       return;
     }

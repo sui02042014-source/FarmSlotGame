@@ -1,4 +1,3 @@
-// Main exports for the FarmSlotGame scripts
 export * from "./core";
 export * from "./data";
 export * from "./logic";

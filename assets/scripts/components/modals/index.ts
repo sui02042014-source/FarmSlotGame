@@ -1,6 +1,5 @@
-// Modal components exports
-export { BaseModal } from "./BaseModal";
-export { WinModal } from "./WinModal";
-export { SettingsModal } from "./SettingsModal";
-export { PaytableModal } from "./PaytableModal";
-export { ModalManager } from "./ModalManager";
+export { BaseModal } from "./base-modal";
+export { WinModal } from "./win-modal";
+export { SettingsModal } from "./settings-modal";
+export { PaytableModal } from "./paytable-modal";
+export { ModalManager } from "./modal-manager";

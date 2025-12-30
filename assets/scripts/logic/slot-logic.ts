@@ -1,4 +1,4 @@
-import { GameConfig } from "../data/config/GameConfig";
+import { GameConfig } from "../data/config/game-config";
 import { WinLine, SpinResult } from "../types";
 
 /**

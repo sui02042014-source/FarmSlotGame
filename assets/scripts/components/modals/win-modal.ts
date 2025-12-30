@@ -1,8 +1,8 @@
 import { _decorator, Label, tween, Vec3 } from "cc";
-import { BaseModal } from "./BaseModal";
-import { NumberCounter } from "../../utils/helpers/NumberCounter";
-import { CoinFlyEffect } from "../../utils/effects/CoinFlyEffect";
-import { GameManager } from "../../core/game-manager/GameManager";
+import { BaseModal } from "./base-modal";
+import { NumberCounter } from "../../utils/helpers/number-counter";
+import { CoinFlyEffect } from "../../utils/effects/coin-fly-effect";
+import { GameManager } from "../../core/game/game-manager";
 
 const { ccclass, property } = _decorator;
 

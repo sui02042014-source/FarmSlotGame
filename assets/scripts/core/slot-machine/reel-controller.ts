@@ -1,9 +1,9 @@
-import { _decorator, Component, CCInteger, tween, Node, Vec3, Color } from "cc";
-import { GameConfig } from "../../data/config/GameConfig";
-import { SymbolData } from "../../data/models/SymbolData";
-import { ReelContainer, SymbolContainer } from "./ReelContainer";
-import { ReelStateMachine, ReelState } from "./ReelStateMachine";
-import { SymbolHighlightEffect } from "../../utils/effects/SymbolHighlightEffect";
+import { _decorator, CCInteger, Color, Component, tween } from "cc";
+import { GameConfig } from "../../data/config/game-config";
+import { SymbolData } from "../../data/models/symbol-data";
+import { SymbolHighlightEffect } from "../../utils/effects/symbol-highlight-effect";
+import { ReelContainer, SymbolContainer } from "./reel-container";
+import { ReelStateMachine } from "./reel-state-machine";
 
 const { ccclass, property } = _decorator;
 

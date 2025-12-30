@@ -1,4 +1,3 @@
-// Game Types and Interfaces
 export type GameState =
   | "idle"
   | "spinning"
@@ -33,5 +32,4 @@ export interface SymbolData {
   paytable: Record<number, number>;
 }
 
-// Re-export commonly used types from other modules
-export type { GameConfig } from "../data/config/GameConfig";
+export type { GameConfig } from "../data/config/game-config";

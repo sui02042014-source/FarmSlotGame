@@ -9,8 +9,8 @@ import {
   Vec3,
   _decorator,
 } from "cc";
-import { SpriteFrameCache } from "../helpers/SpriteFrameCache";
-import { BundleName } from "../../core/asset-manager/AssetBundleManager";
+import { SpriteFrameCache } from "../helpers/sprite-frame-cache";
+import { BundleName } from "../../core/assets/asset-bundle-manager";
 
 const { ccclass } = _decorator;
 

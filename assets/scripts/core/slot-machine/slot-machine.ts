@@ -1,9 +1,9 @@
 import { _decorator, Component, Node } from "cc";
-import { GameConfig } from "../../data/config/GameConfig";
-import { SlotLogic } from "../../logic/SlotLogic";
+import { GameConfig } from "../../data/config/game-config";
+import { SlotLogic } from "../../logic/slot-logic";
 import { SpinResult } from "../../types";
-import { GameManager } from "../game-manager/GameManager";
-import { ReelController } from "./ReelController";
+import { GameManager } from "../game/game-manager";
+import { ReelController } from "./reel-controller";
 
 const { ccclass, property } = _decorator;
 

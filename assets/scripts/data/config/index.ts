@@ -1,2 +1,1 @@
-// Configuration exports
-export { GameConfig } from "./GameConfig";
+export { GameConfig } from "./game-config";
