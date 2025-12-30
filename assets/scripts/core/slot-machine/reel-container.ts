@@ -37,13 +37,13 @@ export class ReelContainer extends Component {
       node.name = `Symbol_${symbolId}`;
     } else {
       node = new Node(`Symbol_${symbolId}`);
-      node.layer = this.node.layer; // Ensure it's on the same layer as the Reel
+      node.layer = this.node.layer;
       node
         .addComponent(UITransform)
         .setContentSize(GameConfig.SYMBOL_SIZE, GameConfig.SYMBOL_SIZE);
       const sprite = node.addComponent(Sprite);
       sprite.sizeMode = Sprite.SizeMode.CUSTOM;
-      sprite.trim = false; // Disable trim for better batching stability
+      sprite.trim = false;
     }
     node.active = true;
     return node;

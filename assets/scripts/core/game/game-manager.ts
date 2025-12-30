@@ -90,14 +90,12 @@ export class GameManager extends Component {
     const bundleManager = AssetBundleManager.getInstance();
     const cache = SpriteFrameCache.getInstance();
 
-    // Load bundles and symbols
     const [_symbolsBundle, _audio, _game] = await Promise.all([
       bundleManager.loadBundle(BundleName.SYMBOLS),
       bundleManager.loadBundle(BundleName.AUDIO),
       bundleManager.loadBundle(BundleName.GAME),
     ]);
 
-    // Load all SpriteFrames from symbols bundle
     const symbolFrames = await bundleManager.loadDir(
       BundleName.SYMBOLS,
       "",

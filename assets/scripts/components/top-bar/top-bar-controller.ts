@@ -60,28 +60,28 @@ export class TopBarController extends Component {
   }
 
   protected onDestroy(): void {
-    if (this.lobbyButton) {
+    if (this.lobbyButton && this.lobbyButton.isValid) {
       this.lobbyButton.off(
         Node.EventType.TOUCH_END,
         this.onLobbyButtonClick,
         this
       );
     }
-    if (this.infoButton) {
+    if (this.infoButton && this.infoButton.isValid) {
       this.infoButton.off(
         Node.EventType.TOUCH_END,
         this.onInfoButtonClick,
         this
       );
     }
-    if (this.settingsButton) {
+    if (this.settingsButton && this.settingsButton.isValid) {
       this.settingsButton.off(
         Node.EventType.TOUCH_END,
         this.onSettingsButtonClick,
         this
       );
     }
-    if (this.pauseButton) {
+    if (this.pauseButton && this.pauseButton.isValid) {
       this.pauseButton.off(
         Node.EventType.TOUCH_END,
         this.onPauseButtonClick,
