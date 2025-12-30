@@ -17,16 +17,12 @@ export class SpriteFrameCache {
   public cacheAtlas(bundleName: string, atlas: SpriteAtlas): void {
     const frames = atlas.getSpriteFrames();
     if (!frames || frames.length === 0) {
-      console.warn(`[SpriteFrameCache] Atlas ${bundleName} has NO frames!`);
       return;
     }
     frames.forEach((sf) => {
       sf.packable = true;
       this._cache.set(this.makeKey(bundleName, sf.name), sf);
     });
-    console.log(
-      `[SpriteFrameCache] Atlas cached: ${frames.length} frames from bundle ${bundleName}`
-    );
   }
 
   public setStaticCache(bundle: string, path: string, sf: SpriteFrame): void {
@@ -37,9 +33,6 @@ export class SpriteFrameCache {
   public getSpriteFrame(bundle: string, path: string): SpriteFrame | null {
     const key = this.makeKey(bundle, path);
     const sf = this._cache.get(key);
-    if (!sf) {
-      console.warn(`[SpriteFrameCache] SpriteFrame not found in cache: ${key}`);
-    }
     return sf || null;
   }
 

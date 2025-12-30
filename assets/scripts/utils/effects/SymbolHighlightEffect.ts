@@ -49,23 +49,13 @@ class RoundAnimationController {
 
           if (sf) {
             newFrames.push(sf);
-          } else {
-            console.warn(
-              `[RoundAnimationController] Failed to load frame: ${spritePath}`
-            );
           }
         }
 
         this.roundFrames = newFrames;
         this.isLoaded = true;
-        console.log(
-          `[RoundAnimationController] Loaded ${this.roundFrames.length} animation frames`
-        );
       } catch (error) {
-        console.error(
-          "[RoundAnimationController] Error loading frames:",
-          error
-        );
+        // Silent error handling
       } finally {
         this.loadingPromise = null;
       }
@@ -205,7 +195,6 @@ export class SymbolHighlightEffect {
 
     const frames = RoundAnimationController.getAllFrames();
     if (frames.length === 0) {
-      console.error("[SymbolHighlightEffect] No animation frames available");
       this.highlightPool.release(highlightNode);
       return;
     }

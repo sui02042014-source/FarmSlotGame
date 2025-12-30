@@ -1773,10 +1773,6 @@
     "contentContainer": {
       "__id__": 51
     },
-    "itemPrefab": {
-      "__uuid__": "9fb0813e-db9a-4562-a3e6-ef158a41b3e1",
-      "__expectedType__": "cc.Prefab"
-    },
     "_id": ""
   },
   {

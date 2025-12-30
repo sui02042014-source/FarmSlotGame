@@ -104,9 +104,6 @@ export class CoinFlyEffect {
     );
 
     if (!sf) {
-      console.error(
-        `[CoinFlyEffect] Failed to load sprite frame: ${spritePath}`
-      );
       return;
     }
 

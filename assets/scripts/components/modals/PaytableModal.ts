@@ -1,13 +1,12 @@
 import {
   _decorator,
-  instantiate,
   Label,
+  Layout,
   Node,
-  Prefab,
   ScrollView,
   Sprite,
   UITransform,
-  UIStaticBatch,
+  Widget,
 } from "cc";
 import { GameConfig } from "../../data/config/GameConfig";
 import { SpriteFrameCache } from "../../utils/helpers/SpriteFrameCache";
@@ -25,107 +24,182 @@ export class PaytableModal extends BaseModal {
   @property(Node)
   contentContainer: Node = null!;
 
-  @property(Prefab)
-  itemPrefab: Prefab = null!;
-
   private _currentBet: number = 1.0;
-  private _itemPool: Node[] = [];
-  private _activeItems: Node[] = [];
+  private _iconPool: Node[] = [];
+  private _labelPool: Node[] = [];
+  private _activeIcons: Node[] = [];
+  private _activeLabels: Node[] = [];
+
+  private readonly ITEM_HEIGHT = 120;
+  private readonly ICON_SIZE = 80;
+  private readonly LABEL_X_OFFSET = 120;
+
+  private _iconsLayer: Node = null!;
+  private _labelsLayer: Node = null!;
+
+  protected onLoad(): void {
+    super.onLoad();
+    this.setupLayers();
+  }
+
+  private setupLayers(): void {
+    if (!this.contentContainer) return;
+
+    const layout = this.contentContainer.getComponent(Layout);
+    if (layout) {
+      layout.enabled = false;
+    }
+
+    const widget = this.contentContainer.getComponent(Widget);
+    if (widget) {
+      widget.enabled = false;
+    }
+
+    if (!this._iconsLayer) {
+      this._iconsLayer = new Node("IconsLayer");
+      this._iconsLayer.addComponent(UITransform);
+      this.contentContainer.addChild(this._iconsLayer);
+    }
+
+    if (!this._labelsLayer) {
+      this._labelsLayer = new Node("LabelsLayer");
+      this._labelsLayer.addComponent(UITransform);
+      this.contentContainer.addChild(this._labelsLayer);
+    }
+
+    const ui = this.contentContainer.getComponent(UITransform);
+    if (ui) {
+      ui.setAnchorPoint(0.5, 1);
+    }
+  }
 
   public setData(data: any): void {
     if (data && data.currentBet) {
       this._currentBet = data.currentBet;
     }
+
+    if (this.scrollView && !this.scrollView.content) {
+      this.scrollView.content = this.contentContainer;
+    }
+
     this.renderPaytable();
   }
 
-  private getFromPool(): Node {
-    let node = this._itemPool.pop();
+  private getIconFromPool(): Node {
+    let node = this._iconPool.pop();
     if (!node) {
-      node = instantiate(this.itemPrefab);
+      node = new Node("Icon");
+      node
+        .addComponent(UITransform)
+        .setContentSize(this.ICON_SIZE, this.ICON_SIZE);
+      const sprite = node.addComponent(Sprite);
+      sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+      sprite.trim = false;
     }
     node.active = true;
     return node;
   }
 
-  private returnToPool(node: Node) {
+  private getLabelFromPool(): Node {
+    let node = this._labelPool.pop();
+    if (!node) {
+      node = new Node("Label");
+      node.addComponent(UITransform).setAnchorPoint(0, 0.5);
+      const label = node.addComponent(Label);
+      label.fontSize = 24;
+      label.lineHeight = 30;
+      label.cacheMode = Label.CacheMode.CHAR; // Better for batching dynamic text
+    }
+    node.active = true;
+    return node;
+  }
+
+  private returnToPool(node: Node, pool: Node[]) {
     node.active = false;
     node.removeFromParent();
-    this._itemPool.push(node);
+    pool.push(node);
   }
 
   private async renderPaytable() {
-    if (!this.contentContainer || !this.itemPrefab) return;
+    if (!this.contentContainer) return;
 
-    // Disable StaticBatch while updating content
-    let staticBatch = this.contentContainer.getComponent(UIStaticBatch);
-    if (staticBatch) {
-      staticBatch.enabled = false;
-    }
+    this.setupLayers();
 
-    this._activeItems.forEach((item) => this.returnToPool(item));
-    this._activeItems = [];
+    this._activeIcons.forEach((node) =>
+      this.returnToPool(node, this._iconPool)
+    );
+    this._activeLabels.forEach((node) =>
+      this.returnToPool(node, this._labelPool)
+    );
+    this._activeIcons = [];
+    this._activeLabels = [];
 
     const paytableData = GameConfig.PAYTABLE;
     const cache = SpriteFrameCache.getInstance();
+    const symbols = Object.keys(paytableData);
 
-    for (const symbolKey in paytableData) {
+    const totalHeight = symbols.length * this.ITEM_HEIGHT;
+    const contentUI = this.contentContainer.getComponent(UITransform);
+    if (contentUI) {
+      contentUI.height = totalHeight;
+    }
+
+    let currentY = -this.ITEM_HEIGHT / 2;
+
+    for (const symbolKey of symbols) {
       const payouts = paytableData[symbolKey as keyof typeof paytableData];
-      const itemNode = this.getFromPool();
-      this.contentContainer.addChild(itemNode);
-      this._activeItems.push(itemNode);
-
       const symbolInfo = SymbolData.getSymbol(symbolKey);
       const spritePath = symbolInfo?.spritePath || symbolKey;
 
-      const iconSprite = itemNode.getChildByName("Icon")?.getComponent(Sprite);
-      if (iconSprite) {
-        const sf = cache.getSpriteFrame(BundleName.SYMBOLS, spritePath);
+      if (this._iconsLayer) {
+        const iconNode = this.getIconFromPool();
+        this._iconsLayer.addChild(iconNode);
+        this._activeIcons.push(iconNode);
+        iconNode.setPosition(-250, currentY);
 
-        if (sf && iconSprite.isValid) {
-          // Optimization: Enable packable to allow batching with labels in dynamic atlas
-          sf.packable = true;
-
-          iconSprite.spriteFrame = sf;
-          iconSprite.sizeMode = Sprite.SizeMode.CUSTOM;
-          iconSprite.trim = false;
-          const ui = iconSprite.getComponent(UITransform);
-          if (ui) ui.setContentSize(80, 80);
+        const sprite = iconNode.getComponent(Sprite);
+        if (sprite) {
+          const sf = cache.getSpriteFrame(BundleName.SYMBOLS, spritePath);
+          if (sf) {
+            sprite.spriteFrame = sf;
+          }
         }
       }
 
-      const labelComp = itemNode.getChildByName("Label")?.getComponent(Label);
-      if (labelComp) {
-        // Optimization: Use BITMAP cache mode to batch labels into dynamic atlas
-        labelComp.cacheMode = Label.CacheMode.BITMAP;
+      if (this._labelsLayer) {
+        const labelNode = this.getLabelFromPool();
+        this._labelsLayer.addChild(labelNode);
+        this._activeLabels.push(labelNode);
+        labelNode.setPosition(-200, currentY);
 
-        const x3 = payouts[3] * this._currentBet;
-        const x4 = (payouts as any)[4] * this._currentBet;
-        const x5 = (payouts as any)[5] * this._currentBet;
+        const label = labelNode.getComponent(Label);
+        if (label) {
+          const x3 = payouts[3] * this._currentBet;
+          const x4 = (payouts as any)[4] * this._currentBet;
+          const x5 = (payouts as any)[5] * this._currentBet;
 
-        labelComp.string = `${
-          symbolInfo?.name || symbolKey
-        }\n\nx5: ${x5.toFixed(2)} | x4: ${x4.toFixed(2)} | x3: ${x3.toFixed(
-          2
-        )}`;
+          label.string = `${symbolInfo?.name || symbolKey}\n5x: ${x5.toFixed(
+            2
+          )} | 4x: ${x4.toFixed(2)} | 3x: ${x3.toFixed(2)}`;
+        }
       }
+
+      currentY -= this.ITEM_HEIGHT;
     }
 
-    this.scrollView.scrollToTop(0);
-
-    this.scheduleOnce(() => {
-      if (this.contentContainer?.isValid) {
-        if (!staticBatch) {
-          staticBatch = this.contentContainer.addComponent(UIStaticBatch);
-        }
-        staticBatch.enabled = true;
-        staticBatch.markAsDirty();
-      }
-    }, 0);
+    if (this.scrollView) {
+      this.scrollView.scrollToTop(0);
+    }
   }
 
   protected onDisable(): void {
-    this._activeItems.forEach((item) => this.returnToPool(item));
-    this._activeItems = [];
+    this._activeIcons.forEach((node) =>
+      this.returnToPool(node, this._iconPool)
+    );
+    this._activeLabels.forEach((node) =>
+      this.returnToPool(node, this._labelPool)
+    );
+    this._activeIcons = [];
+    this._activeLabels = [];
   }
 }

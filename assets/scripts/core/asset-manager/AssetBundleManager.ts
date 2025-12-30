@@ -37,10 +37,6 @@ export class AssetBundleManager {
       assetManager.loadBundle(bundleName, (err, bundle) => {
         this._loadingPromises.delete(bundleName);
         if (err) {
-          console.error(
-            `[AssetBundleManager] Load bundle failed: ${bundleName}`,
-            err
-          );
           resolve(null);
         } else {
           this._loadedBundles.set(bundleName, bundle);

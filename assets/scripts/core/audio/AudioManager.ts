@@ -211,7 +211,6 @@ export class AudioManager extends Component {
         }
         return clip;
       } catch (err) {
-        console.error(`AudioManager failed to load: ${path}`, err);
         return null;
       } finally {
         this._loadingPromises.delete(path);

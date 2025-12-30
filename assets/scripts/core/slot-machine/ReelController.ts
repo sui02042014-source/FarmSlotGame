@@ -98,7 +98,6 @@ export class ReelController extends Component {
     this.currentSpeed = 0;
     this.isFinalizing = false;
     this.stateMachine.reset();
-    console.log("[ReelController] Force stopped");
   }
 
   // ==========================================

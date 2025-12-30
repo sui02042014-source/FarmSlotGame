@@ -50,7 +50,6 @@ export class SlotMachine extends Component {
     // Check if game is paused
     const gameManager = GameManager.getInstance();
     if (gameManager?.isGamePaused()) {
-      console.log("[SlotMachine] Cannot spin while game is paused");
       return;
     }
 

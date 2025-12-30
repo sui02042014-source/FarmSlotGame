@@ -3,7 +3,6 @@ import {
   Component,
   Label,
   Node,
-  SpriteAtlas,
   SpriteFrame,
   tween,
   Vec3,
@@ -112,11 +111,6 @@ export class GameManager extends Component {
       symbolFrames.forEach((f) => {
         cache.setStaticCache(BundleName.SYMBOLS, f.name, f);
       });
-      console.log(
-        `[GameManager] Loaded ${symbolFrames.length} symbols into cache`
-      );
-    } else {
-      console.error("[GameManager] Failed to load symbols from bundle!");
     }
 
     const slotSct = this.getSlotMachine();
@@ -170,7 +164,7 @@ export class GameManager extends Component {
     return this.currentState;
   }
 
-  private isIdle(): boolean {
+  public isIdle(): boolean {
     return this.currentState === GameConfig.GAME_STATES.IDLE;
   }
 
@@ -226,16 +220,10 @@ export class GameManager extends Component {
     }
 
     if (this.isPaused) {
-      console.log("[GameManager] Cannot spin while game is paused");
       return;
     }
 
     if (!this.isIdle()) {
-      return;
-    }
-
-    if (this.playerCoins < this.currentBet) {
-      modalManager?.showNotEnoughCoinsModal(this.currentBet, this.playerCoins);
       return;
     }
 
@@ -450,13 +438,13 @@ export class GameManager extends Component {
     if (this.currentState === GameConfig.GAME_STATES.SPINNING) {
       this.setState(GameConfig.GAME_STATES.IDLE);
     }
-
-    console.log("[GameManager] Game paused");
   }
 
   public resumeGame(): void {
     this.isPaused = false;
-    console.log("[GameManager] Game resumed");
+    if (this.isAutoPlay && this.isIdle()) {
+      this.continueAutoPlay();
+    }
   }
 
   public isGamePaused(): boolean {
