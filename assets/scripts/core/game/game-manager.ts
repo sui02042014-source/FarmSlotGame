@@ -46,7 +46,7 @@ export class GameManager extends Component {
   @property(Node)
   winLabelNode: Node = null!;
 
-  @property(SpinButtonController)
+  @property(Node)
   spinButton: SpinButtonController = null!;
 
   private currentState: GameState = GameConfig.GAME_STATES.IDLE;
