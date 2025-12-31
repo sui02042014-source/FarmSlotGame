@@ -134,9 +134,8 @@ export class PaytableModal extends BaseModal {
     this._activeIcons = [];
     this._activeLabels = [];
 
-    const paytableData = GameConfig.PAYTABLE;
+    const symbols = SymbolData.getAllSymbols();
     const cache = SpriteFrameCache.getInstance();
-    const symbols = Object.keys(paytableData);
 
     const totalHeight = symbols.length * this.ITEM_HEIGHT;
     const contentUI = this.contentContainer.getComponent(UITransform);
@@ -146,10 +145,9 @@ export class PaytableModal extends BaseModal {
 
     let currentY = -this.ITEM_HEIGHT / 2;
 
-    for (const symbolKey of symbols) {
-      const payouts = paytableData[symbolKey as keyof typeof paytableData];
-      const symbolInfo = SymbolData.getSymbol(symbolKey);
-      const spritePath = symbolInfo?.spritePath || symbolKey;
+    for (const symbolInfo of symbols) {
+      const payouts = symbolInfo.paytable;
+      const spritePath = symbolInfo.spritePath;
 
       if (this._iconsLayer) {
         const iconNode = this.getIconFromPool();
@@ -175,10 +173,10 @@ export class PaytableModal extends BaseModal {
         const label = labelNode.getComponent(Label);
         if (label) {
           const x3 = payouts[3] * this._currentBet;
-          const x4 = (payouts as any)[4] * this._currentBet;
-          const x5 = (payouts as any)[5] * this._currentBet;
+          const x4 = payouts[4] * this._currentBet;
+          const x5 = payouts[5] * this._currentBet;
 
-          label.string = `${symbolInfo?.name || symbolKey}\n5x: ${x5.toFixed(
+          label.string = `${symbolInfo.name}\n5x: ${x5.toFixed(
             2
           )} | 4x: ${x4.toFixed(2)} | 3x: ${x3.toFixed(2)}`;
         }

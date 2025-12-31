@@ -40,41 +40,6 @@ export class GameConfig {
     SCATTER: "scatter",
   } as const;
 
-  static readonly SYMBOL_WEIGHTS = {
-    pig: 5,
-    cow: 5,
-    chicken: 6,
-    rabbit: 6,
-    hay: 8,
-    truck: 10,
-    barn: 12,
-    symbol_a: 15,
-    symbol_k: 15,
-    symbol_q: 18,
-    symbol_j: 18,
-    symbol_10: 20,
-    wild: 2,
-    bonus: 3,
-    scatter: 3,
-  } as const;
-
-  static readonly PAYTABLE = {
-    pig: { 3: 50, 4: 150, 5: 500 },
-    cow: { 3: 50, 4: 150, 5: 500 },
-    chicken: { 3: 40, 4: 120, 5: 400 },
-    rabbit: { 3: 40, 4: 120, 5: 400 },
-    hay: { 3: 30, 4: 100, 5: 300 },
-    truck: { 3: 25, 4: 75, 5: 250 },
-    barn: { 3: 20, 4: 60, 5: 200 },
-    symbol_a: { 3: 15, 4: 40, 5: 150 },
-    symbol_k: { 3: 15, 4: 40, 5: 150 },
-    symbol_q: { 3: 10, 4: 30, 5: 100 },
-    symbol_j: { 3: 10, 4: 30, 5: 100 },
-    symbol_10: { 3: 5, 4: 20, 5: 80 },
-    wild: { 3: 100, 4: 300, 5: 1000 },
-    scatter: { 3: 10, 4: 50, 5: 200 },
-    bonus: { 3: 0, 4: 0, 5: 0 },
-  } as const;
   static readonly SOUNDS = {
     SPIN: "spin",
     WIN: "win",
