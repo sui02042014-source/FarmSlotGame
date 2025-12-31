@@ -19,6 +19,8 @@ export class GameConfig {
   static readonly BET_STEPS = [
     0.5, 1.0, 2.0, 3.5, 5.0, 10.0, 25.0, 50.0, 100.0,
   ];
+  static readonly DEFAULT_BET_INDEX = 3; // 3.5
+  static readonly DEFAULT_COINS = 1000;
 
   static readonly SYMBOL_TYPES = {
     PIG: "pig",

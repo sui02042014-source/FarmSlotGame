@@ -1,18 +1,12 @@
 import { _decorator, Component, Node } from "cc";
+import { ToastManager } from "../../components/toast/toast-manager";
+import { GameConfig } from "../../data/config/game-config";
+import { SlotService } from "../../services/slot-service";
 import { SpinResult } from "../../types";
 import { GameManager } from "../game/game-manager";
 import { ReelController } from "./reel-controller";
 
-import { SlotService } from "../../services/slot-service";
-
 const { ccclass, property } = _decorator;
-
-export interface WinLine {
-  lineIndex: number;
-  symbolId: string;
-  count: number;
-  positions: number[][];
-}
 
 @ccclass("SlotMachine")
 export class SlotMachine extends Component {
@@ -99,6 +93,11 @@ export class SlotMachine extends Component {
 
       if (gameManager && !gameManager.isGamePaused()) {
         this.stopAllReels();
+
+        gameManager.addCoins(bet);
+        gameManager.setState(GameConfig.GAME_STATES.IDLE);
+
+        ToastManager.getInstance()?.show("Connection error. Bet refunded.");
       }
     }
   }

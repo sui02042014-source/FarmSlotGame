@@ -1,4 +1,4 @@
-import { _decorator, Slider, Toggle, sys } from "cc";
+import { _decorator, Slider, Toggle } from "cc";
 import { AudioManager } from "../../core/audio/audio-manager";
 import { BaseModal } from "./base-modal";
 const { ccclass, property } = _decorator;
@@ -58,42 +58,30 @@ export class SettingsModal extends BaseModal {
   }
 
   private onMusicToggle(toggle: Toggle): void {
-    const enabled = toggle.isChecked;
-    sys.localStorage.setItem("musicEnabled", enabled.toString());
-
     const audioManager = AudioManager.getInstance();
     if (audioManager) {
-      audioManager.setMusicEnabled(enabled);
+      audioManager.setMusicEnabled(toggle.isChecked);
     }
   }
 
   private onSoundToggle(toggle: Toggle): void {
-    const enabled = toggle.isChecked;
-    sys.localStorage.setItem("soundEnabled", enabled.toString());
-
     const audioManager = AudioManager.getInstance();
     if (audioManager) {
-      audioManager.setSoundEnabled(enabled);
+      audioManager.setSoundEnabled(toggle.isChecked);
     }
   }
 
   private onSoundVolumeChange(slider: Slider): void {
-    const volume = slider.progress;
-    sys.localStorage.setItem("soundVolume", volume.toString());
-
     const audioManager = AudioManager.getInstance();
     if (audioManager) {
-      audioManager.setSFXVolume(volume);
+      audioManager.setSFXVolume(slider.progress);
     }
   }
 
   private onMusicVolumeChange(slider: Slider): void {
-    const volume = slider.progress;
-    sys.localStorage.setItem("musicVolume", volume.toString());
-
     const audioManager = AudioManager.getInstance();
     if (audioManager) {
-      audioManager.setBGMVolume(volume);
+      audioManager.setBGMVolume(slider.progress);
     }
   }
 }

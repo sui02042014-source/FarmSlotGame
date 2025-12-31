@@ -50,9 +50,10 @@ export class GameManager extends Component {
   spinButton: SpinButtonController = null!;
 
   private currentState: GameState = GameConfig.GAME_STATES.IDLE;
-  private playerCoins: number = 1000;
-  private currentBet: number = 3.5;
-  private currentBetIndex: number = 3;
+  private playerCoins: number = GameConfig.DEFAULT_COINS;
+  private currentBet: number =
+    GameConfig.BET_STEPS[GameConfig.DEFAULT_BET_INDEX];
+  private currentBetIndex: number = GameConfig.DEFAULT_BET_INDEX;
   private lastWin: number = 0;
   private isAutoPlay: boolean = false;
   private isPaused: boolean = false;

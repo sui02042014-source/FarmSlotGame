@@ -224,7 +224,7 @@ export class AudioManager extends Component {
     return loadPromise;
   }
 
-  public get isMuted(): boolean {
+  public isMuted(): boolean {
     return this._isMuted;
   }
 

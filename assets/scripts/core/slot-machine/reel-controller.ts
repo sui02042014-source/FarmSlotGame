@@ -76,7 +76,7 @@ export class ReelController extends Component {
         this.updateSpeed(dt);
         this.positionOffset += this.currentSpeed * dt;
       }
-      this.syncSymbols(dt);
+      this.syncSymbols();
     }
   }
 
@@ -188,7 +188,7 @@ export class ReelController extends Component {
   // Symbol Synchronization
   // ==========================================
 
-  private syncSymbols(dt: number): void {
+  private syncSymbols(): void {
     const containers = this.reelContainer.getAllContainers();
     this.lastPositionOffset = this.positionOffset;
 

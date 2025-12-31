@@ -63,20 +63,34 @@ export class SlotLogic {
     bet: number
   ): { totalWin: number; winLines: WinLine[] } {
     const winLines: WinLine[] = [];
+    const seenLines = new Set<string>();
     const cols = symbolGrid.length;
     const rows = symbolGrid[0]?.length || 0;
 
-    for (let col = 0; col < cols; col++) {
-      for (let row = 0; row < rows; row++) {
-        const lines = this.checkWinFromPosition(
+    for (const direction of SlotLogic.WIN_DIRECTIONS) {
+      const startPositions = this.getValidStartPositions(direction, cols, rows);
+
+      for (const { col, row } of startPositions) {
+        const line = this.checkWinInDirection(
           symbolGrid,
           col,
           row,
+          direction,
           cols,
           rows,
           bet
         );
-        winLines.push(...lines);
+
+        if (line) {
+          const lineKey = line.positions
+            .map((p) => `${p.col},${p.row}`)
+            .join("|");
+
+          if (!seenLines.has(lineKey)) {
+            seenLines.add(lineKey);
+            winLines.push(line);
+          }
+        }
       }
     }
 
@@ -84,32 +98,39 @@ export class SlotLogic {
     return { totalWin, winLines };
   }
 
-  private static checkWinFromPosition(
-    symbolGrid: string[][],
-    startCol: number,
-    startRow: number,
-    maxCols: number,
-    maxRows: number,
-    bet: number
-  ): WinLine[] {
-    const winLines: WinLine[] = [];
+  private static getValidStartPositions(
+    direction: WinDirection,
+    cols: number,
+    rows: number
+  ): { col: number; row: number }[] {
+    const positions: { col: number; row: number }[] = [];
+    const { colDelta, rowDelta } = direction;
 
-    for (const direction of SlotLogic.WIN_DIRECTIONS) {
-      const line = this.checkWinInDirection(
-        symbolGrid,
-        startCol,
-        startRow,
-        direction,
-        maxCols,
-        maxRows,
-        bet
-      );
-      if (line) {
-        winLines.push(line);
+    if (colDelta === 1 && rowDelta === 0) {
+      for (let row = 0; row < rows; row++) {
+        positions.push({ col: 0, row });
+      }
+    } else if (colDelta === 0 && rowDelta === 1) {
+      for (let col = 0; col < cols; col++) {
+        positions.push({ col, row: 0 });
+      }
+    } else if (colDelta === 1 && rowDelta === 1) {
+      for (let row = 0; row < rows; row++) {
+        positions.push({ col: 0, row });
+      }
+      for (let col = 1; col < cols; col++) {
+        positions.push({ col, row: 0 });
+      }
+    } else if (colDelta === 1 && rowDelta === -1) {
+      for (let row = 0; row < rows; row++) {
+        positions.push({ col: 0, row });
+      }
+      for (let col = 1; col < cols; col++) {
+        positions.push({ col, row: rows - 1 });
       }
     }
 
-    return winLines;
+    return positions;
   }
 
   private static checkWinInDirection(
@@ -140,7 +161,6 @@ export class SlotLogic {
       );
 
       if (this.isValidWinLine(symbols)) {
-        // Get the base symbol (first non-WILD symbol or WILD if all are WILD)
         const baseSymbol = symbols.find((s) => s && s !== "wild") || symbols[0];
         const win = this.calculateWin(baseSymbol, len, bet);
         if (win > 0) {
@@ -189,18 +209,14 @@ export class SlotLogic {
       return false;
     }
 
-    // Handle WILD substitution
-    // WILD can substitute for any symbol except SCATTER and BONUS
     const nonWildSymbols = symbols.filter(
       (s) => s !== "wild" && s !== "" && s !== null
     );
 
-    // All symbols are WILD - valid win line
     if (nonWildSymbols.length === 0) {
       return true;
     }
 
-    // Check if all non-WILD symbols are the same
     const baseSymbol = nonWildSymbols[0];
     const allNonWildMatch = nonWildSymbols.every((s) => s === baseSymbol);
 
@@ -208,12 +224,10 @@ export class SlotLogic {
       return false;
     }
 
-    // WILD cannot substitute for SCATTER or BONUS in most slot games
     if (baseSymbol === "scatter" || baseSymbol === "bonus") {
       return symbols.every((s) => s === baseSymbol);
     }
 
-    // All non-WILD symbols match, and WILDs can substitute
     return true;
   }
 
@@ -222,8 +236,6 @@ export class SlotLogic {
     length: number,
     bet: number
   ): number {
-    // For lines with WILD, use the first non-WILD symbol for payout
-    // This is handled in the caller, so symbol here should already be the base symbol
     const paytable = (GameConfig.PAYTABLE as any)[symbol];
     if (!paytable) {
       return 0;

@@ -78,7 +78,6 @@ export class ReelContainer extends Component {
       this.initSpineForContainer(container, symbolData.animationPath);
     }
 
-    this.containers.push(container);
     return container;
   }
 
