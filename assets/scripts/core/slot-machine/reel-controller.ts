@@ -4,6 +4,7 @@ import { SymbolData } from "../../data/models/symbol-data";
 import { SymbolHighlightEffect } from "../../utils/effects/symbol-highlight-effect";
 import { ReelContainer, SymbolContainer } from "./reel-container";
 import { ReelStateMachine } from "./reel-state-machine";
+import { GameManager } from "../game/game-manager";
 
 const { ccclass, property } = _decorator;
 
@@ -101,7 +102,6 @@ export class ReelController extends Component {
     tween(this.tweenData).stop();
     this.currentSpeed = 0;
     this.isFinalizing = false;
-    this.reelContainer.setUseBlur(false);
     this.stateMachine.reset();
   }
 
@@ -125,7 +125,6 @@ export class ReelController extends Component {
   private beginSmoothStop(): void {
     this.isFinalizing = true;
     this.lastPositionOffset = this.positionOffset;
-    this.reelContainer.setUseBlur(false);
 
     const currentSnap = this.positionOffset % this.symbolSpacing;
     const distToSnap = this.symbolSpacing - currentSnap;
@@ -166,7 +165,12 @@ export class ReelController extends Component {
     this.lastPositionOffset = this.finalOffset;
     this.currentSpeed = 0;
     this.isFinalizing = false;
-    this.reelContainer.setUseBlur(false);
+
+    const gameManager = GameManager.getInstance();
+    if (gameManager && !gameManager.isGamePaused()) {
+      this.reelContainer.setUseBlur(false);
+    }
+
     this.stateMachine.setResult();
     this.node.emit("REEL_STOPPED");
   }
@@ -316,6 +320,10 @@ export class ReelController extends Component {
         container.sprite.node.active = true;
       }
     });
+  }
+
+  public setBlur(enable: boolean): void {
+    this.reelContainer.setUseBlur(enable);
   }
 
   // ==========================================

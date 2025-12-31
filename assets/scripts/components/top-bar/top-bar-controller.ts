@@ -22,6 +22,9 @@ export class TopBarController extends Component {
   @property(Label)
   pauseLabel: Label = null!;
 
+  private _lastClickTime: number = 0;
+  private readonly CLICK_DEBOUNCE = 200; // ms
+
   protected onLoad(): void {
     if (this.lobbyButton) {
       this.lobbyButton.on(
@@ -95,42 +98,24 @@ export class TopBarController extends Component {
   }
 
   private onInfoButtonClick(): void {
-    const gameManager = GameManager.getInstance();
-    if (gameManager) {
-      gameManager.pauseGame();
-      this.updatePauseButtonUI();
-    }
-
     const modalManager = ModalManager.getInstance();
     if (modalManager) {
-      modalManager.showPaytableModal(() => {
-        if (gameManager) {
-          gameManager.resumeGame();
-          this.updatePauseButtonUI();
-        }
-      });
+      modalManager.showPaytableModal();
     }
   }
 
   private onSettingsButtonClick(): void {
-    const gameManager = GameManager.getInstance();
-    if (gameManager) {
-      gameManager.pauseGame();
-      this.updatePauseButtonUI();
-    }
-
     const modalManager = ModalManager.getInstance();
     if (modalManager) {
-      modalManager.showSettingsModal(() => {
-        if (gameManager) {
-          gameManager.resumeGame();
-          this.updatePauseButtonUI();
-        }
-      });
+      modalManager.showSettingsModal();
     }
   }
 
   private onPauseButtonClick(): void {
+    const now = Date.now();
+    if (now - this._lastClickTime < this.CLICK_DEBOUNCE) return;
+    this._lastClickTime = now;
+
     const gameManager = GameManager.getInstance();
     if (!gameManager) return;
 
@@ -144,17 +129,16 @@ export class TopBarController extends Component {
   }
 
   private updatePauseButtonUI(): void {
-    if (!this.pauseLabel) {
-      return;
-    }
     const gameManager = GameManager.getInstance();
     if (!gameManager) {
       this.scheduleOnce(() => this.updatePauseButtonUI(), 0.1);
       return;
     }
+
+    if (!this.pauseLabel) return;
+
     const isPaused = gameManager.isGamePaused();
-    const targetText = isPaused ? "RESUME" : "PAUSE";
-    this.pauseLabel.string = targetText;
+    this.pauseLabel.string = isPaused ? "RESUME" : "PAUSE";
     this.pauseLabel.updateRenderData(true);
   }
 }

@@ -113,6 +113,14 @@ export class SlotMachine extends Component {
     });
   }
 
+  public setBlurAll(enable: boolean): void {
+    this.reelControllers.forEach((reel) => {
+      if (reel) {
+        reel.setBlur(enable);
+      }
+    });
+  }
+
   public showWinEffects(winLines: any[]): void {
     this.resetAllReels();
 

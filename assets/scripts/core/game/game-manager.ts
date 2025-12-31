@@ -466,6 +466,7 @@ export class GameManager extends Component {
     const slot = this.getSlotMachine();
     if (slot) {
       slot.stopAllReels();
+      slot.setBlurAll(true);
     }
 
     if (this.currentState === GameConfig.GAME_STATES.SPINNING) {
@@ -475,6 +476,12 @@ export class GameManager extends Component {
 
   public resumeGame(): void {
     this.isPaused = false;
+
+    const slot = this.getSlotMachine();
+    if (slot) {
+      slot.setBlurAll(false);
+    }
+
     if (this.isAutoPlay && this.isIdle()) {
       this.continueAutoPlay();
     }

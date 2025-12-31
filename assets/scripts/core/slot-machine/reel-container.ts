@@ -64,7 +64,7 @@ export class ReelContainer extends Component {
     const normalSF = cache.getSpriteFrame(BundleName.SYMBOLS, spritePath);
     const blurSF = cache.getSpriteFrame(BundleName.SYMBOLS, `${spritePath}_2`);
 
-    sprite.spriteFrame = normalSF;
+    sprite.spriteFrame = this._useBlur ? blurSF || normalSF : normalSF;
 
     const container: SymbolContainer = {
       node,
