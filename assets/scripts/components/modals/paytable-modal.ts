@@ -8,7 +8,6 @@ import {
   UITransform,
   Widget,
 } from "cc";
-import { GameConfig } from "../../data/config/game-config";
 import { SpriteFrameCache } from "../../utils/helpers/sprite-frame-cache";
 import { BaseModal } from "./base-modal";
 import { BundleName } from "../../core/assets/asset-bundle-manager";

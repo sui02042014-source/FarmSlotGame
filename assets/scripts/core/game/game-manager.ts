@@ -63,7 +63,6 @@ export class GameManager extends Component {
 
   private winCounter: NumberCounter = null!;
 
-  private idleTimeoutHandle: any = null;
   private isLowFPS: boolean = false;
 
   private static instance: GameManager = null!;
@@ -88,27 +87,26 @@ export class GameManager extends Component {
     await this.initGame();
   }
 
-  /**
-   * Schedule idle FPS reduction instead of checking every frame
-   */
+  private idleCallback = (): void => {
+    if (
+      this.currentState === GameConfig.GAME_STATES.IDLE &&
+      !this.isAutoPlay &&
+      !this.isLowFPS
+    ) {
+      this.setFPS(GameConfig.GAMEPLAY.IDLE_FPS);
+    }
+  };
+
   private scheduleIdleFPSReduction(): void {
     this.cancelIdleFPSReduction();
-    this.idleTimeoutHandle = this.scheduleOnce(() => {
-      if (
-        this.currentState === GameConfig.GAME_STATES.IDLE &&
-        !this.isAutoPlay &&
-        !this.isLowFPS
-      ) {
-        this.setFPS(GameConfig.GAMEPLAY.IDLE_FPS);
-      }
-    }, GameConfig.GAMEPLAY.IDLE_FPS_THRESHOLD);
+    this.scheduleOnce(
+      this.idleCallback,
+      GameConfig.GAMEPLAY.IDLE_FPS_THRESHOLD
+    );
   }
 
   private cancelIdleFPSReduction(): void {
-    if (this.idleTimeoutHandle) {
-      this.unschedule(this.idleTimeoutHandle);
-      this.idleTimeoutHandle = null;
-    }
+    this.unschedule(this.idleCallback);
   }
 
   private resetIdleTime(): void {
