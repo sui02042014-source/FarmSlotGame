@@ -160,7 +160,7 @@ export class GameManager extends Component {
     }
 
     const slotSct = this.getSlotMachine();
-    if (slotSct) slotSct.initializeSlot();
+    if (slotSct) await slotSct.initializeSlot();
 
     const loaded = PlayerDataStorage.load(this.playerCoins, this.currentBet);
     this.playerCoins = loaded.coins;
