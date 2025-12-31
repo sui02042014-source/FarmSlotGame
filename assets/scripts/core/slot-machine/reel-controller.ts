@@ -15,12 +15,11 @@ enum GridRow {
 
 const REEL_CONSTANTS = {
   ACCELERATION: 3500,
-  BLUR_THRESHOLD: 800,
-  STOP_DURATION: 2.5,
+  STOP_DURATION: 2.2,
   FRAME_TIME: 0.016,
   POSITION_TOLERANCE: 30,
   VISIBILITY_TOLERANCE: 10,
-  EXTRA_WRAP_MULTIPLIER: 2,
+  EXTRA_WRAP_MULTIPLIER: 1.0,
 } as const;
 
 @ccclass("ReelController")
@@ -62,9 +61,11 @@ export class ReelController extends Component {
   }
 
   protected update(dt: number): void {
-    if (this.stateMachine.isSpinning() && !this.isFinalizing) {
-      this.updateSpeed(dt);
-      this.positionOffset += this.currentSpeed * dt;
+    if (this.stateMachine.isSpinning() || this.stateMachine.isStopping()) {
+      if (!this.isFinalizing) {
+        this.updateSpeed(dt);
+        this.positionOffset += this.currentSpeed * dt;
+      }
       this.syncSymbols(dt);
     }
   }
@@ -100,6 +101,7 @@ export class ReelController extends Component {
     tween(this.tweenData).stop();
     this.currentSpeed = 0;
     this.isFinalizing = false;
+    this.reelContainer.setUseBlur(false);
     this.stateMachine.reset();
   }
 
@@ -108,21 +110,36 @@ export class ReelController extends Component {
   // ==========================================
 
   private updateSpeed(dt: number): void {
+    const wasMaxSpeed = this.currentSpeed >= GameConfig.SPIN_SPEED_MAX;
+
     this.currentSpeed = Math.min(
       this.currentSpeed + REEL_CONSTANTS.ACCELERATION * dt,
       GameConfig.SPIN_SPEED_MAX
     );
+
+    if (!wasMaxSpeed && this.currentSpeed >= GameConfig.SPIN_SPEED_MAX) {
+      this.reelContainer.setUseBlur(true);
+    }
   }
 
   private beginSmoothStop(): void {
     this.isFinalizing = true;
     this.lastPositionOffset = this.positionOffset;
+    this.reelContainer.setUseBlur(false);
 
     const currentSnap = this.positionOffset % this.symbolSpacing;
     const distToSnap = this.symbolSpacing - currentSnap;
 
-    const extraDistance =
-      this.wrapHeight * REEL_CONSTANTS.EXTRA_WRAP_MULTIPLIER;
+    const idealDistance =
+      (this.currentSpeed * REEL_CONSTANTS.STOP_DURATION) / 4;
+    let extraDistance = Math.max(
+      idealDistance - distToSnap,
+      this.wrapHeight * REEL_CONSTANTS.EXTRA_WRAP_MULTIPLIER
+    );
+
+    extraDistance =
+      Math.ceil(extraDistance / this.symbolSpacing) * this.symbolSpacing;
+
     this.finalOffset = this.positionOffset + distToSnap + extraDistance;
 
     this.tweenData.offset = this.positionOffset;
@@ -135,7 +152,6 @@ export class ReelController extends Component {
           easing: "quartOut",
           onUpdate: () => {
             this.positionOffset = this.tweenData.offset;
-            this.syncSymbols(REEL_CONSTANTS.FRAME_TIME);
           },
         }
       )
@@ -147,10 +163,11 @@ export class ReelController extends Component {
 
   private onStopComplete(): void {
     this.positionOffset = this.finalOffset;
+    this.lastPositionOffset = this.finalOffset;
     this.currentSpeed = 0;
     this.isFinalizing = false;
+    this.reelContainer.setUseBlur(false);
     this.stateMachine.setResult();
-    this.forceShowNormalSymbols();
     this.node.emit("REEL_STOPPED");
   }
 
@@ -160,23 +177,12 @@ export class ReelController extends Component {
 
   private syncSymbols(dt: number): void {
     const containers = this.reelContainer.getAllContainers();
-    const shouldBlur = this.shouldApplyBlurEffect(dt);
+    this.lastPositionOffset = this.positionOffset;
 
     for (const container of containers) {
       this.updateSymbolPosition(container);
       this.handleSymbolWrapping(container);
-      this.updateBlurEffect(container, shouldBlur);
     }
-  }
-
-  private shouldApplyBlurEffect(dt: number): boolean {
-    if (dt === 0) return false;
-
-    const instantSpeed =
-      Math.abs(this.positionOffset - this.lastPositionOffset) / dt;
-    this.lastPositionOffset = this.positionOffset;
-
-    return instantSpeed > REEL_CONSTANTS.BLUR_THRESHOLD;
   }
 
   private updateSymbolPosition(container: SymbolContainer): void {
@@ -313,29 +319,6 @@ export class ReelController extends Component {
   }
 
   // ==========================================
-  // Visual Effects
-  // ==========================================
-
-  private forceShowNormalSymbols(): void {
-    this.reelContainer
-      .getAllContainers()
-      .forEach((container) => this.updateBlurEffect(container, false));
-  }
-
-  private updateBlurEffect(container: SymbolContainer, isBlur: boolean): void {
-    if (container.isBlurred === isBlur) return;
-
-    container.isBlurred = isBlur;
-    const spriteFrame = isBlur
-      ? container.blurSpriteFrame || container.normalSpriteFrame
-      : container.normalSpriteFrame;
-
-    if (spriteFrame) {
-      container.sprite.spriteFrame = spriteFrame;
-    }
-  }
-
-  // ==========================================
   // Initialization
   // ==========================================
 
@@ -362,9 +345,9 @@ export class ReelController extends Component {
     const centerIndex = Math.floor(this.totalSymbols / 2);
 
     for (let i = 0; i < this.totalSymbols; i++) {
-      const symbol = symbols[i % symbols.length];
+      const randomSymbol = symbols[Math.floor(Math.random() * symbols.length)];
       const container = await this.reelContainer.createSymbolContainer(
-        symbol.id
+        randomSymbol.id
       );
 
       if (container) {

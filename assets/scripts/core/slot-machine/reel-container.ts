@@ -20,13 +20,13 @@ export interface SymbolContainer {
   symbolId: string;
   normalSpriteFrame: SpriteFrame | null;
   blurSpriteFrame: SpriteFrame | null;
-  isBlurred: boolean;
 }
 
 @ccclass("ReelContainer")
 export class ReelContainer extends Component {
   private containers: SymbolContainer[] = [];
   private _pool: Node[] = [];
+  private _useBlur: boolean = false;
 
   // ==========================================
   // Symbol Container Creation
@@ -71,8 +71,7 @@ export class ReelContainer extends Component {
       sprite,
       symbolId,
       normalSpriteFrame: normalSF,
-      blurSpriteFrame: blurSF || normalSF,
-      isBlurred: false,
+      blurSpriteFrame: blurSF,
     };
 
     if (symbolData?.animationPath) {
@@ -120,12 +119,13 @@ export class ReelContainer extends Component {
       BundleName.SYMBOLS,
       spritePath
     );
-    container.blurSpriteFrame =
-      cache.getSpriteFrame(BundleName.SYMBOLS, `${spritePath}_2`) ||
-      container.normalSpriteFrame;
+    container.blurSpriteFrame = cache.getSpriteFrame(
+      BundleName.SYMBOLS,
+      `${spritePath}_2`
+    );
 
-    container.sprite.spriteFrame = container.isBlurred
-      ? container.blurSpriteFrame
+    container.sprite.spriteFrame = this._useBlur
+      ? container.blurSpriteFrame || container.normalSpriteFrame
       : container.normalSpriteFrame;
 
     if (container.spine) {
@@ -135,6 +135,18 @@ export class ReelContainer extends Component {
     if (symbolData?.animationPath) {
       this.initSpineForContainer(container, symbolData.animationPath);
     }
+  }
+
+  public setUseBlur(useBlur: boolean): void {
+    this._useBlur = useBlur;
+    this.containers.forEach((container) => {
+      const sf = useBlur
+        ? container.blurSpriteFrame || container.normalSpriteFrame
+        : container.normalSpriteFrame;
+      if (container.sprite.spriteFrame !== sf) {
+        container.sprite.spriteFrame = sf;
+      }
+    });
   }
 
   // ==========================================
