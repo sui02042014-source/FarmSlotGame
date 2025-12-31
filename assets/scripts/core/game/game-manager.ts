@@ -19,12 +19,15 @@ import { CoinFlyEffect } from "../../utils/effects/coin-fly-effect";
 import { CoinRainEffect } from "../../utils/effects/coin-rain-effect";
 import { NumberCounter } from "../../utils/helpers/number-counter";
 import { SpriteFrameCache } from "../../utils/helpers/sprite-frame-cache";
+import { Logger } from "../../utils/helpers/logger";
 import { PlayerDataStorage } from "../../utils/storage/player-data-storage";
 import { AssetBundleManager, BundleName } from "../assets/asset-bundle-manager";
 import { SlotMachine } from "../slot-machine/slot-machine";
 import { ToastManager } from "../../components/toast/toast-manager";
 
 const { ccclass, property } = _decorator;
+
+const logger = Logger.create("GameManager");
 
 @ccclass("GameManager")
 export class GameManager extends Component {
@@ -60,13 +63,7 @@ export class GameManager extends Component {
 
   private winCounter: NumberCounter = null!;
 
-  private readonly AUTO_PLAY_DELAY: number = 3.5;
-  private readonly BIG_WIN_THRESHOLD: number = 1000;
-  private readonly IDLE_THRESHOLD: number = 10;
-  private readonly IDLE_FPS: number = 30;
-  private readonly ACTIVE_FPS: number = 60;
-
-  private idleTime: number = 0;
+  private idleTimeoutHandle: any = null;
   private isLowFPS: boolean = false;
 
   private static instance: GameManager = null!;
@@ -91,34 +88,50 @@ export class GameManager extends Component {
     await this.initGame();
   }
 
-  protected update(dt: number): void {
-    if (this.currentState === GameConfig.GAME_STATES.IDLE && !this.isAutoPlay) {
-      this.idleTime += dt;
-      if (this.idleTime >= this.IDLE_THRESHOLD && !this.isLowFPS) {
-        this.setFPS(this.IDLE_FPS);
+  /**
+   * Schedule idle FPS reduction instead of checking every frame
+   */
+  private scheduleIdleFPSReduction(): void {
+    this.cancelIdleFPSReduction();
+    this.idleTimeoutHandle = this.scheduleOnce(() => {
+      if (
+        this.currentState === GameConfig.GAME_STATES.IDLE &&
+        !this.isAutoPlay &&
+        !this.isLowFPS
+      ) {
+        this.setFPS(GameConfig.GAMEPLAY.IDLE_FPS);
       }
-    } else {
-      this.resetIdleTime();
+    }, GameConfig.GAMEPLAY.IDLE_FPS_THRESHOLD);
+  }
+
+  private cancelIdleFPSReduction(): void {
+    if (this.idleTimeoutHandle) {
+      this.unschedule(this.idleTimeoutHandle);
+      this.idleTimeoutHandle = null;
     }
   }
 
   private resetIdleTime(): void {
-    this.idleTime = 0;
+    this.cancelIdleFPSReduction();
     if (this.isLowFPS) {
-      this.setFPS(this.ACTIVE_FPS);
+      this.setFPS(GameConfig.GAMEPLAY.ACTIVE_FPS);
+    }
+    if (this.currentState === GameConfig.GAME_STATES.IDLE && !this.isAutoPlay) {
+      this.scheduleIdleFPSReduction();
     }
   }
 
   private setFPS(fps: number): void {
     game.frameRate = fps;
-    this.isLowFPS = fps <= this.IDLE_FPS;
-    console.log(`[GameManager] Frame rate set to: ${fps}`);
+    this.isLowFPS = fps <= GameConfig.GAMEPLAY.IDLE_FPS;
+    logger.debug(`Frame rate set to: ${fps}`);
   }
 
   protected onDestroy(): void {
     if (GameManager.instance === this) {
       GameManager.instance = null!;
     }
+    this.cancelIdleFPSReduction();
     CoinFlyEffect.clearPool();
     CoinRainEffect.clear();
   }
@@ -211,8 +224,16 @@ export class GameManager extends Component {
       audioManager?.playSpinSound(soundPath);
     }
 
+    const oldState = this.currentState;
     this.currentState = state;
     this.updateSpinButtonsInteractable();
+
+    // Manage FPS optimization
+    if (state === GameConfig.GAME_STATES.IDLE && !this.isAutoPlay) {
+      this.scheduleIdleFPSReduction();
+    } else if (oldState === GameConfig.GAME_STATES.IDLE) {
+      this.resetIdleTime();
+    }
   }
 
   public getState(): GameState {
@@ -356,11 +377,11 @@ export class GameManager extends Component {
     this.scheduleOnce(() => {
       this.setState(GameConfig.GAME_STATES.IDLE);
       this.continueAutoPlay();
-    }, 2.0);
+    }, GameConfig.EFFECTS.WIN_SHOW_DURATION);
   }
 
   private shouldShowWinModal(amount: number): boolean {
-    return amount >= this.BIG_WIN_THRESHOLD;
+    return amount >= GameConfig.GAMEPLAY.BIG_WIN_THRESHOLD;
   }
 
   private onLose(): void {
@@ -404,9 +425,9 @@ export class GameManager extends Component {
       parent: canvas,
       fromNode: this.winLabelNode,
       toNode: this.coinIconNode,
-      coinCount: 20,
-      scatterRadius: 150,
-      coinSize: 60,
+      coinCount: GameConfig.EFFECTS.COIN_FLY_COUNT,
+      scatterRadius: GameConfig.EFFECTS.COIN_SCATTER_RADIUS,
+      coinSize: GameConfig.EFFECTS.COIN_SIZE,
       onAllArrive: () => {
         if (this.coinIconNode?.isValid) {
           tween(this.coinIconNode)
@@ -424,7 +445,10 @@ export class GameManager extends Component {
 
   private continueAutoPlay(): void {
     if (this.isAutoPlay && !this.isPaused) {
-      this.scheduleOnce(this.onAutoPlaySpin, this.AUTO_PLAY_DELAY);
+      this.scheduleOnce(
+        this.onAutoPlaySpin,
+        GameConfig.GAMEPLAY.AUTO_PLAY_DELAY
+      );
     }
   }
 

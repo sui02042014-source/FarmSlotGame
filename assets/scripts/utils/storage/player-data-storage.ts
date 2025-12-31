@@ -1,11 +1,14 @@
 import { sys } from "cc";
 import { GameConfig } from "../../data/config/game-config";
 import { PlayerData } from "../../types";
+import { Logger } from "../helpers/logger";
 
 const KEYS = {
   COINS: "player_coins",
   BET: "current_bet",
 };
+
+const logger = Logger.create("PlayerDataStorage");
 
 export class PlayerDataStorage {
   public static load(defaultCoins: number, defaultBet: number): PlayerData {
@@ -28,7 +31,7 @@ export class PlayerDataStorage {
   public static save(coins: number, bet: number): boolean {
     try {
       if (!this.isValidData(coins, bet)) {
-        console.error("[PlayerDataStorage] Invalid data:", { coins, bet });
+        logger.error("Invalid data:", { coins, bet });
         return false;
       }
 
@@ -36,7 +39,7 @@ export class PlayerDataStorage {
       sys.localStorage.setItem(KEYS.BET, bet.toString());
       return true;
     } catch (error) {
-      console.error("[PlayerDataStorage] Failed to save:", error);
+      logger.error("Failed to save:", error);
       return false;
     }
   }
@@ -55,7 +58,7 @@ export class PlayerDataStorage {
       bet > GameConfig.MAX_BET ||
       !GameConfig.BET_STEPS.includes(bet)
     ) {
-      console.warn(`[PlayerDataStorage] Bet ${bet} is not in valid BET_STEPS`);
+      logger.warn(`Bet ${bet} is not in valid BET_STEPS`);
     }
 
     return true;
@@ -68,7 +71,7 @@ export class PlayerDataStorage {
       const p = parseFloat(val);
       return isNaN(p) ? null : p;
     } catch (error) {
-      console.error(`[PlayerDataStorage] Failed to get ${key}:`, error);
+      logger.error(`Failed to get ${key}:`, error);
       return null;
     }
   }
@@ -81,7 +84,7 @@ export class PlayerDataStorage {
       sys.localStorage.removeItem(KEYS.COINS);
       sys.localStorage.removeItem(KEYS.BET);
     } catch (error) {
-      console.error("[PlayerDataStorage] Failed to clear:", error);
+      logger.error("Failed to clear:", error);
     }
   }
 }

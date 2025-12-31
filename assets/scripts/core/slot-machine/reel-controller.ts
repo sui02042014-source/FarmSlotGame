@@ -21,6 +21,7 @@ const REEL_CONSTANTS = {
   POSITION_TOLERANCE: 30,
   VISIBILITY_TOLERANCE: 10,
   EXTRA_WRAP_MULTIPLIER: 1.0,
+  SYNC_THRESHOLD: 1.0,
 } as const;
 
 @ccclass("ReelController")
@@ -76,7 +77,13 @@ export class ReelController extends Component {
         this.updateSpeed(dt);
         this.positionOffset += this.currentSpeed * dt;
       }
-      this.syncSymbols();
+
+      const positionDelta = Math.abs(
+        this.positionOffset - this.lastPositionOffset
+      );
+      if (positionDelta >= REEL_CONSTANTS.SYNC_THRESHOLD) {
+        this.syncSymbols();
+      }
     }
   }
 
@@ -199,7 +206,11 @@ export class ReelController extends Component {
   }
 
   private updateSymbolPosition(container: SymbolContainer): void {
-    const originY = this.originalPositions.get(container) ?? 0;
+    if (!this.originalPositions.has(container)) {
+      return;
+    }
+
+    const originY = this.originalPositions.get(container)!;
     const halfWrap = this.wrapHeight / 2;
 
     const y =
@@ -216,19 +227,27 @@ export class ReelController extends Component {
   }
 
   private handleSymbolWrapping(container: SymbolContainer): void {
-    const originY = this.originalPositions.get(container) ?? 0;
+    if (!this.originalPositions.has(container)) {
+      return;
+    }
+
+    const originY = this.originalPositions.get(container)!;
     const halfWrap = this.wrapHeight / 2;
 
     const currentLap = Math.floor(
       (originY - this.positionOffset + halfWrap) / this.wrapHeight
     );
+
     const finalLap = Math.floor(
       (originY - this.finalOffset + halfWrap) / this.wrapHeight
     );
 
     const lastLap = this.containerLaps.get(container);
 
-    if (this.isFinalizing && lastLap !== undefined && lastLap !== currentLap) {
+    const hasWrapped =
+      this.isFinalizing && lastLap !== undefined && lastLap !== currentLap;
+
+    if (hasWrapped) {
       if (currentLap === finalLap) {
         this.applyTargetSymbolToContainer(container, originY);
       } else {
@@ -358,7 +377,12 @@ export class ReelController extends Component {
 
   public async initializeReel(): Promise<void> {
     const symbols = SymbolData.getAllSymbols();
+
+    // Clear old references to prevent memory leaks
+    this.originalPositions.clear();
+    this.containerLaps.clear();
     this.reelContainer.clearContainers();
+
     const centerIndex = Math.floor(this.totalSymbols / 2);
 
     for (let i = 0; i < this.totalSymbols; i++) {

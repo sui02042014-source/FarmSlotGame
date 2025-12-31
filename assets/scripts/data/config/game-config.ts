@@ -38,7 +38,8 @@ export class GameConfig {
     WILD: "wild",
     BONUS: "bonus",
     SCATTER: "scatter",
-  };
+  } as const;
+
   static readonly SYMBOL_WEIGHTS = {
     pig: 5,
     cow: 5,
@@ -55,7 +56,7 @@ export class GameConfig {
     wild: 2,
     bonus: 3,
     scatter: 3,
-  };
+  } as const;
 
   static readonly PAYTABLE = {
     pig: { 3: 50, 4: 150, 5: 500 },
@@ -73,7 +74,7 @@ export class GameConfig {
     wild: { 3: 100, 4: 300, 5: 1000 },
     scatter: { 3: 10, 4: 50, 5: 200 },
     bonus: { 3: 0, 4: 0, 5: 0 },
-  };
+  } as const;
   static readonly SOUNDS = {
     SPIN: "spin",
     WIN: "win",
@@ -85,6 +86,21 @@ export class GameConfig {
     COIN_FLY_DURATION: 1.0,
     WIN_POPUP_DELAY: 1,
     NUMBER_COUNT_DURATION: 2.0,
+  };
+
+  static readonly EFFECTS = {
+    COIN_FLY_COUNT: 20,
+    COIN_SCATTER_RADIUS: 150,
+    COIN_SIZE: 60,
+    WIN_SHOW_DURATION: 2.0,
+  };
+
+  static readonly GAMEPLAY = {
+    AUTO_PLAY_DELAY: 3.5,
+    BIG_WIN_THRESHOLD: 1000,
+    IDLE_FPS_THRESHOLD: 10, // seconds
+    IDLE_FPS: 30,
+    ACTIVE_FPS: 60,
   };
 
   static readonly GAME_STATES = {

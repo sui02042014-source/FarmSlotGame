@@ -1,4 +1,5 @@
 import { GameConfig } from "../data/config/game-config";
+import { SymbolData } from "../data/models/symbol-data";
 import { WinLine, SpinResult } from "../types";
 
 interface WinDirection {
@@ -30,7 +31,7 @@ export class SlotLogic {
   }
 
   private static generateReelSymbols(symbolsPerReel: number): string[] {
-    const weights = GameConfig.SYMBOL_WEIGHTS;
+    const weights = SymbolData.getAllWeights();
     const symbols = Object.keys(weights);
     const totalWeight = Object.values(weights).reduce((a, b) => a + b, 0);
     const reelSymbols: string[] = [];
@@ -236,12 +237,12 @@ export class SlotLogic {
     length: number,
     bet: number
   ): number {
-    const paytable = (GameConfig.PAYTABLE as any)[symbol];
-    if (!paytable) {
+    const symbolData = SymbolData.getSymbol(symbol);
+    if (!symbolData || !symbolData.paytable) {
       return 0;
     }
 
-    const multiplier = paytable[length];
+    const multiplier = symbolData.paytable[length];
     return multiplier ? multiplier * bet : 0;
   }
 

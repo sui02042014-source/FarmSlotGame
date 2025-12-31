@@ -1,14 +1,14 @@
 import { _decorator } from "cc";
-import { GameConfig } from "../config/game-config";
 const { ccclass } = _decorator;
 
 export interface ISymbolData {
   id: string;
   name: string;
   type: SymbolType;
-  value: number; // Max win value from paytable (for 5 symbols)
+  value: number;
   spritePath: string;
   weight: number;
+  paytable: Record<number, number>;
   animationPath?: string;
 }
 
@@ -30,9 +30,10 @@ export class SymbolData {
         id: "pig",
         name: "Pig",
         type: SymbolType.HIGH_VALUE,
-        value: GameConfig.PAYTABLE.pig[5],
+        value: 500,
         spritePath: "9_Pig",
-        weight: GameConfig.SYMBOL_WEIGHTS.pig,
+        weight: 5,
+        paytable: { 3: 50, 4: 150, 5: 500 },
       },
     ],
     [
@@ -41,9 +42,10 @@ export class SymbolData {
         id: "cow",
         name: "Cow",
         type: SymbolType.HIGH_VALUE,
-        value: GameConfig.PAYTABLE.cow[5],
+        value: 500,
         spritePath: "10_Cow",
-        weight: GameConfig.SYMBOL_WEIGHTS.cow,
+        weight: 5,
+        paytable: { 3: 50, 4: 150, 5: 500 },
       },
     ],
     [
@@ -52,9 +54,10 @@ export class SymbolData {
         id: "chicken",
         name: "Chicken",
         type: SymbolType.HIGH_VALUE,
-        value: GameConfig.PAYTABLE.chicken[5],
+        value: 400,
         spritePath: "7_Hen",
-        weight: GameConfig.SYMBOL_WEIGHTS.chicken,
+        weight: 6,
+        paytable: { 3: 40, 4: 120, 5: 400 },
       },
     ],
     [
@@ -63,9 +66,10 @@ export class SymbolData {
         id: "rabbit",
         name: "Rabbit",
         type: SymbolType.HIGH_VALUE,
-        value: GameConfig.PAYTABLE.rabbit[5],
+        value: 400,
         spritePath: "8_Rabbit",
-        weight: GameConfig.SYMBOL_WEIGHTS.rabbit,
+        weight: 6,
+        paytable: { 3: 40, 4: 120, 5: 400 },
       },
     ],
     [
@@ -74,9 +78,10 @@ export class SymbolData {
         id: "hay",
         name: "Hay",
         type: SymbolType.HIGH_VALUE,
-        value: GameConfig.PAYTABLE.hay[5],
+        value: 300,
         spritePath: "6_Cart_with_hay",
-        weight: GameConfig.SYMBOL_WEIGHTS.hay,
+        weight: 8,
+        paytable: { 3: 30, 4: 100, 5: 300 },
       },
     ],
     [
@@ -85,9 +90,10 @@ export class SymbolData {
         id: "truck",
         name: "Truck",
         type: SymbolType.MEDIUM_VALUE,
-        value: GameConfig.PAYTABLE.truck[5],
+        value: 250,
         spritePath: "11_Truck",
-        weight: GameConfig.SYMBOL_WEIGHTS.truck,
+        weight: 10,
+        paytable: { 3: 25, 4: 75, 5: 250 },
       },
     ],
     [
@@ -96,9 +102,10 @@ export class SymbolData {
         id: "barn",
         name: "Barn (placeholder)",
         type: SymbolType.MEDIUM_VALUE,
-        value: GameConfig.PAYTABLE.barn[5],
+        value: 200,
         spritePath: "13_Bonus_Mill",
-        weight: GameConfig.SYMBOL_WEIGHTS.barn,
+        weight: 12,
+        paytable: { 3: 20, 4: 60, 5: 200 },
       },
     ],
     [
@@ -107,9 +114,10 @@ export class SymbolData {
         id: "symbol_a",
         name: "A",
         type: SymbolType.LOW_VALUE,
-        value: GameConfig.PAYTABLE.symbol_a[5],
+        value: 150,
         spritePath: "5_Tomato",
-        weight: GameConfig.SYMBOL_WEIGHTS.symbol_a,
+        weight: 15,
+        paytable: { 3: 15, 4: 40, 5: 150 },
       },
     ],
     [
@@ -118,9 +126,10 @@ export class SymbolData {
         id: "symbol_k",
         name: "K",
         type: SymbolType.LOW_VALUE,
-        value: GameConfig.PAYTABLE.symbol_k[5],
+        value: 150,
         spritePath: "4_Eggplant",
-        weight: GameConfig.SYMBOL_WEIGHTS.symbol_k,
+        weight: 15,
+        paytable: { 3: 15, 4: 40, 5: 150 },
       },
     ],
     [
@@ -129,9 +138,10 @@ export class SymbolData {
         id: "symbol_q",
         name: "Q",
         type: SymbolType.LOW_VALUE,
-        value: GameConfig.PAYTABLE.symbol_q[5],
+        value: 100,
         spritePath: "3_Watermelon",
-        weight: GameConfig.SYMBOL_WEIGHTS.symbol_q,
+        weight: 18,
+        paytable: { 3: 10, 4: 30, 5: 100 },
       },
     ],
     [
@@ -140,9 +150,10 @@ export class SymbolData {
         id: "symbol_j",
         name: "J",
         type: SymbolType.LOW_VALUE,
-        value: GameConfig.PAYTABLE.symbol_j[5],
+        value: 100,
         spritePath: "2_Carrot",
-        weight: GameConfig.SYMBOL_WEIGHTS.symbol_j,
+        weight: 18,
+        paytable: { 3: 10, 4: 30, 5: 100 },
       },
     ],
     [
@@ -151,9 +162,10 @@ export class SymbolData {
         id: "symbol_10",
         name: "10",
         type: SymbolType.LOW_VALUE,
-        value: GameConfig.PAYTABLE.symbol_10[5],
+        value: 80,
         spritePath: "1_Pumpkin",
-        weight: GameConfig.SYMBOL_WEIGHTS.symbol_10,
+        weight: 20,
+        paytable: { 3: 5, 4: 20, 5: 80 },
       },
     ],
     [
@@ -162,10 +174,11 @@ export class SymbolData {
         id: "wild",
         name: "Wild",
         type: SymbolType.WILD,
-        value: GameConfig.PAYTABLE.wild[5],
+        value: 1000,
         spritePath: "12_Wild_Girl",
         animationPath: "animations/wild_anim",
-        weight: GameConfig.SYMBOL_WEIGHTS.wild,
+        weight: 2,
+        paytable: { 3: 100, 4: 300, 5: 1000 },
       },
     ],
     [
@@ -177,7 +190,8 @@ export class SymbolData {
         value: 0,
         spritePath: "13_Bonus_Mill",
         animationPath: "animations/bonus_anim",
-        weight: GameConfig.SYMBOL_WEIGHTS.bonus,
+        weight: 3,
+        paytable: { 3: 0, 4: 0, 5: 0 },
       },
     ],
     [
@@ -186,10 +200,11 @@ export class SymbolData {
         id: "scatter",
         name: "Scatter",
         type: SymbolType.SCATTER,
-        value: GameConfig.PAYTABLE.scatter[5],
+        value: 200,
         spritePath: "Experience_star",
         animationPath: "animations/scatter_anim",
-        weight: GameConfig.SYMBOL_WEIGHTS.scatter,
+        weight: 3,
+        paytable: { 3: 10, 4: 50, 5: 200 },
       },
     ],
   ]);
@@ -222,5 +237,25 @@ export class SymbolData {
   static canSubstitute(id: string): boolean {
     const symbol = this.getSymbol(id);
     return symbol ? symbol.type === SymbolType.WILD : false;
+  }
+
+  static getAllWeights(): Record<string, number> {
+    const weights: Record<string, number> = {};
+    this.symbols.forEach((symbol, id) => {
+      weights[id] = symbol.weight;
+    });
+    return weights;
+  }
+
+  static getPaytable(id: string): Record<number, number> | undefined {
+    return this.getSymbol(id)?.paytable;
+  }
+
+  static getAllPaytables(): Record<string, Record<number, number>> {
+    const paytables: Record<string, Record<number, number>> = {};
+    this.symbols.forEach((symbol, id) => {
+      paytables[id] = symbol.paytable;
+    });
+    return paytables;
   }
 }

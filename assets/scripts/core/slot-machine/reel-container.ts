@@ -11,7 +11,10 @@ import { AssetBundleManager, BundleName } from "../assets/asset-bundle-manager";
 import { GameConfig } from "../../data/config/game-config";
 import { SymbolData } from "../../data/models/symbol-data";
 import { SpriteFrameCache } from "../../utils/helpers/sprite-frame-cache";
+import { Logger } from "../../utils/helpers/logger";
 const { ccclass } = _decorator;
+
+const logger = Logger.create("ReelContainer");
 
 export interface SymbolContainer {
   node: Node;
@@ -54,53 +57,74 @@ export class ReelContainer extends Component {
   public async createSymbolContainer(
     symbolId: string
   ): Promise<SymbolContainer | null> {
-    const node = this.getFromPool(symbolId);
-    const sprite = node.getComponent(Sprite)!;
+    try {
+      const node = this.getFromPool(symbolId);
+      const sprite = node.getComponent(Sprite)!;
 
-    const symbolData = SymbolData.getSymbol(symbolId);
-    const spritePath = symbolData?.spritePath || symbolId;
+      const symbolData = SymbolData.getSymbol(symbolId);
+      const spritePath = symbolData?.spritePath || symbolId;
 
-    const cache = SpriteFrameCache.getInstance();
-    const normalSF = cache.getSpriteFrame(BundleName.SYMBOLS, spritePath);
-    const blurSF = cache.getSpriteFrame(BundleName.SYMBOLS, `${spritePath}_2`);
+      const cache = SpriteFrameCache.getInstance();
+      const normalSF = cache.getSpriteFrame(BundleName.SYMBOLS, spritePath);
+      const blurSF = cache.getSpriteFrame(
+        BundleName.SYMBOLS,
+        `${spritePath}_2`
+      );
 
-    sprite.spriteFrame = this._useBlur ? blurSF || normalSF : normalSF;
+      if (!normalSF) {
+        logger.error(`Failed to load sprite frame: ${spritePath}`);
+        // Return node to pool
+        node.active = false;
+        this._pool.push(node);
+        return null;
+      }
 
-    const container: SymbolContainer = {
-      node,
-      sprite,
-      symbolId,
-      normalSpriteFrame: normalSF,
-      blurSpriteFrame: blurSF,
-    };
+      sprite.spriteFrame = this._useBlur ? blurSF || normalSF : normalSF;
 
-    if (symbolData?.animationPath) {
-      this.initSpineForContainer(container, symbolData.animationPath);
+      const container: SymbolContainer = {
+        node,
+        sprite,
+        symbolId,
+        normalSpriteFrame: normalSF,
+        blurSpriteFrame: blurSF,
+      };
+
+      if (symbolData?.animationPath) {
+        this.initSpineForContainer(container, symbolData.animationPath);
+      }
+
+      return container;
+    } catch (error) {
+      logger.error(`Failed to create symbol container for ${symbolId}:`, error);
+      return null;
     }
-
-    return container;
   }
 
   private async initSpineForContainer(
     container: SymbolContainer,
     path: string
   ): Promise<void> {
-    const assetManager = AssetBundleManager.getInstance();
-    const skeletonData = await assetManager.load(
-      BundleName.SYMBOLS,
-      path,
-      sp.SkeletonData
-    );
+    try {
+      const assetManager = AssetBundleManager.getInstance();
+      const skeletonData = await assetManager.load(
+        BundleName.SYMBOLS,
+        path,
+        sp.SkeletonData
+      );
 
-    if (skeletonData && container.node.isValid) {
-      let spine = container.node.getComponent(sp.Skeleton);
-      if (!spine) {
-        spine = container.node.addComponent(sp.Skeleton);
+      if (skeletonData && container.node.isValid) {
+        let spine = container.node.getComponent(sp.Skeleton);
+        if (!spine) {
+          spine = container.node.addComponent(sp.Skeleton);
+        }
+        spine.skeletonData = skeletonData;
+        spine.premultipliedAlpha = true;
+        spine.node.active = false;
+        container.spine = spine;
       }
-      spine.skeletonData = skeletonData;
-      spine.premultipliedAlpha = true;
-      spine.node.active = false;
-      container.spine = spine;
+    } catch (error) {
+      logger.warn(`Failed to load spine animation: ${path}`, error);
+      // Continue without animation - sprite will be used instead
     }
   }
 

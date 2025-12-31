@@ -3,10 +3,13 @@ import { ToastManager } from "../../components/toast/toast-manager";
 import { GameConfig } from "../../data/config/game-config";
 import { SlotService } from "../../services/slot-service";
 import { SpinResult } from "../../types";
+import { Logger } from "../../utils/helpers/logger";
 import { GameManager } from "../game/game-manager";
 import { ReelController } from "./reel-controller";
 
 const { ccclass, property } = _decorator;
+
+const logger = Logger.create("SlotMachine");
 
 @ccclass("SlotMachine")
 export class SlotMachine extends Component {
@@ -15,6 +18,8 @@ export class SlotMachine extends Component {
 
   private reelControllers: ReelController[] = [];
   private lastSpinResult: SpinResult | null = null;
+  private finishedReelsCount: number = 0;
+  private isSpinning: boolean = false;
 
   // ==========================================
   // Lifecycle Methods
@@ -46,6 +51,15 @@ export class SlotMachine extends Component {
       return;
     }
 
+    // Prevent multiple concurrent spins
+    if (this.isSpinning) {
+      logger.warn("Spin already in progress");
+      return;
+    }
+
+    this.isSpinning = true;
+    this.finishedReelsCount = 0;
+
     this.reelControllers.forEach((controller, col) => {
       controller.startSpin([], col * 0.1);
     });
@@ -59,37 +73,31 @@ export class SlotMachine extends Component {
       });
 
       if (!gameManager || gameManager.isGamePaused()) {
-        console.log("[SlotMachine] Game paused during spin result fetch");
+        logger.info("Game paused during spin result fetch");
+        this.isSpinning = false;
         return;
       }
 
       this.lastSpinResult = result;
 
-      let finishedReels = 0;
       this.reelControllers.forEach((controller, col) => {
         this.scheduleOnce(() => {
           if (!controller?.node?.isValid) {
-            console.warn(
-              `[SlotMachine] Controller ${col} is invalid, skipping stop`
-            );
+            logger.warn(`Controller ${col} is invalid, skipping stop`);
+            this.handleReelStopped();
             return;
           }
 
           controller.stopSpin(result.symbolGrid[col]);
 
           controller.node.once("REEL_STOPPED", () => {
-            finishedReels++;
-            if (finishedReels === this.reelControllers.length) {
-              const gm = GameManager.getInstance();
-              if (gm && !gm.isGamePaused()) {
-                gm.onSpinComplete();
-              }
-            }
+            this.handleReelStopped();
           });
         }, col * 0.2);
       });
     } catch (error) {
-      console.error("[SlotMachine] Failed to fetch spin result:", error);
+      logger.error("Failed to fetch spin result:", error);
+      this.isSpinning = false;
 
       if (gameManager && !gameManager.isGamePaused()) {
         this.stopAllReels();
@@ -102,8 +110,21 @@ export class SlotMachine extends Component {
     }
   }
 
+  private handleReelStopped(): void {
+    this.finishedReelsCount++;
+    if (this.finishedReelsCount === this.reelControllers.length) {
+      this.isSpinning = false;
+      const gm = GameManager.getInstance();
+      if (gm && !gm.isGamePaused()) {
+        gm.onSpinComplete();
+      }
+    }
+  }
+
   public stopAllReels(): void {
     this.unscheduleAllCallbacks();
+    this.isSpinning = false;
+    this.finishedReelsCount = 0;
     this.reelControllers.forEach((controller) => {
       if (controller) {
         controller.forceStop();
