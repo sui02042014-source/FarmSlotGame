@@ -142,7 +142,7 @@ export class ReelController extends Component {
     this.finalOffset = this.positionOffset + distToSnap + extraDistance;
 
     this.tweenData.offset = this.positionOffset;
-
+    this.reelContainer.setUseBlur(false);
     tween(this.tweenData)
       .to(
         REEL_CONSTANTS.STOP_DURATION,

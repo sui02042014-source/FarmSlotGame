@@ -13,6 +13,7 @@ import { SpinButtonController } from "../../components/spin-button/spin-button-c
 import { AudioManager } from "../audio/audio-manager";
 import { GameConfig, GameState } from "../../data/config/game-config";
 import { CoinFlyEffect } from "../../utils/effects/coin-fly-effect";
+import { CoinRainEffect } from "../../utils/effects/coin-rain-effect";
 import { NumberCounter } from "../../utils/helpers/number-counter";
 import { SpriteFrameCache } from "../../utils/helpers/sprite-frame-cache";
 import { PlayerDataStorage } from "../../utils/storage/player-data-storage";
@@ -56,7 +57,7 @@ export class GameManager extends Component {
   private winCounter: NumberCounter = null!;
 
   private readonly AUTO_PLAY_DELAY: number = 3.5;
-  private readonly BIG_WIN_THRESHOLD: number = 3000;
+  private readonly BIG_WIN_THRESHOLD: number = 1000;
   private readonly IDLE_THRESHOLD: number = 10;
   private readonly IDLE_FPS: number = 30;
   private readonly ACTIVE_FPS: number = 60;
@@ -115,6 +116,7 @@ export class GameManager extends Component {
       GameManager.instance = null!;
     }
     CoinFlyEffect.clearPool();
+    CoinRainEffect.clear();
   }
 
   // ==========================================

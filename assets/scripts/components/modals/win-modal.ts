@@ -1,8 +1,7 @@
 import { _decorator, Label, tween, Vec3 } from "cc";
-import { BaseModal } from "./base-modal";
+import { CoinRainEffect } from "../../utils/effects/coin-rain-effect";
 import { NumberCounter } from "../../utils/helpers/number-counter";
-import { CoinFlyEffect } from "../../utils/effects/coin-fly-effect";
-import { GameManager } from "../../core/game/game-manager";
+import { BaseModal } from "./base-modal";
 
 const { ccclass, property } = _decorator;
 
@@ -50,12 +49,13 @@ export class WinModal extends BaseModal {
       this.playPulseAnimation(this.winAmountLabel.node);
     }
 
-    this.playCoinBurstEffect();
+    this.playCoinRainEffect();
     this.scheduleOnce(() => this.hide(), this.AUTO_CLOSE_DELAY);
   }
 
   protected onBeforeHide(): void {
     this.unscheduleAllCallbacks();
+    CoinRainEffect.stop();
     super.onBeforeHide();
   }
 
@@ -84,27 +84,16 @@ export class WinModal extends BaseModal {
     this.hide();
   }
 
-  private playCoinBurstEffect(): void {
-    const gm = GameManager.getInstance();
-    const target = gm?.coinIconNode || gm?.coinLabel?.node;
-    const from = this.winAmountLabel?.node || this.modalContent || this.node;
-    const canvas = this.node.scene?.getChildByName("Canvas");
+  private playCoinRainEffect(): void {
+    const parent = this.node;
 
-    if (!target?.isValid || !from?.isValid || !canvas?.isValid) return;
+    if (!parent?.isValid) return;
 
-    CoinFlyEffect.play({
-      parent: canvas,
-      fromNode: from,
-      toNode: target,
-      coinCount: 22,
-      scatterRadius: 220,
-      coinSize: 60,
-      onAllArrive: () => {
-        tween(target)
-          .to(0.1, { scale: new Vec3(1.15, 1.15, 1) })
-          .to(0.1, { scale: new Vec3(1.0, 1.0, 1) })
-          .start();
-      },
+    CoinRainEffect.start({
+      parent: parent,
+      asBackground: true,
+      spawnInterval: 0.0085,
+      fallDuration: 0.8,
     });
   }
 }

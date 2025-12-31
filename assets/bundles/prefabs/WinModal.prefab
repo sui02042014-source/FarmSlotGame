@@ -561,8 +561,6 @@
       "__id__": 0
     },
     "fileId": "9e4O7DdHhOnqvvJdi5geqX",
-    "instance": null,
-    "targetOverrides": null,
     "nestedPrefabInstanceRoots": null
   },
   {
@@ -615,6 +613,7 @@
     "enableBackgroundClose": true,
     "animationDuration": 0.3,
     "enableAnimation": true,
+    "blockInputUnderneath": true,
     "winAmountLabel": {
       "__id__": 16
     },
