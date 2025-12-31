@@ -62,7 +62,9 @@ export class WinModal extends BaseModal {
   private updateUI(): void {
     if (this.winMultiplierLabel) {
       const multiplier =
-        this._betAmount > 0 ? this._winAmount / this._betAmount : 0;
+        this._betAmount && this._betAmount > 0
+          ? this._winAmount / this._betAmount
+          : 0;
       this.winMultiplierLabel.string = `${multiplier.toFixed(1)}x`;
     }
 

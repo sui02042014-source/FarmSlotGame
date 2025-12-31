@@ -46,7 +46,7 @@ export class SlotMachine extends Component {
     });
   }
 
-  public spin(): void {
+  public async spin(): Promise<void> {
     const gameManager = GameManager.getInstance();
     if (gameManager?.isGamePaused()) {
       return;
@@ -57,25 +57,50 @@ export class SlotMachine extends Component {
     });
 
     const bet = gameManager.getCurrentBet();
-    SlotService.getInstance()
-      .fetchSpinResult({ bet, lines: 20 })
-      .then((result) => {
-        this.lastSpinResult = result;
 
-        let finishedReels = 0;
-        this.reelControllers.forEach((controller, col) => {
-          this.scheduleOnce(() => {
-            controller.stopSpin(result.symbolGrid[col]);
-
-            controller.node.once("REEL_STOPPED", () => {
-              finishedReels++;
-              if (finishedReels === this.reelControllers.length) {
-                GameManager.getInstance().onSpinComplete();
-              }
-            });
-          }, col * 0.2);
-        });
+    try {
+      const result = await SlotService.getInstance().fetchSpinResult({
+        bet,
+        lines: 20,
       });
+
+      if (!gameManager || gameManager.isGamePaused()) {
+        console.log("[SlotMachine] Game paused during spin result fetch");
+        return;
+      }
+
+      this.lastSpinResult = result;
+
+      let finishedReels = 0;
+      this.reelControllers.forEach((controller, col) => {
+        this.scheduleOnce(() => {
+          if (!controller?.node?.isValid) {
+            console.warn(
+              `[SlotMachine] Controller ${col} is invalid, skipping stop`
+            );
+            return;
+          }
+
+          controller.stopSpin(result.symbolGrid[col]);
+
+          controller.node.once("REEL_STOPPED", () => {
+            finishedReels++;
+            if (finishedReels === this.reelControllers.length) {
+              const gm = GameManager.getInstance();
+              if (gm && !gm.isGamePaused()) {
+                gm.onSpinComplete();
+              }
+            }
+          });
+        }, col * 0.2);
+      });
+    } catch (error) {
+      console.error("[SlotMachine] Failed to fetch spin result:", error);
+
+      if (gameManager && !gameManager.isGamePaused()) {
+        this.stopAllReels();
+      }
+    }
   }
 
   public stopAllReels(): void {

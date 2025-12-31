@@ -153,6 +153,7 @@ export class GameManager extends Component {
     const loaded = PlayerDataStorage.load(this.playerCoins, this.currentBet);
     this.playerCoins = loaded.coins;
     this.currentBet = loaded.bet;
+    this.currentBetIndex = loaded.betIndex;
 
     this.setupWinCounter();
     this.updateUI();

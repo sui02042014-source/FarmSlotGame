@@ -1,4 +1,4 @@
-import { _decorator, Component, AudioClip, AudioSource, math } from "cc";
+import { _decorator, Component, AudioClip, AudioSource, math, sys } from "cc";
 import { AssetBundleManager } from "../assets/asset-bundle-manager";
 
 const { ccclass } = _decorator;
@@ -60,14 +60,15 @@ export class AudioManager extends Component {
 
   private loadSettings(): void {
     this._bgmVolume = parseFloat(
-      localStorage.getItem(AUDIO_STORAGE_KEYS.BGM_VOLUME) ?? "0.5"
+      sys.localStorage.getItem(AUDIO_STORAGE_KEYS.BGM_VOLUME) ?? "0.5"
     );
     this._sfxVolume = parseFloat(
-      localStorage.getItem(AUDIO_STORAGE_KEYS.SFX_VOLUME) ?? "0.8"
+      sys.localStorage.getItem(AUDIO_STORAGE_KEYS.SFX_VOLUME) ?? "0.8"
     );
-    this._isMuted = localStorage.getItem(AUDIO_STORAGE_KEYS.MUTED) === "true";
-    this._isMusicEnabled = localStorage.getItem("musicEnabled") !== "false";
-    this._isSoundEnabled = localStorage.getItem("soundEnabled") !== "false";
+    this._isMuted =
+      sys.localStorage.getItem(AUDIO_STORAGE_KEYS.MUTED) === "true";
+    this._isMusicEnabled = sys.localStorage.getItem("musicEnabled") !== "false";
+    this._isSoundEnabled = sys.localStorage.getItem("soundEnabled") !== "false";
   }
 
   // ==========================================
@@ -114,7 +115,7 @@ export class AudioManager extends Component {
   public setBGMVolume(volume: number): void {
     this._bgmVolume = math.clamp01(volume);
     this.updateVolumes();
-    localStorage.setItem(
+    sys.localStorage.setItem(
       AUDIO_STORAGE_KEYS.BGM_VOLUME,
       this._bgmVolume.toString()
     );
@@ -123,7 +124,7 @@ export class AudioManager extends Component {
   public setSFXVolume(volume: number): void {
     this._sfxVolume = math.clamp01(volume);
     this.updateVolumes();
-    localStorage.setItem(
+    sys.localStorage.setItem(
       AUDIO_STORAGE_KEYS.SFX_VOLUME,
       this._sfxVolume.toString()
     );
@@ -132,7 +133,10 @@ export class AudioManager extends Component {
   public toggleMute(): void {
     this._isMuted = !this._isMuted;
     this.updateVolumes();
-    localStorage.setItem(AUDIO_STORAGE_KEYS.MUTED, this._isMuted.toString());
+    sys.localStorage.setItem(
+      AUDIO_STORAGE_KEYS.MUTED,
+      this._isMuted.toString()
+    );
 
     if (this._isMuted) {
       this._bgmSource.pause();
@@ -144,7 +148,7 @@ export class AudioManager extends Component {
 
   public setMusicEnabled(enabled: boolean): void {
     this._isMusicEnabled = enabled;
-    localStorage.setItem("musicEnabled", enabled.toString());
+    sys.localStorage.setItem("musicEnabled", enabled.toString());
 
     if (enabled) {
       if (this._bgmSource.clip && !this._bgmSource.playing && !this._isMuted) {
@@ -157,9 +161,8 @@ export class AudioManager extends Component {
 
   public setSoundEnabled(enabled: boolean): void {
     this._isSoundEnabled = enabled;
-    localStorage.setItem("soundEnabled", enabled.toString());
+    sys.localStorage.setItem("soundEnabled", enabled.toString());
 
-    // Stop spin sound nếu đang chạy
     if (!enabled && this._spinSource.playing) {
       this._spinSource.stop();
     }

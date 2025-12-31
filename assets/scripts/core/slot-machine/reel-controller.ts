@@ -61,6 +61,15 @@ export class ReelController extends Component {
     await SymbolHighlightEffect.initialize();
   }
 
+  protected onDestroy(): void {
+    this.unscheduleAllCallbacks();
+    tween(this.tweenData).stop();
+    this.originalPositions.clear();
+    this.containerLaps.clear();
+    this.currentSpeed = 0;
+    this.isFinalizing = false;
+  }
+
   protected update(dt: number): void {
     if (this.stateMachine.isSpinning() || this.stateMachine.isStopping()) {
       if (!this.isFinalizing) {

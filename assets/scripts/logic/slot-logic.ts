@@ -140,10 +140,12 @@ export class SlotLogic {
       );
 
       if (this.isValidWinLine(symbols)) {
-        const win = this.calculateWin(symbols[0], len, bet);
+        // Get the base symbol (first non-WILD symbol or WILD if all are WILD)
+        const baseSymbol = symbols.find((s) => s && s !== "wild") || symbols[0];
+        const win = this.calculateWin(baseSymbol, len, bet);
         if (win > 0) {
           return this.createWinLine(
-            symbols[0],
+            baseSymbol,
             startCol,
             startRow,
             direction,
@@ -187,7 +189,32 @@ export class SlotLogic {
       return false;
     }
 
-    return symbols.every((symbol) => symbol === firstSymbol);
+    // Handle WILD substitution
+    // WILD can substitute for any symbol except SCATTER and BONUS
+    const nonWildSymbols = symbols.filter(
+      (s) => s !== "wild" && s !== "" && s !== null
+    );
+
+    // All symbols are WILD - valid win line
+    if (nonWildSymbols.length === 0) {
+      return true;
+    }
+
+    // Check if all non-WILD symbols are the same
+    const baseSymbol = nonWildSymbols[0];
+    const allNonWildMatch = nonWildSymbols.every((s) => s === baseSymbol);
+
+    if (!allNonWildMatch) {
+      return false;
+    }
+
+    // WILD cannot substitute for SCATTER or BONUS in most slot games
+    if (baseSymbol === "scatter" || baseSymbol === "bonus") {
+      return symbols.every((s) => s === baseSymbol);
+    }
+
+    // All non-WILD symbols match, and WILDs can substitute
+    return true;
   }
 
   private static calculateWin(
@@ -195,6 +222,8 @@ export class SlotLogic {
     length: number,
     bet: number
   ): number {
+    // For lines with WILD, use the first non-WILD symbol for payout
+    // This is handled in the caller, so symbol here should already be the base symbol
     const paytable = (GameConfig.PAYTABLE as any)[symbol];
     if (!paytable) {
       return 0;

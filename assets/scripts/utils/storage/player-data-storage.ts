@@ -1,3 +1,4 @@
+import { sys } from "cc";
 import { GameConfig } from "../../data/config/game-config";
 import { PlayerData } from "../../types";
 
@@ -24,17 +25,63 @@ export class PlayerDataStorage {
     return { coins, bet, betIndex };
   }
 
-  public static save(coins: number, bet: number): void {
+  public static save(coins: number, bet: number): boolean {
     try {
-      localStorage.setItem(KEYS.COINS, coins.toString());
-      localStorage.setItem(KEYS.BET, bet.toString());
-    } catch {}
+      if (!this.isValidData(coins, bet)) {
+        console.error("[PlayerDataStorage] Invalid data:", { coins, bet });
+        return false;
+      }
+
+      sys.localStorage.setItem(KEYS.COINS, coins.toString());
+      sys.localStorage.setItem(KEYS.BET, bet.toString());
+      return true;
+    } catch (error) {
+      console.error("[PlayerDataStorage] Failed to save:", error);
+      return false;
+    }
+  }
+
+  private static isValidData(coins: number, bet: number): boolean {
+    if (typeof coins !== "number" || isNaN(coins) || coins < 0) {
+      return false;
+    }
+
+    if (typeof bet !== "number" || isNaN(bet) || bet < 0) {
+      return false;
+    }
+
+    if (
+      bet < GameConfig.MIN_BET ||
+      bet > GameConfig.MAX_BET ||
+      !GameConfig.BET_STEPS.includes(bet)
+    ) {
+      console.warn(`[PlayerDataStorage] Bet ${bet} is not in valid BET_STEPS`);
+    }
+
+    return true;
   }
 
   private static getNumeric(key: string): number | null {
-    const val = localStorage.getItem(key);
-    if (val === null) return null;
-    const p = parseFloat(val);
-    return isNaN(p) ? null : p;
+    try {
+      const val = sys.localStorage.getItem(key);
+      if (val === null) return null;
+      const p = parseFloat(val);
+      return isNaN(p) ? null : p;
+    } catch (error) {
+      console.error(`[PlayerDataStorage] Failed to get ${key}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Clear all saved player data
+   */
+  public static clear(): void {
+    try {
+      sys.localStorage.removeItem(KEYS.COINS);
+      sys.localStorage.removeItem(KEYS.BET);
+    } catch (error) {
+      console.error("[PlayerDataStorage] Failed to clear:", error);
+    }
   }
 }

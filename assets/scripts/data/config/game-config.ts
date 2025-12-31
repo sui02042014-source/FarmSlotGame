@@ -70,6 +70,7 @@ export class GameConfig {
     symbol_10: { 3: 5, 4: 20, 5: 80 },
     wild: { 3: 100, 4: 300, 5: 1000 },
     scatter: { 3: 10, 4: 50, 5: 200 },
+    bonus: { 3: 0, 4: 0, 5: 0 },
   };
   static readonly SOUNDS = {
     SPIN: "spin",
