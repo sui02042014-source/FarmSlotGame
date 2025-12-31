@@ -6,7 +6,10 @@ import {
   Node,
   SpriteFrame,
   tween,
+  UITransform,
+  Vec2,
   Vec3,
+  Widget,
 } from "cc";
 import { ModalManager } from "../../components/modals/modal-manager";
 import { SpinButtonController } from "../../components/spin-button/spin-button-controller";
@@ -153,6 +156,7 @@ export class GameManager extends Component {
 
     this.setupWinCounter();
     this.updateUI();
+    this.setupCoinAmountLayout();
     this.setState(GameConfig.GAME_STATES.IDLE);
   }
 
@@ -166,6 +170,24 @@ export class GameManager extends Component {
     this.winCounter.label = this.winLabel;
     this.winCounter.duration = GameConfig.ANIM.NUMBER_COUNT_DURATION;
     this.winCounter.decimalPlaces = 2;
+  }
+
+  private setupCoinAmountLayout(): void {
+    if (!this.coinLabel) return;
+
+    const coinNode = this.coinLabel.node;
+    const uiTrans = coinNode.getComponent(UITransform);
+    if (!uiTrans) return;
+
+    uiTrans.setAnchorPoint(new Vec2(0, 0.5));
+
+    const widget =
+      coinNode.getComponent(Widget) || coinNode.addComponent(Widget);
+    widget.isAlignLeft = true;
+    widget.left = 100;
+    widget.updateAlignment();
+
+    this.coinLabel.updateRenderData(true);
   }
 
   // ==========================================
