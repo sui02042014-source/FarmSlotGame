@@ -1,6 +1,7 @@
 import {
   _decorator,
   Component,
+  game,
   Label,
   Node,
   SpriteFrame,
@@ -17,6 +18,7 @@ import { SpriteFrameCache } from "../../utils/helpers/sprite-frame-cache";
 import { PlayerDataStorage } from "../../utils/storage/player-data-storage";
 import { AssetBundleManager, BundleName } from "../assets/asset-bundle-manager";
 import { SlotMachine } from "../slot-machine/slot-machine";
+import { ToastManager } from "../../components/toast/toast-manager";
 
 const { ccclass, property } = _decorator;
 
@@ -55,6 +57,12 @@ export class GameManager extends Component {
 
   private readonly AUTO_PLAY_DELAY: number = 3.5;
   private readonly BIG_WIN_THRESHOLD: number = 3000;
+  private readonly IDLE_THRESHOLD: number = 10;
+  private readonly IDLE_FPS: number = 30;
+  private readonly ACTIVE_FPS: number = 60;
+
+  private idleTime: number = 0;
+  private isLowFPS: boolean = false;
 
   private static instance: GameManager = null!;
 
@@ -73,7 +81,33 @@ export class GameManager extends Component {
     }
     GameManager.instance = this;
 
+    this.node.on(Node.EventType.TOUCH_START, this.resetIdleTime, this);
+
     await this.initGame();
+  }
+
+  protected update(dt: number): void {
+    if (this.currentState === GameConfig.GAME_STATES.IDLE && !this.isAutoPlay) {
+      this.idleTime += dt;
+      if (this.idleTime >= this.IDLE_THRESHOLD && !this.isLowFPS) {
+        this.setFPS(this.IDLE_FPS);
+      }
+    } else {
+      this.resetIdleTime();
+    }
+  }
+
+  private resetIdleTime(): void {
+    this.idleTime = 0;
+    if (this.isLowFPS) {
+      this.setFPS(this.ACTIVE_FPS);
+    }
+  }
+
+  private setFPS(fps: number): void {
+    game.frameRate = fps;
+    this.isLowFPS = fps <= this.IDLE_FPS;
+    console.log(`[GameManager] Frame rate set to: ${fps}`);
   }
 
   protected onDestroy(): void {
@@ -165,10 +199,9 @@ export class GameManager extends Component {
 
   private updateSpinButtonsInteractable(): void {
     const canSpin = this.currentState === GameConfig.GAME_STATES.IDLE;
-    const hasMoney = this.playerCoins >= this.currentBet;
 
     if (this.spinButton?.isValid) {
-      this.spinButton.setEnabled(canSpin && hasMoney);
+      this.spinButton.setEnabled(canSpin);
     }
   }
 
@@ -219,6 +252,11 @@ export class GameManager extends Component {
     }
 
     if (!this.isIdle()) {
+      return;
+    }
+
+    if (this.playerCoins < this.currentBet) {
+      ToastManager.getInstance()?.show("Not enough coins!");
       return;
     }
 

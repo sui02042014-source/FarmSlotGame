@@ -5,8 +5,9 @@ import {
   Sprite,
   SpriteFrame,
   UITransform,
+  sp,
 } from "cc";
-import { BundleName } from "../assets/asset-bundle-manager";
+import { AssetBundleManager, BundleName } from "../assets/asset-bundle-manager";
 import { GameConfig } from "../../data/config/game-config";
 import { SymbolData } from "../../data/models/symbol-data";
 import { SpriteFrameCache } from "../../utils/helpers/sprite-frame-cache";
@@ -15,6 +16,7 @@ const { ccclass } = _decorator;
 export interface SymbolContainer {
   node: Node;
   sprite: Sprite;
+  spine?: sp.Skeleton;
   symbolId: string;
   normalSpriteFrame: SpriteFrame | null;
   blurSpriteFrame: SpriteFrame | null;
@@ -73,32 +75,36 @@ export class ReelContainer extends Component {
       isBlurred: false,
     };
 
+    if (symbolData?.animationPath) {
+      this.initSpineForContainer(container, symbolData.animationPath);
+    }
+
     this.containers.push(container);
     return container;
   }
 
-  // ==========================================
-  // Sprite Loading
-  // ==========================================
+  private async initSpineForContainer(
+    container: SymbolContainer,
+    path: string
+  ): Promise<void> {
+    const assetManager = AssetBundleManager.getInstance();
+    const skeletonData = await assetManager.load(
+      BundleName.SYMBOLS,
+      path,
+      sp.SkeletonData
+    );
 
-  public async loadSymbolSprite(
-    symbolId: string,
-    isBlur: boolean = false
-  ): Promise<SpriteFrame | null> {
-    const frameName = isBlur ? `${symbolId}_2` : symbolId;
-
-    const cache = SpriteFrameCache.getInstance();
-    let sf = cache.getSpriteFrame(BundleName.SYMBOLS, frameName);
-
-    if (!sf && isBlur) {
-      sf = cache.getSpriteFrame(BundleName.SYMBOLS, symbolId);
+    if (skeletonData && container.node.isValid) {
+      let spine = container.node.getComponent(sp.Skeleton);
+      if (!spine) {
+        spine = container.node.addComponent(sp.Skeleton);
+      }
+      spine.skeletonData = skeletonData;
+      spine.premultipliedAlpha = true;
+      spine.node.active = false;
+      container.spine = spine;
     }
-
-    return sf;
   }
-  // ==========================================
-  // Symbol Container Management
-  // ==========================================
 
   public updateSymbolContainer(
     container: SymbolContainer,
@@ -121,6 +127,14 @@ export class ReelContainer extends Component {
     container.sprite.spriteFrame = container.isBlurred
       ? container.blurSpriteFrame
       : container.normalSpriteFrame;
+
+    if (container.spine) {
+      container.spine.node.active = false;
+    }
+
+    if (symbolData?.animationPath) {
+      this.initSpineForContainer(container, symbolData.animationPath);
+    }
   }
 
   // ==========================================

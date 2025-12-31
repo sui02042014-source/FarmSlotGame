@@ -73,7 +73,7 @@ export class ReelController extends Component {
   // Public API - Spin Control
   // ==========================================
 
-  public startSpin(targetSymbols: string[], delay = 0): void {
+  public startSpin(targetSymbols: string[] = [], delay = 0): void {
     if (!this.stateMachine.canSpin()) return;
 
     this.targetSymbols = targetSymbols;
@@ -85,8 +85,11 @@ export class ReelController extends Component {
     }, delay);
   }
 
-  public stopSpin(): void {
+  public stopSpin(targetSymbols: string[] = []): void {
     if (this.stateMachine.isSpinning() && !this.isFinalizing) {
+      if (targetSymbols.length > 0) {
+        this.targetSymbols = targetSymbols;
+      }
       this.stateMachine.startStopping();
       this.beginSmoothStop();
     }
@@ -282,12 +285,18 @@ export class ReelController extends Component {
 
     SymbolHighlightEffect.stop(container.node);
 
-    SymbolHighlightEffect.play({
-      targetNode: container.node,
-      duration: 1,
-      loop: true,
-      brightness: 1.2,
-    });
+    if (container.spine && container.spine.skeletonData) {
+      container.sprite.node.active = false;
+      container.spine.node.active = true;
+      container.spine.setAnimation(0, "win", true);
+    } else {
+      SymbolHighlightEffect.play({
+        targetNode: container.node,
+        duration: 1,
+        loop: true,
+        brightness: 1.2,
+      });
+    }
   }
 
   public resetSymbolsScale(): void {
@@ -295,6 +304,11 @@ export class ReelController extends Component {
       SymbolHighlightEffect.stop(container.node);
       container.node.setScale(1, 1, 1);
       container.sprite.color = new Color(255, 255, 255, 255);
+
+      if (container.spine) {
+        container.spine.node.active = false;
+        container.sprite.node.active = true;
+      }
     });
   }
 

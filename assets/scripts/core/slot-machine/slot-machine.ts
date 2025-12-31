@@ -1,9 +1,9 @@
 import { _decorator, Component, Node } from "cc";
-import { GameConfig } from "../../data/config/game-config";
-import { SlotLogic } from "../../logic/slot-logic";
 import { SpinResult } from "../../types";
 import { GameManager } from "../game/game-manager";
 import { ReelController } from "./reel-controller";
+
+import { SlotService } from "../../services/slot-service";
 
 const { ccclass, property } = _decorator;
 
@@ -47,38 +47,35 @@ export class SlotMachine extends Component {
   }
 
   public spin(): void {
-    // Check if game is paused
     const gameManager = GameManager.getInstance();
     if (gameManager?.isGamePaused()) {
       return;
     }
 
-    const bet = gameManager.getCurrentBet();
-    const result = SlotLogic.calculateSpinResult(
-      GameConfig.REEL_COUNT,
-      GameConfig.SYMBOL_PER_REEL,
-      bet
-    );
-
-    this.lastSpinResult = result;
-
-    let finishedReels = 0;
     this.reelControllers.forEach((controller, col) => {
-      controller.startSpin(result.symbolGrid[col], col * 0.1);
-
-      controller.node.once("REEL_STOPPED", () => {
-        finishedReels++;
-        if (finishedReels === this.reelControllers.length) {
-          GameManager.getInstance().onSpinComplete();
-        }
-      });
+      controller.startSpin([], col * 0.1);
     });
 
-    this.scheduleOnce(() => {
-      this.reelControllers.forEach((c, i) => {
-        this.scheduleOnce(() => c.stopSpin(), i * 0.2);
+    const bet = gameManager.getCurrentBet();
+    SlotService.getInstance()
+      .fetchSpinResult({ bet, lines: 20 })
+      .then((result) => {
+        this.lastSpinResult = result;
+
+        let finishedReels = 0;
+        this.reelControllers.forEach((controller, col) => {
+          this.scheduleOnce(() => {
+            controller.stopSpin(result.symbolGrid[col]);
+
+            controller.node.once("REEL_STOPPED", () => {
+              finishedReels++;
+              if (finishedReels === this.reelControllers.length) {
+                GameManager.getInstance().onSpinComplete();
+              }
+            });
+          }, col * 0.2);
+        });
       });
-    }, 2.5);
   }
 
   public stopAllReels(): void {

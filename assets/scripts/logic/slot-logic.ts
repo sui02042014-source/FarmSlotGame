@@ -1,9 +1,6 @@
 import { GameConfig } from "../data/config/game-config";
 import { WinLine, SpinResult } from "../types";
 
-/**
- * Win line direction vectors for pattern matching
- */
 interface WinDirection {
   colDelta: number;
   rowDelta: number;
@@ -12,10 +9,10 @@ interface WinDirection {
 export class SlotLogic {
   private static readonly MIN_WIN_LENGTH = 3;
   private static readonly WIN_DIRECTIONS: WinDirection[] = [
-    { colDelta: 1, rowDelta: 0 }, // Horizontal
-    { colDelta: 0, rowDelta: 1 }, // Vertical
-    { colDelta: 1, rowDelta: 1 }, // Diagonal down-right
-    { colDelta: 1, rowDelta: -1 }, // Diagonal up-right
+    { colDelta: 1, rowDelta: 0 },
+    { colDelta: 0, rowDelta: 1 },
+    { colDelta: 1, rowDelta: 1 },
+    { colDelta: 1, rowDelta: -1 },
   ];
 
   public static generateTargetSymbols(
