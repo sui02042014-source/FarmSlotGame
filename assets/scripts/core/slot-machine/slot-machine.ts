@@ -57,92 +57,130 @@ export class SlotMachine extends Component {
   }
 
   public async spin(): Promise<void> {
-    const gameManager = GameManager.getInstance();
-    if (!gameManager || gameManager.isGamePaused()) {
+    if (!this.canStartSpin()) {
       return;
     }
 
-    if (this.isSpinning) {
-      return;
-    }
-
-    this.isSpinning = true;
-    this.finishedReelsCount = 0;
-    this.cleanupReelCallbacks();
-
-    const startDelay = 0.1;
-    const minSpinTime = 1.0;
-
-    this.reelControllers.forEach((controller, col) => {
-      controller.startSpin([], col * startDelay);
-    });
-
-    const bet = gameManager.getCurrentBet();
+    this.initializeSpin();
+    this.startReelSpinning();
 
     try {
-      const result = await SlotService.getInstance().fetchSpinResult({
-        bet,
-        lines: GameConfig.DEFAULT_LINES,
-      });
-
-      const currentGameManager = GameManager.getInstance();
-      if (
-        !currentGameManager ||
-        currentGameManager.isGamePaused() ||
-        !this.node?.isValid
-      ) {
-        this.isSpinning = false;
+      const result = await this.fetchSpinResult();
+      if (!this.isSpinStillValid()) {
         return;
       }
 
       this.lastSpinResult = result;
-
-      this.reelControllers.forEach((controller, col) => {
-        const reelStartDelay = col * startDelay;
-        const stopDelay =
-          reelStartDelay + minSpinTime + col * GameConfig.REEL_STOP_DELAY;
-
-        this.scheduleOnce(() => {
-          if (!controller?.node?.isValid) {
-            this.handleReelStopped();
-            return;
-          }
-
-          const callback = () => {
-            this.reelStopCallbacks.delete(col);
-            this.handleReelStopped();
-          };
-
-          this.reelStopCallbacks.set(col, callback);
-
-          controller.node.once(GameConfig.EVENTS.REEL_STOPPED, callback);
-
-          controller.stopSpin(result.symbolGrid[col]);
-        }, stopDelay);
-      });
+      this.scheduleReelStops(result);
     } catch (error) {
-      logger.error("Failed to fetch spin result:", error);
+      this.handleSpinError(error);
+    }
+  }
+
+  // ==========================================
+  // Private Spin Helper Methods
+  // ==========================================
+
+  private canStartSpin(): boolean {
+    const gameManager = GameManager.getInstance();
+    if (!gameManager || gameManager.isGamePaused()) {
+      return false;
+    }
+    if (this.isSpinning) {
+      return false;
+    }
+    return true;
+  }
+
+  private initializeSpin(): void {
+    this.isSpinning = true;
+    this.finishedReelsCount = 0;
+    this.cleanupReelCallbacks();
+  }
+
+  private startReelSpinning(): void {
+    const startDelay = 0.1;
+    this.reelControllers.forEach((controller, col) => {
+      controller.startSpin([], col * startDelay);
+    });
+  }
+
+  private async fetchSpinResult(): Promise<SpinResult> {
+    const gameManager = GameManager.getInstance();
+    const bet = gameManager!.getCurrentBet();
+
+    return await SlotService.getInstance().fetchSpinResult({
+      bet,
+      lines: GameConfig.DEFAULT_LINES,
+    });
+  }
+
+  private isSpinStillValid(): boolean {
+    const currentGameManager = GameManager.getInstance();
+    if (
+      !currentGameManager ||
+      currentGameManager.isGamePaused() ||
+      !this.node?.isValid
+    ) {
       this.isSpinning = false;
+      return false;
+    }
+    return true;
+  }
 
-      const currentGameManager = GameManager.getInstance();
-      if (currentGameManager && !currentGameManager.isGamePaused()) {
-        this.stopAllReels();
+  private scheduleReelStops(result: SpinResult): void {
+    const startDelay = 0.1;
+    const minSpinTime = 1.0;
 
-        currentGameManager.refundLastBet();
+    this.reelControllers.forEach((controller, col) => {
+      const reelStartDelay = col * startDelay;
+      const stopDelay =
+        reelStartDelay + minSpinTime + col * GameConfig.REEL_STOP_DELAY;
 
-        currentGameManager.setState(GameConfig.GAME_STATES.IDLE);
+      this.scheduleOnce(() => {
+        this.stopReelAtColumn(controller, col, result);
+      }, stopDelay);
+    });
+  }
 
-        ToastManager.getInstance()?.show(
-          "Connection error. Bet has been refunded."
-        );
-      }
+  private stopReelAtColumn(
+    controller: ReelController,
+    col: number,
+    result: SpinResult
+  ): void {
+    if (!controller?.node?.isValid) {
+      this.handleReelStopped();
+      return;
+    }
+
+    const callback = () => {
+      this.reelStopCallbacks.delete(col);
+      this.handleReelStopped();
+    };
+
+    this.reelStopCallbacks.set(col, callback);
+    controller.node.once(GameConfig.EVENTS.REEL_STOPPED, callback);
+    controller.stopSpin(result.symbolGrid[col]);
+  }
+
+  private handleSpinError(error: unknown): void {
+    logger.error("Failed to fetch spin result:", error);
+    this.isSpinning = false;
+
+    const currentGameManager = GameManager.getInstance();
+    if (currentGameManager && !currentGameManager.isGamePaused()) {
+      this.stopAllReels();
+      currentGameManager.refundLastBet();
+      currentGameManager.setState(GameConfig.GAME_STATES.IDLE);
+      ToastManager.getInstance()?.show(
+        "Connection error. Bet has been refunded."
+      );
     }
   }
 
   private handleReelStopped(): void {
     this.finishedReelsCount++;
 
-    // Check for scatter anticipation after each reel stops
     if (
       this.lastSpinResult &&
       this.finishedReelsCount < this.reelControllers.length
