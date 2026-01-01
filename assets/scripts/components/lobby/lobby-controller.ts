@@ -1,6 +1,10 @@
 import { _decorator, Button, Component, Node, sys, tween, Vec3 } from "cc";
 import { AudioManager } from "../../core/audio/audio-manager";
 import { SceneManager } from "../../core/scenes/scene-manager";
+import {
+  AssetBundleManager,
+  BundleName,
+} from "../../core/assets/asset-bundle-manager";
 
 const { ccclass, property } = _decorator;
 
@@ -24,11 +28,18 @@ export class LobbyController extends Component {
 
   protected onLoad(): void {
     this.setupButtons();
+  }
+
+  protected start(): void {
+    // Wait for AudioManager to be ready
     this.initAudio();
   }
 
   protected onDestroy(): void {
     this.cleanupButtons();
+
+    // Don't stop BGM - let it continue playing across scenes
+    // AudioManager will handle BGM transitions automatically
   }
 
   // ==========================================
@@ -73,9 +84,24 @@ export class LobbyController extends Component {
   }
 
   private async initAudio(): Promise<void> {
-    const audioManager = AudioManager.getInstance();
-    if (audioManager) {
-      await audioManager.playBGM("lobby_bgm").catch(() => {});
+    try {
+      // Load audio bundle first
+      const bundleManager = AssetBundleManager.getInstance();
+      await bundleManager.loadBundle(BundleName.AUDIO);
+
+      // Then play BGM
+      const audioManager = AudioManager.getInstance();
+
+      if (audioManager) {
+        // Ensure music is enabled
+        if (!audioManager.isMusicEnabled()) {
+          audioManager.setMusicEnabled(true);
+        }
+
+        await audioManager.playBGM("lobby_bgm");
+      }
+    } catch (error) {
+      // Silently handle audio initialization errors
     }
   }
 
@@ -124,31 +150,25 @@ export class LobbyController extends Component {
       tween(this.playButton).stop();
     }
 
-    const audioManager = AudioManager.getInstance();
-    if (audioManager) {
-      audioManager.playSFX("button_click");
-    }
-
+    this.playSFX("button_click");
     this.animateOutAndTransition();
   }
 
   private onSettingsButtonClick(): void {
-    const audioManager = AudioManager.getInstance();
-    if (audioManager) {
-      audioManager.playSFX("button_click");
-    }
-
-    // TODO: Show settings modal
+    this.playSFX("button_click");
   }
 
   private onQuitButtonClick(): void {
-    const audioManager = AudioManager.getInstance();
-    if (audioManager) {
-      audioManager.playSFX("button_click");
-    }
+    this.playSFX("button_click");
 
     if (!sys.isBrowser) {
-      // On native platforms, could implement exit logic here
+    }
+  }
+
+  private playSFX(soundName: string): void {
+    const audioManager = AudioManager.getInstance();
+    if (audioManager) {
+      audioManager.playSFX(soundName).catch(() => {});
     }
   }
 

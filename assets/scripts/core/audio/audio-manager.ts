@@ -1,4 +1,12 @@
-import { _decorator, Component, AudioClip, AudioSource, math, sys } from "cc";
+import {
+  _decorator,
+  Component,
+  AudioClip,
+  AudioSource,
+  math,
+  sys,
+  game,
+} from "cc";
 import { AssetBundleManager } from "../assets/asset-bundle-manager";
 
 const { ccclass } = _decorator;
@@ -24,6 +32,7 @@ export class AudioManager extends Component {
   private _isMuted: boolean = false;
   private _isMusicEnabled: boolean = true;
   private _isSoundEnabled: boolean = true;
+  private _currentBGMPath: string = "";
 
   private readonly _audioCache = new Map<string, AudioClip>();
   private readonly _loadingPromises = new Map<
@@ -41,6 +50,9 @@ export class AudioManager extends Component {
       return;
     }
     AudioManager._instance = this;
+
+    // Make this node persist across scene transitions
+    game.addPersistRootNode(this.node);
 
     this.initAudioSources();
     this.loadSettings();
@@ -67,8 +79,15 @@ export class AudioManager extends Component {
     );
     this._isMuted =
       sys.localStorage.getItem(AUDIO_STORAGE_KEYS.MUTED) === "true";
-    this._isMusicEnabled = sys.localStorage.getItem("musicEnabled") !== "false";
-    this._isSoundEnabled = sys.localStorage.getItem("soundEnabled") !== "false";
+
+    // Default to true if not set
+    const musicEnabledValue = sys.localStorage.getItem("musicEnabled");
+    this._isMusicEnabled =
+      musicEnabledValue === null ? true : musicEnabledValue === "true";
+
+    const soundEnabledValue = sys.localStorage.getItem("soundEnabled");
+    this._isSoundEnabled =
+      soundEnabledValue === null ? true : soundEnabledValue === "true";
   }
 
   // ==========================================
@@ -76,15 +95,22 @@ export class AudioManager extends Component {
   // ==========================================
 
   public async playBGM(path: string): Promise<void> {
+    // If same BGM is already playing, don't restart it
+    if (this._currentBGMPath === path && this._bgmSource.playing) {
+      return;
+    }
+
     const clip = await this.getOrLoadClip(path);
     if (!clip || this._isMuted || !this._isMusicEnabled) return;
 
     this._bgmSource.clip = clip;
     this._bgmSource.play();
+    this._currentBGMPath = path;
   }
 
   public stopBGM(): void {
     this._bgmSource.stop();
+    this._currentBGMPath = "";
   }
 
   public async playSFX(path: string): Promise<void> {
