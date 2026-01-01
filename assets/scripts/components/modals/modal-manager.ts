@@ -32,22 +32,14 @@ export class ModalManager extends Component {
   protected onLoad(): void {
     if (ModalManager.instance && ModalManager.instance !== this) {
       if (!ModalManager.instance.node?.isValid) {
-        this.replaceSingleton();
+        this.initializeAsSingleton();
       } else {
         this.node.destroy();
       }
       return;
     }
 
-    ModalManager.instance = this;
-    game.addPersistRootNode(this.node);
-
-    if (!this.modalContainer) {
-      this.modalContainer = new Node("ModalContainer");
-      this.modalContainer.setParent(this.node);
-    }
-
-    this.repositionToCanvas();
+    this.initializeAsSingleton();
   }
 
   protected start(): void {
@@ -61,7 +53,7 @@ export class ModalManager extends Component {
     this.closeAllModals();
   }
 
-  private replaceSingleton(): void {
+  private initializeAsSingleton(): void {
     ModalManager.instance = this;
     game.addPersistRootNode(this.node);
 

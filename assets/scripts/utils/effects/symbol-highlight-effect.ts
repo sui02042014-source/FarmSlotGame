@@ -11,6 +11,7 @@ import {
 } from "cc";
 import { SpriteFrameCache } from "../helpers/sprite-frame-cache";
 import { BundleName } from "../../core/assets/asset-bundle-manager";
+import { GameConfig } from "../../data/config/game-config";
 
 const { ccclass } = _decorator;
 
@@ -35,7 +36,7 @@ class RoundAnimationController {
     this.loadingPromise = (async () => {
       try {
         const cache = SpriteFrameCache.getInstance();
-        const frameCount = 89;
+        const frameCount = GameConfig.EFFECTS.HIGHLIGHT_ANIMATION_FRAMES;
 
         const newFrames: SpriteFrame[] = [];
         for (let i = 0; i < frameCount; i++) {
@@ -55,7 +56,10 @@ class RoundAnimationController {
         this.roundFrames = newFrames;
         this.isLoaded = true;
       } catch (error) {
-        // Silent error handling
+        console.error(
+          "[SymbolHighlightEffect] Failed to load animation frames:",
+          error
+        );
       } finally {
         this.loadingPromise = null;
       }
@@ -130,8 +134,17 @@ class HighlightPool {
   }
 
   public clear(): void {
-    this.active.forEach((node) => node.isValid && node.destroy());
-    this.pool.forEach((node) => node.isValid && node.destroy());
+    this.active.forEach((node) => {
+      if (node.isValid) {
+        Tween.stopAllByTarget(node);
+        node.destroy();
+      }
+    });
+    this.pool.forEach((node) => {
+      if (node.isValid) {
+        node.destroy();
+      }
+    });
     this.active.clear();
     this.pool = [];
   }
@@ -142,6 +155,7 @@ export class SymbolHighlightEffect {
   private static highlightPool: HighlightPool = new HighlightPool();
   private static isInitialized = false;
   private static initPromise: Promise<void> | null = null;
+  private static stopCallbacks = new WeakMap<Node, () => void>();
 
   public static async initialize(): Promise<void> {
     if (this.isInitialized) return;
@@ -231,10 +245,12 @@ export class SymbolHighlightEffect {
 
     playFrame();
 
-    (highlightNode as any)._stopHighlight = () => {
+    // Store stop callback in WeakMap to avoid memory leaks
+    const stopCallback = () => {
       isPlaying = false;
       this.highlightPool.release(highlightNode);
     };
+    this.stopCallbacks.set(highlightNode, stopCallback);
   }
 
   public static stop(targetNode: Node): void {
@@ -244,8 +260,12 @@ export class SymbolHighlightEffect {
       (child) => child.name === "SymbolHighlight" && child.active
     );
 
-    if (highlightNode && (highlightNode as any)._stopHighlight) {
-      (highlightNode as any)._stopHighlight();
+    if (highlightNode) {
+      const stopCallback = this.stopCallbacks.get(highlightNode);
+      if (stopCallback) {
+        stopCallback();
+        this.stopCallbacks.delete(highlightNode);
+      }
     }
   }
 

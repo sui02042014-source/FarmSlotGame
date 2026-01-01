@@ -59,6 +59,7 @@ export class GameConfig {
     COIN_SIZE: 60,
     WIN_SHOW_DURATION: 2.0,
     COIN_SPRITE_PATH: "ui/win/coin_icon/spriteFrame",
+    HIGHLIGHT_ANIMATION_FRAMES: 89, // Number of frames in round animation
   };
 
   static readonly GAMEPLAY = {

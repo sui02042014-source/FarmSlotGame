@@ -102,11 +102,27 @@ export class ReelController extends Component {
   public stopSpin(targetSymbols: string[] = []): void {
     if (this.stateMachine.isSpinning() && !this.isFinalizing) {
       if (targetSymbols.length > 0) {
+        // Validate target symbols array has correct length
+        if (targetSymbols.length !== GameConfig.SYMBOL_PER_REEL) {
+          console.warn(
+            `[ReelController] Expected ${GameConfig.SYMBOL_PER_REEL} symbols, got ${targetSymbols.length}. Padding with random symbols.`
+          );
+          // Pad or trim to correct length
+          while (targetSymbols.length < GameConfig.SYMBOL_PER_REEL) {
+            targetSymbols.push(this.getRandomSymbolId());
+          }
+          targetSymbols = targetSymbols.slice(0, GameConfig.SYMBOL_PER_REEL);
+        }
         this.targetSymbols = targetSymbols;
       }
       this.stateMachine.startStopping();
       this.beginSmoothStop();
     }
+  }
+
+  private getRandomSymbolId(): string {
+    const allSymbols = SymbolData.getAllSymbols();
+    return allSymbols[Math.floor(Math.random() * allSymbols.length)].id;
   }
 
   public forceStop(): void {

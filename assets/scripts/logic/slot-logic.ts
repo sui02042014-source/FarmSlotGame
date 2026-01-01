@@ -1,6 +1,9 @@
 import { GameConfig } from "../data/config/game-config";
 import { SymbolData } from "../data/models/symbol-data";
 import { WinLine, SpinResult } from "../types";
+import { Logger } from "../utils/helpers/logger";
+
+const logger = Logger.create("SlotLogic");
 
 interface WinDirection {
   colDelta: number;
@@ -65,12 +68,12 @@ export class SlotLogic {
   ): { totalWin: number; winLines: WinLine[] } {
     // Validate inputs
     if (!symbolGrid || !Array.isArray(symbolGrid) || symbolGrid.length === 0) {
-      console.warn("[SlotLogic] Invalid symbolGrid provided");
+      logger.warn("Invalid symbolGrid provided");
       return { totalWin: 0, winLines: [] };
     }
 
     if (typeof bet !== "number" || bet <= 0 || isNaN(bet)) {
-      console.warn("[SlotLogic] Invalid bet amount provided:", bet);
+      logger.warn("Invalid bet amount provided:", bet);
       return { totalWin: 0, winLines: [] };
     }
 
@@ -81,14 +84,14 @@ export class SlotLogic {
 
     // Validate grid dimensions
     if (cols === 0 || rows === 0) {
-      console.warn("[SlotLogic] Invalid grid dimensions:", { cols, rows });
+      logger.warn("Invalid grid dimensions:", { cols, rows });
       return { totalWin: 0, winLines: [] };
     }
 
     // Validate all rows have same length
     for (let i = 0; i < symbolGrid.length; i++) {
       if (!symbolGrid[i] || symbolGrid[i].length !== rows) {
-        console.warn("[SlotLogic] Inconsistent row lengths in symbolGrid");
+        logger.warn("Inconsistent row lengths in symbolGrid");
         return { totalWin: 0, winLines: [] };
       }
     }

@@ -84,7 +84,7 @@ export class WalletService {
     if (index < 0 || index >= GameConfig.BET_STEPS.length) return;
     this._currentBetIndex = index;
     this._currentBet = GameConfig.BET_STEPS[this._currentBetIndex];
-    this.onDataChanged(false); // Only emit bet changed
+    this.onDataChanged(false, true); // Emit bet changed event
   }
 
   public increaseBet(): void {
@@ -115,42 +115,60 @@ export class WalletService {
     this._isSyncing = true;
     let lastError: any = null;
 
-    for (let attempt = 0; attempt < retries; attempt++) {
-      try {
-        await new Promise((resolve, reject) => {
-          setTimeout(() => {
-            if (Math.random() > 0.05) {
-              resolve(true);
-            } else {
-              reject(new Error("Network error"));
-            }
-          }, 300);
-        });
+    try {
+      for (let attempt = 0; attempt < retries; attempt++) {
+        try {
+          // Mock API call - replace with real API in production
+          await new Promise((resolve, reject) => {
+            setTimeout(() => {
+              if (Math.random() > 0.05) {
+                resolve(true);
+              } else {
+                reject(new Error("Network error"));
+              }
+            }, 300);
+          });
 
-        this._isSyncing = false;
-        return;
-      } catch (error) {
-        lastError = error;
-        logger.warn(`Sync attempt ${attempt + 1}/${retries} failed:`, error);
+          this._isSyncing = false;
+          return;
+        } catch (error) {
+          lastError = error;
+          logger.warn(`Sync attempt ${attempt + 1}/${retries} failed:`, error);
 
-        if (attempt < retries - 1) {
-          await new Promise((resolve) =>
-            setTimeout(resolve, Math.pow(2, attempt) * 500)
-          );
+          if (attempt < retries - 1) {
+            // Exponential backoff
+            await new Promise((resolve) =>
+              setTimeout(resolve, Math.pow(2, attempt) * 500)
+            );
+          }
         }
       }
-    }
 
-    this._isSyncing = false;
-    logger.error("Failed to sync wallet with server after retries", lastError);
+      // All retries failed
+      logger.error(
+        "Failed to sync wallet with server after retries",
+        lastError
+      );
+      // In production, you might want to queue this for retry later
+      // or notify the user
+    } finally {
+      // Ensure flag is reset even if there's an unexpected error
+      this._isSyncing = false;
+    }
   }
 
-  private onDataChanged(coinsChanged: boolean = true): void {
+  private onDataChanged(
+    coinsChanged: boolean = true,
+    betChanged: boolean = false
+  ): void {
     PlayerDataStorage.save(this._coins, this._currentBet);
 
     if (coinsChanged) {
       EventManager.emit(GameConfig.EVENTS.COINS_CHANGED, this._coins);
     }
-    EventManager.emit(GameConfig.EVENTS.BET_CHANGED, this._currentBet);
+
+    if (betChanged) {
+      EventManager.emit(GameConfig.EVENTS.BET_CHANGED, this._currentBet);
+    }
   }
 }

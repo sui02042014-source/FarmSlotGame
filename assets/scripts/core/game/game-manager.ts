@@ -77,11 +77,16 @@ export class GameManager extends Component {
   }
 
   protected async onLoad(): Promise<void> {
-    // Check if already initializing or initialized
-    if (GameManager.instance || GameManager.isInitializing) {
-      logger.warn(
-        "GameManager already exists or is initializing. Destroying duplicate."
-      );
+    // Check if already initialized
+    if (GameManager.instance) {
+      logger.warn("GameManager already exists. Destroying duplicate.");
+      this.node.destroy();
+      return;
+    }
+
+    // Check if already initializing
+    if (GameManager.isInitializing) {
+      logger.warn("GameManager is initializing. Destroying duplicate.");
       this.node.destroy();
       return;
     }
