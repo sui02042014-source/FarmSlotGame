@@ -11,7 +11,14 @@ import { AssetBundleManager, BundleName } from "../assets/asset-bundle-manager";
 import { GameConfig } from "../../data/config/game-config";
 import { SymbolData } from "../../data/models/symbol-data";
 import { SpriteFrameCache } from "../../utils/helpers/sprite-frame-cache";
+import { Logger } from "../../utils/helpers/logger";
+
 const { ccclass } = _decorator;
+const logger = Logger.create("ReelContainer");
+
+const CONTAINER_CONSTANTS = {
+  BLUR_SUFFIX: "_2",
+} as const;
 
 export interface SymbolContainer {
   node: Node;
@@ -28,16 +35,61 @@ export class ReelContainer extends Component {
   private _pool: Node[] = [];
   private _useBlur: boolean = false;
 
-  // ==========================================
-  // Symbol Container Creation
-  // ==========================================
+  private spriteFrameCache!: SpriteFrameCache;
+  private assetBundleManager!: AssetBundleManager;
 
+  protected onLoad(): void {
+    this.spriteFrameCache = SpriteFrameCache.getInstance();
+    this.assetBundleManager = AssetBundleManager.getInstance();
+  }
+
+  private loadSpriteFrames(symbolId: string): {
+    normal: SpriteFrame | null;
+    blur: SpriteFrame | null;
+  } {
+    const symbolData = SymbolData.getSymbol(symbolId);
+    const spritePath = symbolData?.spritePath || symbolId;
+
+    const normal = this.spriteFrameCache.getSpriteFrame(
+      BundleName.SYMBOLS,
+      spritePath
+    );
+    const blur = this.spriteFrameCache.getSpriteFrame(
+      BundleName.SYMBOLS,
+      `${spritePath}${CONTAINER_CONSTANTS.BLUR_SUFFIX}`
+    );
+
+    return { normal, blur };
+  }
+
+  /**
+   * Return a node to the pool for reuse
+   */
+  private returnToPool(node: Node | null): void {
+    if (node?.isValid) {
+      node.active = false;
+      this._pool.push(node);
+    }
+  }
+
+  /**
+   * Get a node from pool or create new one
+   */
   private getFromPool(symbolId: string): Node {
-    let node: Node;
-    if (this._pool.length > 0) {
-      node = this._pool.pop()!;
-      node.name = `Symbol_${symbolId}`;
-    } else {
+    let node: Node | undefined;
+
+    // Try to get valid node from pool
+    while (this._pool.length > 0) {
+      const pooledNode = this._pool.pop()!;
+      if (pooledNode?.isValid) {
+        node = pooledNode;
+        node.name = `Symbol_${symbolId}`;
+        break;
+      }
+    }
+
+    // Create new node if no valid node in pool
+    if (!node) {
       node = new Node(`Symbol_${symbolId}`);
       node.layer = this.node.layer;
       node
@@ -47,9 +99,64 @@ export class ReelContainer extends Component {
       sprite.sizeMode = Sprite.SizeMode.CUSTOM;
       sprite.trim = false;
     }
+
     node.active = true;
     return node;
   }
+
+  /**
+   * Initialize spine animation for a container
+   */
+  private async initSpineForContainer(
+    container: SymbolContainer,
+    path: string
+  ): Promise<void> {
+    try {
+      const skeletonData = await this.assetBundleManager.load(
+        BundleName.SYMBOLS,
+        path,
+        sp.SkeletonData
+      );
+
+      if (!skeletonData) {
+        logger.warn(`Failed to load skeleton data at ${path}`);
+        return;
+      }
+
+      if (!container.node.isValid) {
+        logger.warn(`Container node is invalid for skeleton at ${path}`);
+        return;
+      }
+
+      let spine = container.node.getComponent(sp.Skeleton);
+      if (!spine) {
+        spine = container.node.addComponent(sp.Skeleton);
+      }
+
+      spine.skeletonData = skeletonData;
+      spine.premultipliedAlpha = true;
+      spine.node.active = false;
+      container.spine = spine;
+    } catch (error) {
+      logger.warn(`Failed to load spine animation at ${path}:`, error);
+    }
+  }
+
+  /**
+   * Apply blur state to a container's sprite
+   */
+  private applyBlurStateToContainer(container: SymbolContainer): void {
+    if (!container || !container.sprite) {
+      return;
+    }
+    container.sprite.spriteFrame = this._useBlur
+      ? container.blurSpriteFrame || container.normalSpriteFrame
+      : container.normalSpriteFrame;
+  }
+
+  // ==========================================
+  // Public API - Container Creation
+  // ==========================================
 
   public async createSymbolContainer(
     symbolId: string
@@ -59,19 +166,12 @@ export class ReelContainer extends Component {
       node = this.getFromPool(symbolId);
       const sprite = node.getComponent(Sprite)!;
 
-      const symbolData = SymbolData.getSymbol(symbolId);
-      const spritePath = symbolData?.spritePath || symbolId;
-
-      const cache = SpriteFrameCache.getInstance();
-      const normalSF = cache.getSpriteFrame(BundleName.SYMBOLS, spritePath);
-      const blurSF = cache.getSpriteFrame(
-        BundleName.SYMBOLS,
-        `${spritePath}_2`
-      );
+      const { normal: normalSF, blur: blurSF } =
+        this.loadSpriteFrames(symbolId);
 
       if (!normalSF) {
-        node.active = false;
-        this._pool.push(node);
+        logger.warn(`Failed to load sprite frame for symbol: ${symbolId}`);
+        this.returnToPool(node);
         return null;
       }
 
@@ -85,90 +185,74 @@ export class ReelContainer extends Component {
         blurSpriteFrame: blurSF,
       };
 
+      // Initialize spine animation asynchronously if available
+      const symbolData = SymbolData.getSymbol(symbolId);
       if (symbolData?.animationPath) {
-        this.initSpineForContainer(container, symbolData.animationPath);
+        this.initSpineForContainer(container, symbolData.animationPath).catch(
+          (error) => {
+            logger.warn(
+              `Spine init failed for ${symbolId}: ${symbolData.animationPath}`,
+              error
+            );
+          }
+        );
       }
 
       return container;
     } catch (error) {
-      if (node?.isValid) {
-        node.active = false;
-        this._pool.push(node);
-      }
+      logger.error(`Error creating symbol container for ${symbolId}:`, error);
+      this.returnToPool(node);
       return null;
     }
   }
 
-  private async initSpineForContainer(
-    container: SymbolContainer,
-    path: string
-  ): Promise<void> {
-    try {
-      const assetManager = AssetBundleManager.getInstance();
-      const skeletonData = await assetManager.load(
-        BundleName.SYMBOLS,
-        path,
-        sp.SkeletonData
-      );
-
-      if (skeletonData && container.node.isValid) {
-        let spine = container.node.getComponent(sp.Skeleton);
-        if (!spine) {
-          spine = container.node.addComponent(sp.Skeleton);
-        }
-        spine.skeletonData = skeletonData;
-        spine.premultipliedAlpha = true;
-        spine.node.active = false;
-        container.spine = spine;
-      }
-    } catch (error) {
-      console.warn(
-        `[ReelContainer] Failed to load spine animation at ${path}:`,
-        error
-      );
-    }
-  }
-
+  /**
+   * Update an existing container with a new symbol
+   */
   public updateSymbolContainer(
     container: SymbolContainer,
     newId: string
   ): void {
+    if (!container || !container.node?.isValid) {
+      logger.warn("Invalid container in updateSymbolContainer");
+      return;
+    }
+
     if (container.symbolId === newId) {
       this.applyBlurStateToContainer(container);
       return;
     }
 
-    const cache = SpriteFrameCache.getInstance();
     container.symbolId = newId;
 
-    const symbolData = SymbolData.getSymbol(newId);
-    const spritePath = symbolData?.spritePath || newId;
-
-    container.normalSpriteFrame = cache.getSpriteFrame(
-      BundleName.SYMBOLS,
-      spritePath
-    );
-    container.blurSpriteFrame = cache.getSpriteFrame(
-      BundleName.SYMBOLS,
-      `${spritePath}_2`
-    );
+    const { normal, blur } = this.loadSpriteFrames(newId);
+    container.normalSpriteFrame = normal;
+    container.blurSpriteFrame = blur;
 
     this.applyBlurStateToContainer(container);
 
+    // Hide existing spine animation
     if (container.spine) {
       container.spine.node.active = false;
     }
 
+    // Load new spine animation if available
+    const symbolData = SymbolData.getSymbol(newId);
     if (symbolData?.animationPath) {
-      this.initSpineForContainer(container, symbolData.animationPath);
+      this.initSpineForContainer(container, symbolData.animationPath).catch(
+        (error) => {
+          logger.warn(
+            `Spine init failed for ${newId}: ${symbolData.animationPath}`,
+            error
+          );
+        }
+      );
     }
   }
 
-  private applyBlurStateToContainer(container: SymbolContainer): void {
-    container.sprite.spriteFrame = this._useBlur
-      ? container.blurSpriteFrame || container.normalSpriteFrame
-      : container.normalSpriteFrame;
-  }
+  // ==========================================
+  // Public API - Blur Effects
+  // ==========================================
 
   public setUseBlur(useBlur: boolean): void {
     this._useBlur = useBlur;
@@ -178,7 +262,7 @@ export class ReelContainer extends Component {
   }
 
   // ==========================================
-  // Container Access
+  // Public API - Container Management
   // ==========================================
 
   public getAllContainers(): SymbolContainer[] {
@@ -186,40 +270,47 @@ export class ReelContainer extends Component {
   }
 
   public addContainer(container: SymbolContainer): void {
+    if (!container || !container.node?.isValid) {
+      logger.warn("Attempted to add invalid container");
+      return;
+    }
     this.containers.push(container);
   }
 
+  public getSortedContainers(): SymbolContainer[] {
+    return this.containers
+      .filter((c) => c?.node?.isValid)
+      .sort((a, b) => b.node.position.y - a.node.position.y);
+  }
+
+  // ==========================================
+  // Public API - Cleanup
+  // ==========================================
+
   public clearContainers(): void {
     this.containers.forEach((container) => {
-      if (container.node?.isValid) {
+      if (container?.node?.isValid) {
         container.node.active = false;
         container.node.removeFromParent();
         this._pool.push(container.node);
       }
     });
-    this.containers = [];
+    this.containers.length = 0;
   }
 
   public destroyAllContainers(): void {
     this.containers.forEach((container) => {
-      if (container.node?.isValid) {
+      if (container?.node?.isValid) {
         container.node.destroy();
       }
     });
-    this.containers = [];
+    this.containers.length = 0;
 
-    // Destroy all pooled nodes
     this._pool.forEach((node) => {
       if (node?.isValid) {
         node.destroy();
       }
     });
-    this._pool = [];
-  }
-
-  public getSortedContainers(): SymbolContainer[] {
-    return [...this.containers].sort(
-      (a, b) => b.node.position.y - a.node.position.y
-    );
+    this._pool.length = 0;
   }
 }
