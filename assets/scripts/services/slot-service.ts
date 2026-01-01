@@ -18,18 +18,26 @@ export class SlotService {
   }
 
   public async fetchSpinResult(request: ISpinRequest): Promise<SpinResult> {
-    return new Promise((resolve) => {
-      const latency = 500 + Math.random() * 1000;
+    const result = SlotLogic.calculateSpinResult(
+      GameConfig.REEL_COUNT,
+      GameConfig.SYMBOL_PER_REEL,
+      request.bet
+    );
 
-      setTimeout(() => {
-        const result = SlotLogic.calculateSpinResult(
-          GameConfig.REEL_COUNT,
-          GameConfig.SYMBOL_PER_REEL,
-          request.bet
-        );
-        resolve(result);
-      }, latency);
-    });
+    // Simulate network latency if enabled (for testing)
+    if (GameConfig.NETWORK.ENABLE_FAKE_LATENCY) {
+      const latency =
+        GameConfig.NETWORK.MIN_LATENCY_MS +
+        Math.random() *
+          (GameConfig.NETWORK.MAX_LATENCY_MS -
+            GameConfig.NETWORK.MIN_LATENCY_MS);
+
+      return new Promise((resolve) => {
+        setTimeout(() => resolve(result), latency);
+      });
+    }
+
+    return result;
   }
 
   public async syncPlayerData(coins: number): Promise<boolean> {

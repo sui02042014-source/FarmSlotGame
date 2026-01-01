@@ -89,4 +89,40 @@ export class AssetBundleManager {
   public getBundle(bundleName: string): AssetManager.Bundle | null {
     return this._loadedBundles.get(bundleName) || null;
   }
+
+  /**
+   * Release a specific bundle and all its assets
+   */
+  public releaseBundle(bundleName: string): void {
+    const bundle = this._loadedBundles.get(bundleName);
+    if (bundle) {
+      bundle.releaseAll();
+      assetManager.removeBundle(bundle);
+      this._loadedBundles.delete(bundleName);
+      console.log(`[AssetBundleManager] Released bundle: ${bundleName}`);
+    }
+  }
+
+  /**
+   * Release all loaded bundles
+   */
+  public releaseAll(): void {
+    this._loadedBundles.forEach((bundle, name) => {
+      bundle.releaseAll();
+      assetManager.removeBundle(bundle);
+      console.log(`[AssetBundleManager] Released bundle: ${name}`);
+    });
+    this._loadedBundles.clear();
+    this._loadingPromises.clear();
+  }
+
+  /**
+   * Get memory usage statistics
+   */
+  public getStats(): { bundleCount: number; bundleNames: string[] } {
+    return {
+      bundleCount: this._loadedBundles.size,
+      bundleNames: Array.from(this._loadedBundles.keys()),
+    };
+  }
 }

@@ -1,4 +1,5 @@
 import { _decorator, Component, Node, instantiate, Prefab, game } from "cc";
+import { BaseModal } from "./base-modal";
 const { ccclass, property } = _decorator;
 
 @ccclass("ModalManager")
@@ -134,7 +135,7 @@ export class ModalManager extends Component {
 
     this.activeModals.set(modalName, modalNode);
 
-    const modalComponent = modalNode.getComponent("BaseModal") as any;
+    const modalComponent = modalNode.getComponent(BaseModal);
     if (modalComponent) {
       modalComponent.setData(data);
       modalComponent.show(() => {
@@ -142,6 +143,9 @@ export class ModalManager extends Component {
         this.onModalClosed(modalName);
       });
     } else {
+      console.error(
+        `[ModalManager] Modal ${modalName} does not have BaseModal component`
+      );
       this.isShowingModal = false;
       this.processQueue();
     }
@@ -150,10 +154,13 @@ export class ModalManager extends Component {
   public closeModal(modalName: string): void {
     const modalNode = this.activeModals.get(modalName);
     if (modalNode && modalNode.isValid) {
-      const modalComponent = modalNode.getComponent("BaseModal") as any;
+      const modalComponent = modalNode.getComponent(BaseModal);
       if (modalComponent) {
         modalComponent.hide();
       } else {
+        console.error(
+          `[ModalManager] Modal ${modalName} does not have BaseModal component`
+        );
         modalNode.destroy();
         this.activeModals.delete(modalName);
         this.onModalClosed(modalName);

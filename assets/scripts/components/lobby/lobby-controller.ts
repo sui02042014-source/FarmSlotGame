@@ -101,7 +101,9 @@ export class LobbyController extends Component {
     try {
       await this.loadAudioBundle();
       await this.playLobbyMusic();
-    } catch (error) {}
+    } catch (error) {
+      console.error("[LobbyController] Failed to initialize audio:", error);
+    }
   }
 
   private async loadAudioBundle(): Promise<void> {
@@ -119,7 +121,13 @@ export class LobbyController extends Component {
   private playSFX(soundName: string): void {
     const audioManager = AudioManager.getInstance();
     if (audioManager) {
-      audioManager.playSFX(soundName).catch(() => {});
+      audioManager.playSFX(soundName).catch((error) => {
+        console.error(
+          "[LobbyController] Failed to play SFX:",
+          soundName,
+          error
+        );
+      });
     }
   }
 

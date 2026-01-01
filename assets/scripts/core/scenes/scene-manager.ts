@@ -51,10 +51,13 @@ export class SceneManager {
       BundleName.GAME
     );
     gameBundle?.loadScene(`scene/${SceneName.GAME}`, (err, sceneAsset) => {
-      if (!err) {
-        director.runScene(sceneAsset);
+      if (err) {
+        console.error("[SceneManager] Failed to load game scene:", err);
         this._isLoading = false;
+        return;
       }
+      director.runScene(sceneAsset);
+      this._isLoading = false;
     });
   }
 
@@ -62,7 +65,10 @@ export class SceneManager {
     if (this._isLoading) return;
     this._isLoading = true;
 
-    director.loadScene(SceneName.LOBBY, () => {
+    director.loadScene(SceneName.LOBBY, (err) => {
+      if (err) {
+        console.error("[SceneManager] Failed to load lobby scene:", err);
+      }
       this._isLoading = false;
     });
   }
@@ -81,12 +87,16 @@ export class SceneManager {
 
     if (gameBundle) {
       gameBundle.loadScene(`scene/${SceneName.LOADING}`, (err, sceneAsset) => {
-        if (!err) {
-          director.runScene(sceneAsset);
+        if (err) {
+          console.error("[SceneManager] Failed to load loading scene:", err);
+          this._isLoading = false;
+          return;
         }
+        director.runScene(sceneAsset);
         this._isLoading = false;
       });
     } else {
+      console.error("[SceneManager] Game bundle not available");
       this._isLoading = false;
     }
   }

@@ -59,7 +59,9 @@ export class ToastManager extends Component {
       if (!toastNode) return;
 
       this.displayToast(toastNode, message, duration);
-    } catch (error) {}
+    } catch (error) {
+      console.error("[ToastManager] Failed to show toast:", message, error);
+    }
   }
 
   private initializeSingleton(): void {
@@ -74,13 +76,20 @@ export class ToastManager extends Component {
 
     ToastManager.instance = this;
     game.addPersistRootNode(this.node);
-    this.ensurePrefabLoaded().catch(() => {});
+    this.ensurePrefabLoaded().catch((error) => {
+      console.error("[ToastManager] Failed to load prefab during init:", error);
+    });
   }
 
   private replaceSingleton(): void {
     ToastManager.instance = this;
     game.addPersistRootNode(this.node);
-    this.ensurePrefabLoaded().catch(() => {});
+    this.ensurePrefabLoaded().catch((error) => {
+      console.error(
+        "[ToastManager] Failed to load prefab during replacement:",
+        error
+      );
+    });
   }
 
   private cleanup(): void {
@@ -230,6 +239,7 @@ export class ToastManager extends Component {
 
       return prefab;
     } catch (error) {
+      console.error("[ToastManager] Failed to load prefab from bundle:", error);
       return null;
     }
   }

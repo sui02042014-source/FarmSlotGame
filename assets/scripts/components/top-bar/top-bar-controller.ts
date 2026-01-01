@@ -25,6 +25,8 @@ export class TopBarController extends Component {
 
   private _lastClickTime: number = 0;
   private readonly CLICK_DEBOUNCE = 200; // ms
+  private _retryCount: number = 0;
+  private readonly MAX_RETRY_COUNT = 50; // Max 5 seconds (50 * 0.1s)
 
   protected onLoad(): void {
     if (this.lobbyButton) {
@@ -139,10 +141,18 @@ export class TopBarController extends Component {
   private updatePauseButtonUI(): void {
     const gameManager = GameManager.getInstance();
     if (!gameManager) {
-      this.scheduleOnce(() => this.updatePauseButtonUI(), 0.1);
+      if (this._retryCount < this.MAX_RETRY_COUNT) {
+        this._retryCount++;
+        this.scheduleOnce(() => this.updatePauseButtonUI(), 0.1);
+      } else {
+        console.error(
+          "[TopBarController] GameManager not available after max retries"
+        );
+      }
       return;
     }
 
+    this._retryCount = 0; // Reset on success
     if (!this.pauseLabel) return;
 
     const isPaused = gameManager.isGamePaused();

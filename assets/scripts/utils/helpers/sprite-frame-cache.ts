@@ -59,5 +59,37 @@ export class SpriteFrameCache {
 
   public clear(): void {
     this._cache.clear();
+    console.log("[SpriteFrameCache] Cache cleared");
+  }
+
+  /**
+   * Clear cache for a specific bundle
+   */
+  public clearBundle(bundleName: string): void {
+    const keysToDelete: string[] = [];
+    this._cache.forEach((_, key) => {
+      if (key.startsWith(`${bundleName}/`)) {
+        keysToDelete.push(key);
+      }
+    });
+    keysToDelete.forEach((key) => this._cache.delete(key));
+    console.log(
+      `[SpriteFrameCache] Cleared ${keysToDelete.length} frames from bundle: ${bundleName}`
+    );
+  }
+
+  /**
+   * Get cache statistics
+   */
+  public getStats(): { cachedFrames: number; bundles: string[] } {
+    const bundleSet = new Set<string>();
+    this._cache.forEach((_, key) => {
+      const bundle = key.split("/")[0];
+      bundleSet.add(bundle);
+    });
+    return {
+      cachedFrames: this._cache.size,
+      bundles: Array.from(bundleSet),
+    };
   }
 }

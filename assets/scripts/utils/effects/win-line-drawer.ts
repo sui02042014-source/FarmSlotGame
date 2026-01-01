@@ -196,7 +196,7 @@ export class WinLineDrawer extends Component {
     return points;
   }
 
-  private async animateLineDraw(
+  private animateLineDraw(
     graphics: Graphics,
     points: Vec2[],
     color: Color
@@ -208,30 +208,23 @@ export class WinLineDrawer extends Component {
       fillColor.a = 100;
       graphics.fillColor = fillColor;
 
-      // Draw line segments progressively
       let currentSegment = 0;
       const totalSegments = points.length - 1;
       const segmentDuration = 0.15;
 
       const drawNextSegment = () => {
-        if (currentSegment >= totalSegments) {
-          resolve();
-          return;
-        }
+        if (!this.node?.isValid) return;
 
         const start = points[currentSegment];
         const end = points[currentSegment + 1];
 
-        // Draw with smooth curve
         if (currentSegment === 0) {
           graphics.moveTo(start.x, start.y);
           graphics.circle(start.x, start.y, 6);
           graphics.fill();
         }
 
-        // Draw bezier curve for smooth lines
         if (currentSegment > 0) {
-          const prev = points[currentSegment - 1];
           const controlX = (start.x + end.x) / 2;
           const controlY = start.y;
           graphics.bezierCurveTo(
@@ -251,7 +244,11 @@ export class WinLineDrawer extends Component {
         graphics.stroke();
 
         currentSegment++;
-        setTimeout(drawNextSegment, segmentDuration * 1000);
+        if (currentSegment < totalSegments) {
+          this.scheduleOnce(drawNextSegment, segmentDuration);
+        } else {
+          resolve();
+        }
       };
 
       drawNextSegment();

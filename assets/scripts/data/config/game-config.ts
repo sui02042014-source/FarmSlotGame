@@ -68,6 +68,12 @@ export class GameConfig {
     ACTIVE_FPS: 60,
   };
 
+  static readonly NETWORK = {
+    ENABLE_FAKE_LATENCY: false, // Set to true for testing
+    MIN_LATENCY_MS: 500,
+    MAX_LATENCY_MS: 1500,
+  };
+
   static readonly GAME_STATES = {
     IDLE: "idle",
     SPINNING: "spinning",

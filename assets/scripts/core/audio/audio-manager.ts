@@ -414,4 +414,27 @@ export class AudioManager extends Component {
     this._currentBGM = "";
     this._isSpinPlaying = false;
   }
+
+  // ==========================================
+  // Public API - Resource Management
+  // ==========================================
+
+  /**
+   * Clear all cached audio clips to free memory
+   */
+  public clearCache(): void {
+    this._audioCache.clear();
+    this._loadingPromises.clear();
+    console.log("[AudioManager] Audio cache cleared");
+  }
+
+  /**
+   * Get cache statistics
+   */
+  public getCacheStats(): { cachedClips: number; loadingClips: number } {
+    return {
+      cachedClips: this._audioCache.size,
+      loadingClips: this._loadingPromises.size,
+    };
+  }
 }

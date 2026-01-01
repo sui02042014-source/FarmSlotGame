@@ -117,54 +117,43 @@ export class CoinFlyEffect {
     const startPos = parentUITrans.convertToNodeSpaceAR(fromWorldPos);
     const endPos = parentUITrans.convertToNodeSpaceAR(toWorldPos);
 
-    let arrivedCount = 0;
+    const promises: Promise<void>[] = [];
 
     for (let i = 0; i < coinCount; i++) {
       const coin = this.coinPool.get(parent, coinSize);
-      const sprite = coin.getComponent(Sprite)!;
-      sprite.spriteFrame = sf;
-      sprite.color = Color.WHITE;
-
-      coin.setPosition(startPos);
-      coin.setScale(Vec3.ZERO);
-
-      const angle = math.randomRange(0, Math.PI * 2);
-      const dist = math.randomRange(scatterRadius * 0.4, scatterRadius);
-      const scatterPos = new Vec3(
-        startPos.x + Math.cos(angle) * dist,
-        startPos.y + Math.sin(angle) * dist,
-        0
-      );
-
+      // ... existing code ...
       const delay = i * stagger;
 
-      tween(coin)
-        .delay(delay)
-        .to(
-          scatterDuration,
-          {
-            position: scatterPos,
-            scale: new Vec3(coinScale, coinScale, 1),
-          },
-          { easing: "backOut" }
-        )
-        .to(
-          flyDuration,
-          {
-            position: endPos,
-            scale: new Vec3(coinScale * 0.5, coinScale * 0.5, 1),
-          },
-          { easing: "quartIn" }
-        )
-        .call(() => {
-          this.coinPool.release(coin);
-          arrivedCount++;
-          if (arrivedCount >= coinCount && onAllArrive) {
-            onAllArrive();
-          }
-        })
-        .start();
+      const p = new Promise<void>((resolve) => {
+        tween(coin)
+          .delay(delay)
+          .to(
+            scatterDuration,
+            {
+              position: scatterPos,
+              scale: new Vec3(coinScale, coinScale, 1),
+            },
+            { easing: "backOut" }
+          )
+          .to(
+            flyDuration,
+            {
+              position: endPos,
+              scale: new Vec3(coinScale * 0.5, coinScale * 0.5, 1),
+            },
+            { easing: "quartIn" }
+          )
+          .call(() => {
+            this.coinPool.release(coin);
+            resolve();
+          })
+          .start();
+      });
+      promises.push(p);
     }
+
+    await Promise.all(promises);
+    if (onAllArrive) onAllArrive();
   }
 
   public static clearPool(): void {

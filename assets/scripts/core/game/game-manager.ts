@@ -301,7 +301,7 @@ export class GameManager extends Component {
     }
 
     if (this.playerCoins < this.currentBet) {
-      ToastManager.getInstance()?.show("Not enough coins!");
+      this.handleInsufficientCoins();
       return;
     }
 
@@ -537,5 +537,31 @@ export class GameManager extends Component {
 
   public isGamePaused(): boolean {
     return this.isPaused;
+  }
+
+  // ==========================================
+  // Insufficient Coins Handler
+  // ==========================================
+
+  private handleInsufficientCoins(): void {
+    const toastManager = ToastManager.getInstance();
+    const modalManager = ModalManager.getInstance();
+
+    // Give player some free coins to continue playing
+    const freeCoins = GameConfig.DEFAULT_COINS * 0.5; // 50% of default coins
+
+    if (toastManager) {
+      toastManager.show(
+        `Not enough coins! Added ${freeCoins.toFixed(2)} free coins!`,
+        3.0
+      );
+    }
+
+    this.addCoins(freeCoins);
+
+    // Log for analytics/debugging
+    console.log(
+      `[GameManager] Player received ${freeCoins} free coins (balance was ${this.playerCoins})`
+    );
   }
 }
