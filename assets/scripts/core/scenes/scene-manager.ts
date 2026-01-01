@@ -3,6 +3,7 @@ import { LoadingScreen } from "../../components/loading-screen/loading-screen";
 import { AssetBundleManager, BundleName } from "../assets/asset-bundle-manager";
 
 export enum SceneName {
+  LOBBY = "LobbyScene",
   LOADING = "LoadingScene",
   GAME = "GameScene",
 }
@@ -61,8 +62,32 @@ export class SceneManager {
     if (this._isLoading) return;
     this._isLoading = true;
 
-    director.loadScene(SceneName.LOADING, () => {
+    director.loadScene(SceneName.LOBBY, () => {
       this._isLoading = false;
     });
+  }
+
+  public async loadGameSceneFromLobby(): Promise<void> {
+    if (this._isLoading) return;
+    this._isLoading = true;
+
+    const manager = AssetBundleManager.getInstance();
+    let gameBundle = manager.getBundle(BundleName.GAME);
+
+    if (!gameBundle) {
+      await manager.loadBundle(BundleName.GAME);
+      gameBundle = manager.getBundle(BundleName.GAME);
+    }
+
+    if (gameBundle) {
+      gameBundle.loadScene(`scene/${SceneName.LOADING}`, (err, sceneAsset) => {
+        if (!err) {
+          director.runScene(sceneAsset);
+        }
+        this._isLoading = false;
+      });
+    } else {
+      this._isLoading = false;
+    }
   }
 }

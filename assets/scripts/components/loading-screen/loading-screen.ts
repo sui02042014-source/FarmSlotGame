@@ -22,9 +22,9 @@ export class LoadingScreen extends Component {
   @property(Sprite) loadingBarSprite: Sprite = null!;
   @property(Label) progressLabel: Label = null!;
   @property(Label) messageLabel: Label = null!;
-  @property(Node) playButton: Node = null!;
 
   @property smoothingSpeed: number = 0.1;
+  @property autoTransitionDelay: number = 0.5;
 
   private _loadingBarFrames: SpriteFrame[] = [];
   private _targetProgress: number = 0;
@@ -33,10 +33,6 @@ export class LoadingScreen extends Component {
   private _isFinished: boolean = false;
 
   protected onLoad(): void {
-    if (this.playButton) {
-      this.playButton.active = false;
-      this.playButton.setScale(Vec3.ZERO);
-    }
     this.progressLabel.string = "0%";
   }
 
@@ -125,45 +121,15 @@ export class LoadingScreen extends Component {
 
   private onLoadDataFinished() {
     this._isFinished = true;
-    if (this.playButton) {
-      this.messageLabel.string = "READY TO FARM!";
-      this.playButtonAnimationShow();
-    } else {
-      this.onUserClickPlay();
-    }
+    this.messageLabel.string = "READY TO FARM!";
+
+    // Auto-transition to game scene after a short delay
+    this.scheduleOnce(() => {
+      this.autoTransitionToGame();
+    }, this.autoTransitionDelay);
   }
 
-  // ==========================================
-  // BUTTON ANIMATIONS
-  // ==========================================
-
-  private playButtonAnimationShow() {
-    this.playButton.active = true;
-    this.playButton.setScale(Vec3.ZERO);
-
-    tween(this.playButton)
-      .to(0.5, { scale: new Vec3(1, 1, 1) }, { easing: "backOut" })
-      .call(() => {
-        this.playButtonAnimationPulse();
-      })
-      .start();
-  }
-
-  private playButtonAnimationPulse() {
-    tween(this.playButton)
-      .to(0.8, { scale: new Vec3(1.1, 1.1, 1) }, { easing: "sineInOut" })
-      .to(0.8, { scale: new Vec3(1, 1, 1) }, { easing: "sineInOut" })
-      .union()
-      .repeatForever()
-      .start();
-  }
-
-  public onUserClickPlay() {
-    const btn = this.playButton.getComponent("cc.Button") as any;
-    if (btn) btn.interactable = false;
-
-    tween(this.playButton).stop();
-
+  private autoTransitionToGame() {
     if (this._onComplete) {
       this._onComplete();
       this._onComplete = null;
