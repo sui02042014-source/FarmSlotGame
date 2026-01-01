@@ -72,8 +72,8 @@ export class AudioManager extends Component {
   }
 
   protected onLoad(): void {
-    if (AudioManager._instance) {
-      this.cleanup();
+    if (AudioManager._instance && AudioManager._instance !== this) {
+      logger.warn("Duplicate AudioManager detected, destroying...");
       this.node.destroy();
       return;
     }
@@ -97,19 +97,26 @@ export class AudioManager extends Component {
   // ==========================================
 
   private init(): void {
-    this.cacheManagers();
+    if (!this.cacheManagers()) {
+      logger.error(
+        "Failed to initialize AudioManager: AssetBundleManager not available"
+      );
+      return;
+    }
+
     this.initAudioSources();
     this.loadSettings();
     this.updateVolumes();
   }
 
-  private cacheManagers(): void {
+  private cacheManagers(): boolean {
     const bundleManager = AssetBundleManager.getInstance();
     if (!bundleManager) {
       logger.error("AssetBundleManager not initialized");
-      return;
+      return false;
     }
     this._assetBundleManager = bundleManager;
+    return true;
   }
 
   private initAudioSources(): void {
@@ -145,6 +152,7 @@ export class AudioManager extends Component {
   // ==========================================
 
   public async playBGM(path: string): Promise<void> {
+    if (!this.isAudioSourceValid(this._bgmSource)) return;
     if (!this.canPlayMusic()) return;
     if (this._currentBGM === path && this._bgmSource.playing) return;
 
@@ -153,6 +161,7 @@ export class AudioManager extends Component {
   }
 
   public stopBGM(): void {
+    if (!this._bgmSource) return;
     this.stopSource(this._bgmSource, true);
     this._currentBGM = "";
   }
@@ -177,6 +186,7 @@ export class AudioManager extends Component {
   // ==========================================
 
   public async playSpinSound(path: string): Promise<void> {
+    if (!this.isAudioSourceValid(this._loopingSfxSource)) return;
     if (!this.canPlaySound()) return;
     if (this._isLoopingSfxPlaying && this._loopingSfxSource.playing) return;
 
@@ -185,6 +195,7 @@ export class AudioManager extends Component {
   }
 
   public stopSpinSound(): void {
+    if (!this._loopingSfxSource) return;
     this.stopSource(this._loopingSfxSource, true);
     this._isLoopingSfxPlaying = false;
   }
@@ -208,14 +219,17 @@ export class AudioManager extends Component {
   public setMusicEnabled(enabled: boolean): void {
     this._settings.isMusicEnabled = enabled;
     this.saveToStorage(STORAGE_KEYS.MUSIC_ENABLED, enabled);
-    enabled ? this.resumeBGM() : this.pauseBGM();
+
+    if (this._bgmSource) {
+      enabled ? this.resumeBGM() : this.pauseBGM();
+    }
   }
 
   public setSoundEnabled(enabled: boolean): void {
     this._settings.isSoundEnabled = enabled;
     this.saveToStorage(STORAGE_KEYS.SOUND_ENABLED, enabled);
 
-    if (!enabled) {
+    if (!enabled && this._loopingSfxSource) {
       this.stopSpinSound();
     }
   }
@@ -275,12 +289,14 @@ export class AudioManager extends Component {
   }
 
   private pauseBGM(): void {
+    if (!this._bgmSource) return;
     if (this.isAudioSourceValid(this._bgmSource) && this._bgmSource.playing) {
       this._bgmSource.pause();
     }
   }
 
   private resumeBGM(): void {
+    if (!this._bgmSource) return;
     if (
       this.isAudioSourceValid(this._bgmSource) &&
       this._bgmSource.clip &&
@@ -292,12 +308,17 @@ export class AudioManager extends Component {
   }
 
   private updateVolumes(): void {
-    if (!this.isAudioSourceValid(this._bgmSource)) return;
-
     const muteFactor = this._settings.isMuted ? 0 : 1;
-    this._bgmSource.volume = this._settings.bgmVolume * muteFactor;
-    this._sfxSource.volume = this._settings.sfxVolume * muteFactor;
-    this._loopingSfxSource.volume = this._settings.sfxVolume * muteFactor;
+
+    if (this.isAudioSourceValid(this._bgmSource)) {
+      this._bgmSource.volume = this._settings.bgmVolume * muteFactor;
+    }
+    if (this.isAudioSourceValid(this._sfxSource)) {
+      this._sfxSource.volume = this._settings.sfxVolume * muteFactor;
+    }
+    if (this.isAudioSourceValid(this._loopingSfxSource)) {
+      this._loopingSfxSource.volume = this._settings.sfxVolume * muteFactor;
+    }
   }
 
   // ==========================================
@@ -373,9 +394,15 @@ export class AudioManager extends Component {
   // ==========================================
 
   private cleanup(): void {
-    this.stopSource(this._bgmSource, true);
-    this.stopSource(this._sfxSource, false);
-    this.stopSource(this._loopingSfxSource, true);
+    if (this._bgmSource) {
+      this.stopSource(this._bgmSource, true);
+    }
+    if (this._sfxSource) {
+      this.stopSource(this._sfxSource, false);
+    }
+    if (this._loopingSfxSource) {
+      this.stopSource(this._loopingSfxSource, true);
+    }
 
     this._audioCache.clear();
     this._loadingPromises.clear();

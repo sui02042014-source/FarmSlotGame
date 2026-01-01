@@ -23,7 +23,7 @@
         "__id__": 42
       },
       {
-        "__id__": 45
+        "__id__": 44
       },
       {
         "__id__": 39
@@ -61,7 +61,7 @@
     },
     "autoReleaseAssets": false,
     "_globals": {
-      "__id__": 47
+      "__id__": 46
     },
     "_id": "dc53e8c6-6193-42e1-9796-eba9035cc293"
   },
@@ -1703,9 +1703,6 @@
     "_components": [
       {
         "__id__": 43
-      },
-      {
-        "__id__": 44
       }
     ],
     "_prefab": null,
@@ -1748,21 +1745,7 @@
     },
     "_enabled": true,
     "__prefab": null,
-    "_id": "d2uSJJXiJBBoVJaTwdpc+y"
-  },
-  {
-    "__type__": "a8188oyrixATrCdM76GQdDu",
-    "_name": "",
-    "_objFlags": 0,
-    "node": {
-      "__id__": 42
-    },
-    "_enabled": true,
-    "__prefab": null,
-    "persistId": "persist_node",
-    "destroyOnSceneLoad": false,
-    "destroyOnScene": "",
-    "_id": "aaQLXu4v5Hcao03AJ4BmKq"
+    "_id": "b2nZ5rNVBISKbzaTFlUXdc"
   },
   {
     "__type__": "cc.Node",
@@ -1776,7 +1759,7 @@
     "_active": true,
     "_components": [
       {
-        "__id__": 46
+        "__id__": 45
       }
     ],
     "_prefab": null,
@@ -1815,12 +1798,12 @@
     "_objFlags": 0,
     "__editorExtras__": {},
     "node": {
-      "__id__": 45
+      "__id__": 44
     },
     "_enabled": true,
     "__prefab": null,
     "modalContainer": {
-      "__id__": 45
+      "__id__": 44
     },
     "winModalPrefab": null,
     "paytableModalPrefab": null,
@@ -1833,28 +1816,28 @@
   {
     "__type__": "cc.SceneGlobals",
     "ambient": {
-      "__id__": 48
+      "__id__": 47
     },
     "shadows": {
-      "__id__": 49
+      "__id__": 48
     },
     "_skybox": {
-      "__id__": 50
+      "__id__": 49
     },
     "fog": {
-      "__id__": 51
+      "__id__": 50
     },
     "octree": {
-      "__id__": 52
+      "__id__": 51
     },
     "skin": {
-      "__id__": 53
+      "__id__": 52
     },
     "lightProbeInfo": {
-      "__id__": 54
+      "__id__": 53
     },
     "postSettings": {
-      "__id__": 55
+      "__id__": 54
     },
     "bakedWithStationaryMainLight": false,
     "bakedWithHighpLightmap": false
