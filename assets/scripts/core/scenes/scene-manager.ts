@@ -1,6 +1,8 @@
-import { director } from "cc";
+import { director, SpriteFrame } from "cc";
 import { LoadingScreen } from "../../components/loading-screen/loading-screen";
 import { AssetBundleManager, BundleName } from "../assets/asset-bundle-manager";
+import { SpriteFrameCache } from "../../utils/helpers/sprite-frame-cache";
+import { SymbolPreloader } from "../../utils/helpers/symbol-preloader";
 import { Logger } from "../../utils/helpers/logger";
 
 const logger = Logger.create("SceneManager");
@@ -13,7 +15,12 @@ export enum SceneName {
 
 const SCENE_CONSTANTS = {
   SCENE_PATH_PREFIX: "scene/",
-  TOTAL_LOADING_STEPS: 1, // bundles + preload
+  LOADING_STEPS: {
+    BUNDLES: 0.4, // 40% - Load 3 bundles
+    SYMBOL_FRAMES: 0.2, // 20% - Load symbol frames
+    PRELOAD_SYMBOLS: 0.3, // 30% - Preload all symbols
+    PRELOAD_SCENE: 0.1, // 10% - Preload game scene
+  },
 } as const;
 
 export class SceneManager {
@@ -76,12 +83,44 @@ export class SceneManager {
   private async loadAllBundles(loadingUI: LoadingScreen | null): Promise<void> {
     if (!this.bundleManager) return;
 
-    const bundles = [BundleName.GAME, BundleName.SYMBOLS, BundleName.AUDIO];
-    const totalSteps = bundles.length + SCENE_CONSTANTS.TOTAL_LOADING_STEPS;
+    let currentProgress = 0;
 
-    for (let i = 0; i < bundles.length; i++) {
-      await this.bundleManager.loadBundle(bundles[i]);
-      loadingUI?.updateProgress((i + 1) / totalSteps);
+    // Step 1: Load all bundles in parallel (0 → 40%)
+    logger.info("Loading asset bundles...");
+    await Promise.all([
+      this.bundleManager.loadBundle(BundleName.GAME),
+      this.bundleManager.loadBundle(BundleName.SYMBOLS),
+      this.bundleManager.loadBundle(BundleName.AUDIO),
+    ]);
+    currentProgress += SCENE_CONSTANTS.LOADING_STEPS.BUNDLES;
+    loadingUI?.updateProgress(currentProgress);
+
+    // Step 2: Load and cache symbol frames (40% → 60%)
+    await this.loadSymbolFrames();
+    currentProgress += SCENE_CONSTANTS.LOADING_STEPS.SYMBOL_FRAMES;
+    loadingUI?.updateProgress(currentProgress);
+
+    // Step 3: Preload all symbols (60% → 90%)
+    await SymbolPreloader.preloadAll();
+    currentProgress += SCENE_CONSTANTS.LOADING_STEPS.PRELOAD_SYMBOLS;
+    loadingUI?.updateProgress(currentProgress);
+  }
+
+  private async loadSymbolFrames(): Promise<void> {
+    if (!this.bundleManager) return;
+
+    const symbolFrames = await this.bundleManager.loadDir(
+      BundleName.SYMBOLS,
+      "",
+      SpriteFrame
+    );
+
+    if (symbolFrames && symbolFrames.length > 0) {
+      const cache = SpriteFrameCache.getInstance();
+      symbolFrames.forEach((frame) => {
+        cache.setStaticCache(BundleName.SYMBOLS, frame.name, frame);
+      });
+      logger.info(`Cached ${symbolFrames.length} symbol frames`);
     }
   }
 
@@ -90,6 +129,8 @@ export class SceneManager {
   ): Promise<void> {
     if (!this.bundleManager) return;
 
+    // Step 4: Preload game scene (90% → 100%)
+    logger.info("Preloading game scene...");
     const gameBundle = this.bundleManager.getBundle(BundleName.GAME);
     const scenePath = this.getScenePath(SceneName.GAME);
 
@@ -100,6 +141,7 @@ export class SceneManager {
           reject(err);
         } else {
           loadingUI?.updateProgress(1.0);
+          logger.info("Game scene preloaded - Loading complete!");
           resolve();
         }
       });

@@ -20,8 +20,7 @@ import { CoinFlyEffect } from "../../utils/effects/coin-fly-effect";
 import { CoinRainEffect } from "../../utils/effects/coin-rain-effect";
 import { Logger } from "../../utils/helpers/logger";
 import { NumberCounter } from "../../utils/helpers/number-counter";
-import { SpriteFrameCache } from "../../utils/helpers/sprite-frame-cache";
-import { AssetBundleManager, BundleName } from "../assets/asset-bundle-manager";
+import { AssetBundleManager } from "../assets/asset-bundle-manager";
 import { AudioManager } from "../audio/audio-manager";
 import { EventManager } from "../events/event-manager";
 import { SlotMachine } from "../slot-machine/slot-machine";
@@ -120,7 +119,6 @@ export class GameManager extends Component {
 
   private initializeSingleton(): boolean {
     if (GameManager.instance && GameManager.instance !== this) {
-      logger.warn("GameManager already exists. Destroying duplicate.");
       this.node.destroy();
       return false;
     }
@@ -131,10 +129,11 @@ export class GameManager extends Component {
 
   private async initGame(): Promise<void> {
     await this.initializeServices();
-    await this.loadAssetBundles();
     await this.initializeSlotMachine();
     this.setupUI();
     this.setState(GameConfig.GAME_STATES.IDLE);
+
+    logger.info("Game initialized - Ready to play!");
   }
 
   private async initializeServices(): Promise<void> {
@@ -144,29 +143,6 @@ export class GameManager extends Component {
     this.audioManager = AudioManager.getInstance();
     this.toastManager = ToastManager.getInstance();
     this.modalManager = ModalManager.getInstance();
-  }
-
-  private async loadAssetBundles(): Promise<void> {
-    const bundleManager = AssetBundleManager.getInstance();
-    const cache = SpriteFrameCache.getInstance();
-
-    await Promise.all([
-      bundleManager.loadBundle(BundleName.SYMBOLS),
-      bundleManager.loadBundle(BundleName.AUDIO),
-      bundleManager.loadBundle(BundleName.GAME),
-    ]);
-
-    const symbolFrames = await bundleManager.loadDir(
-      BundleName.SYMBOLS,
-      "",
-      SpriteFrame
-    );
-
-    if (symbolFrames && symbolFrames.length > 0) {
-      symbolFrames.forEach((f) => {
-        cache.setStaticCache(BundleName.SYMBOLS, f.name, f);
-      });
-    }
   }
 
   private async initializeSlotMachine(): Promise<void> {
