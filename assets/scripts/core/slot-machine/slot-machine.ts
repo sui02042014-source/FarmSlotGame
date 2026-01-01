@@ -59,8 +59,11 @@ export class SlotMachine extends Component {
     this.isSpinning = true;
     this.finishedReelsCount = 0;
 
+    const startDelay = 0.1;
+    const minSpinTime = 1.0; // Minimum time reel must spin before stopping
+
     this.reelControllers.forEach((controller, col) => {
-      controller.startSpin([], col * 0.1);
+      controller.startSpin([], col * startDelay);
     });
 
     const bet = gameManager.getCurrentBet();
@@ -84,18 +87,24 @@ export class SlotMachine extends Component {
       this.lastSpinResult = result;
 
       this.reelControllers.forEach((controller, col) => {
+        // Stop delay must account for: start delay + minimum spin time + stagger delay
+        const reelStartDelay = col * startDelay;
+        const stopDelay =
+          reelStartDelay + minSpinTime + col * GameConfig.REEL_STOP_DELAY;
+
         this.scheduleOnce(() => {
           if (!controller?.node?.isValid) {
             this.handleReelStopped();
             return;
           }
 
-          controller.stopSpin(result.symbolGrid[col]);
-
+          // Register event listener BEFORE calling stopSpin to prevent race condition
           controller.node.once(GameConfig.EVENTS.REEL_STOPPED, () => {
             this.handleReelStopped();
           });
-        }, col * GameConfig.REEL_STOP_DELAY);
+
+          controller.stopSpin(result.symbolGrid[col]);
+        }, stopDelay);
       });
     } catch (error) {
       logger.error("Failed to fetch spin result:", error);

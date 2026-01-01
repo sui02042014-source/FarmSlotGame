@@ -75,7 +75,12 @@ export class ToastManager extends Component {
     }
 
     ToastManager.instance = this;
-    game.addPersistRootNode(this.node);
+
+    // Only persist if this node is at root level (direct child of scene)
+    if (this.node.parent && this.node.parent === this.node.scene) {
+      game.addPersistRootNode(this.node);
+    }
+
     this.ensurePrefabLoaded().catch((error) => {
       console.error("[ToastManager] Failed to load prefab during init:", error);
     });

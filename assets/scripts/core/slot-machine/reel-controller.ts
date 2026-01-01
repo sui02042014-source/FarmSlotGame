@@ -100,24 +100,42 @@ export class ReelController extends Component {
   }
 
   public stopSpin(targetSymbols: string[] = []): void {
-    if (this.stateMachine.isSpinning() && !this.isFinalizing) {
-      if (targetSymbols.length > 0) {
-        // Validate target symbols array has correct length
-        if (targetSymbols.length !== GameConfig.SYMBOL_PER_REEL) {
-          console.warn(
-            `[ReelController] Expected ${GameConfig.SYMBOL_PER_REEL} symbols, got ${targetSymbols.length}. Padding with random symbols.`
-          );
-          // Pad or trim to correct length
-          while (targetSymbols.length < GameConfig.SYMBOL_PER_REEL) {
-            targetSymbols.push(this.getRandomSymbolId());
-          }
-          targetSymbols = targetSymbols.slice(0, GameConfig.SYMBOL_PER_REEL);
-        }
-        this.targetSymbols = targetSymbols;
-      }
-      this.stateMachine.startStopping();
-      this.beginSmoothStop();
+    if (!this.canStopReel()) {
+      this.emitStoppedEventSafely();
+      return;
     }
+
+    if (targetSymbols.length > 0) {
+      this.targetSymbols = this.validateAndNormalizeSymbols(targetSymbols);
+    }
+
+    this.stateMachine.startStopping();
+    this.beginSmoothStop();
+  }
+
+  private canStopReel(): boolean {
+    return this.stateMachine.isSpinning() && !this.isFinalizing;
+  }
+
+  private validateAndNormalizeSymbols(symbols: string[]): string[] {
+    const expected = GameConfig.SYMBOL_PER_REEL;
+
+    if (symbols.length === expected) {
+      return symbols;
+    }
+
+    const normalized = [...symbols];
+    while (normalized.length < expected) {
+      normalized.push(this.getRandomSymbolId());
+    }
+
+    return normalized.slice(0, expected);
+  }
+
+  private emitStoppedEventSafely(): void {
+    this.scheduleOnce(() => {
+      this.node.emit(GameConfig.EVENTS.REEL_STOPPED);
+    }, 0);
   }
 
   private getRandomSymbolId(): string {

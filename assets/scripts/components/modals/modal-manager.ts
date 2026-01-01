@@ -55,7 +55,11 @@ export class ModalManager extends Component {
 
   private initializeAsSingleton(): void {
     ModalManager.instance = this;
-    game.addPersistRootNode(this.node);
+
+    // Only persist if this node is at root level (direct child of scene)
+    if (this.node.parent && this.node.parent === this.node.scene) {
+      game.addPersistRootNode(this.node);
+    }
 
     if (!this.modalContainer) {
       this.modalContainer = new Node("ModalContainer");
