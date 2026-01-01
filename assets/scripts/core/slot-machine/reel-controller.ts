@@ -2,9 +2,11 @@ import { _decorator, CCInteger, Color, Component, tween } from "cc";
 import { GameConfig } from "../../data/config/game-config";
 import { SymbolData } from "../../data/models/symbol-data";
 import { SymbolHighlightEffect } from "../../utils/effects/symbol-highlight-effect";
+import { WinGlowHelper } from "../../utils/effects/win-glow-effect";
 import { ReelContainer, SymbolContainer } from "./reel-container";
 import { ReelStateMachine } from "./reel-state-machine";
 import { GameManager } from "../game/game-manager";
+import { AudioManager } from "../audio/audio-manager";
 
 const { ccclass, property } = _decorator;
 
@@ -242,8 +244,22 @@ export class ReelController extends Component {
       this.reelContainer.setUseBlur(false);
     }
 
+    // Play reel stop sound exactly when reel finishes stopping
+    this.playReelStopSound();
+
     this.stateMachine.setResult();
     this.node.emit(GameConfig.EVENTS.REEL_STOPPED);
+  }
+
+  // ==========================================
+  // Audio
+  // ==========================================
+
+  private playReelStopSound(): void {
+    const audioManager = AudioManager.getInstance();
+    if (audioManager) {
+      audioManager.playSFX(GameConfig.SOUNDS.REEL_STOP);
+    }
   }
 
   // ==========================================
@@ -383,18 +399,23 @@ export class ReelController extends Component {
       container.spine.node.active = true;
       container.spine.setAnimation(0, "win", true);
     } else {
+      // Apply both highlight effect and glow shader
       SymbolHighlightEffect.play({
         targetNode: container.node,
         duration: 1,
         loop: true,
         brightness: 1.2,
       });
+
+      // Apply win glow effect for enhanced visual feedback
+      WinGlowHelper.applyGlow(container.sprite.node, 1.5, 1.3);
     }
   }
 
   public resetSymbolsScale(): void {
     this.reelContainer.getAllContainers().forEach((container) => {
       SymbolHighlightEffect.stop(container.node);
+      WinGlowHelper.removeGlow(container.sprite.node);
       container.node.setScale(1, 1, 1);
       container.sprite.color = new Color(255, 255, 255, 255);
 

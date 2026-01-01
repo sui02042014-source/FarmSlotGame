@@ -45,6 +45,8 @@ export class GameConfig {
     SPIN: "spin",
     WIN: "win",
     LOSE: "lose",
+    REEL_STOP: "reel_stop",
+    SCATTER_ANTICIPATION: "scatter_anticipation",
   };
 
   static readonly ANIM = {

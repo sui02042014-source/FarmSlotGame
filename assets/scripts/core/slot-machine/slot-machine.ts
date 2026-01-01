@@ -7,6 +7,7 @@ import { Logger } from "../../utils/helpers/logger";
 import { GameManager } from "../game/game-manager";
 import { ReelController } from "./reel-controller";
 import { EventManager } from "../events/event-manager";
+import { AudioManager } from "../audio/audio-manager";
 
 const { ccclass, property } = _decorator;
 
@@ -22,6 +23,8 @@ export class SlotMachine extends Component {
   private finishedReelsCount: number = 0;
   private isSpinning: boolean = false;
   private reelStopCallbacks: Map<number, () => void> = new Map();
+  private isAnticipationActive: boolean = false;
+  private scatterPositions: Array<{ col: number; row: number }> = [];
 
   // ==========================================
   // Lifecycle Methods
@@ -138,9 +141,80 @@ export class SlotMachine extends Component {
 
   private handleReelStopped(): void {
     this.finishedReelsCount++;
+
+    // Check for scatter anticipation after each reel stops
+    if (
+      this.lastSpinResult &&
+      this.finishedReelsCount < this.reelControllers.length
+    ) {
+      this.checkScatterAnticipation();
+    }
+
     if (this.finishedReelsCount === this.reelControllers.length) {
       this.isSpinning = false;
+      this.stopAnticipationEffects();
       EventManager.emit(GameConfig.EVENTS.SPIN_COMPLETE);
+    }
+  }
+
+  // ==========================================
+  // Scatter Anticipation System
+  // ==========================================
+
+  private checkScatterAnticipation(): void {
+    if (!this.lastSpinResult || this.isAnticipationActive) return;
+
+    // Count scatters that have landed so far
+    const scatterSymbolId = GameConfig.SYMBOL_TYPES.SCATTER;
+    this.scatterPositions = [];
+
+    for (let col = 0; col < this.finishedReelsCount; col++) {
+      const reelSymbols = this.lastSpinResult.symbolGrid[col];
+      for (let row = 0; row < reelSymbols.length; row++) {
+        if (reelSymbols[row] === scatterSymbolId) {
+          this.scatterPositions.push({ col, row });
+        }
+      }
+    }
+
+    // If exactly 2 scatters have landed, activate anticipation
+    if (this.scatterPositions.length === 2) {
+      this.startAnticipationEffects();
+    }
+  }
+
+  private startAnticipationEffects(): void {
+    this.isAnticipationActive = true;
+
+    // Play anticipation sound (looping)
+    const audioManager = AudioManager.getInstance();
+    if (audioManager) {
+      audioManager.playSFX(GameConfig.SOUNDS.SCATTER_ANTICIPATION);
+    }
+
+    // Visual feedback: highlight the 2 scatters
+    this.scatterPositions.forEach((pos) => {
+      const controller = this.reelControllers[pos.col];
+      if (controller) {
+        controller.highlightSymbol(pos.row);
+      }
+    });
+
+    logger.info(
+      "Anticipation activated! 2 scatters landed, waiting for 3rd..."
+    );
+  }
+
+  private stopAnticipationEffects(): void {
+    if (!this.isAnticipationActive) return;
+
+    this.isAnticipationActive = false;
+    this.scatterPositions = [];
+
+    // Stop anticipation audio
+    const audioManager = AudioManager.getInstance();
+    if (audioManager) {
+      audioManager.stopSpinSound(); // This stops any looping SFX
     }
   }
 

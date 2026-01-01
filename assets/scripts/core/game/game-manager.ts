@@ -530,7 +530,6 @@ export class GameManager extends Component {
     this.isPaused = true;
     this.unscheduleAllCallbacks();
 
-    // Save current state before pausing
     this.stateBeforePause = this.currentState;
 
     const slot = this.getSlotMachine();
@@ -539,7 +538,6 @@ export class GameManager extends Component {
       slot.setBlurAll(true);
     }
 
-    // Force to idle state when paused
     if (this.currentState === GameConfig.GAME_STATES.SPINNING) {
       this.currentState = GameConfig.GAME_STATES.IDLE;
       this.updateSpinButtonsInteractable();
@@ -573,14 +571,12 @@ export class GameManager extends Component {
     const toastManager = ToastManager.getInstance();
     const modalManager = ModalManager.getInstance();
 
-    // Stop auto-play when running out of coins
     if (this.isAutoPlay) {
       this.isAutoPlay = false;
       this.unschedule(this.onAutoPlaySpin);
       logger.info("Auto-play stopped due to insufficient coins");
     }
 
-    // Give player some free coins to continue playing
     const freeCoins =
       GameConfig.DEFAULT_COINS * GameConfig.FREE_COINS_MULTIPLIER;
 
