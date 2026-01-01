@@ -2,6 +2,7 @@ import { _decorator, Component, Label, Node } from "cc";
 import { GameManager } from "../../core/game/game-manager";
 import { SceneManager } from "../../core/scenes/scene-manager";
 import { ModalManager } from "../modals/modal-manager";
+import { ToastManager } from "../toast/toast-manager";
 
 const { ccclass, property } = _decorator;
 
@@ -94,6 +95,13 @@ export class TopBarController extends Component {
   }
 
   private onLobbyButtonClick(): void {
+    const gameManager = GameManager.getInstance();
+
+    if (gameManager && !gameManager.isIdle()) {
+      ToastManager.getInstance()?.show("Please wait for spin to complete!");
+      return;
+    }
+
     SceneManager.instance.loadLobbyScene();
   }
 
