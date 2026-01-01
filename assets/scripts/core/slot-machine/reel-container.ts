@@ -89,8 +89,14 @@ export class ReelContainer extends Component {
         blurSpriteFrame: blurSF,
       };
 
+      // Load spine animation asynchronously (non-blocking)
       if (symbolData?.animationPath) {
-        this.initSpineForContainer(container, symbolData.animationPath);
+        this.initSpineForContainer(container, symbolData.animationPath).catch(
+          (err) => {
+            // Animation is optional, log but don't fail
+            logger.warn(`Spine animation load failed for ${symbolId}:`, err);
+          }
+        );
       }
 
       return container;

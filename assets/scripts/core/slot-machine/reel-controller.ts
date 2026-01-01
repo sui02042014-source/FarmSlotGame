@@ -1,14 +1,16 @@
 import { _decorator, CCInteger, Color, Component, tween } from "cc";
 import { GameConfig } from "../../data/config/game-config";
-import { SymbolData } from "../../data/models/symbol-data";
+import { ISymbolData, SymbolData } from "../../data/models/symbol-data";
 import { SymbolHighlightEffect } from "../../utils/effects/symbol-highlight-effect";
 import { WinGlowHelper } from "../../utils/effects/win-glow-effect";
 import { ReelContainer, SymbolContainer } from "./reel-container";
 import { ReelStateMachine } from "./reel-state-machine";
 import { GameManager } from "../game/game-manager";
 import { AudioManager } from "../audio/audio-manager";
+import { Logger } from "../../utils/helpers/logger";
 
 const { ccclass, property } = _decorator;
+const logger = Logger.create("ReelController");
 
 enum GridRow {
   TOP = 1,
@@ -65,7 +67,6 @@ export class ReelController extends Component {
         "[ReelController] Failed to initialize SymbolHighlightEffect:",
         error
       );
-      // Continue even if highlight effect fails - it's not critical
     }
   }
 
@@ -131,7 +132,6 @@ export class ReelController extends Component {
   private validateAndNormalizeSymbols(symbols: string[]): string[] {
     const expected = GameConfig.SYMBOL_PER_REEL;
 
-    // Validate each symbol ID exists, replace invalid ones
     const validatedSymbols = symbols.map((symbolId) => {
       const symbolData = SymbolData.getSymbol(symbolId);
       if (!symbolData) {
@@ -244,7 +244,6 @@ export class ReelController extends Component {
       this.reelContainer.setUseBlur(false);
     }
 
-    // Play reel stop sound exactly when reel finishes stopping
     this.playReelStopSound();
 
     this.stateMachine.setResult();
@@ -399,7 +398,6 @@ export class ReelController extends Component {
       container.spine.node.active = true;
       container.spine.setAnimation(0, "win", true);
     } else {
-      // Apply both highlight effect and glow shader
       SymbolHighlightEffect.play({
         targetNode: container.node,
         duration: 1,
@@ -407,7 +405,6 @@ export class ReelController extends Component {
         brightness: 1.2,
       });
 
-      // Apply win glow effect for enhanced visual feedback
       WinGlowHelper.applyGlow(container.sprite.node, 1.5, 1.3);
     }
   }
@@ -452,39 +449,68 @@ export class ReelController extends Component {
   }
 
   public async initializeReel(): Promise<void> {
+    const startTime = Date.now();
     try {
-      const symbols = SymbolData.getAllSymbols();
-
-      if (!symbols || symbols.length === 0) {
-        console.error(
-          "[ReelController] No symbols available for initialization"
-        );
-        return;
-      }
-
-      // Clear old references to prevent memory leaks
-      this.originalPositions.clear();
-      this.containerLaps.clear();
-      this.reelContainer.clearContainers();
-
-      const centerIndex = Math.floor(this.totalSymbols / 2);
-
-      for (let i = 0; i < this.totalSymbols; i++) {
-        const randomSymbol =
-          symbols[Math.floor(Math.random() * symbols.length)];
-        const container = await this.reelContainer.createSymbolContainer(
-          randomSymbol.id
-        );
-
-        if (container) {
-          const posY = (centerIndex - i) * this.symbolSpacing;
-          this.setupContainer(container, posY);
-        }
-      }
+      const symbols = this.validateSymbols();
+      this.resetReelState();
+      await this.createAllSymbolContainers(symbols);
+      logger.info(
+        `Reel initialized with ${this.totalSymbols} symbols in ${
+          Date.now() - startTime
+        }ms`
+      );
     } catch (error) {
-      console.error("[ReelController] Failed to initialize reel:", error);
-      throw error; // Re-throw so caller can handle
+      logger.error("Failed to initialize reel:", error);
+      throw error;
     }
+  }
+
+  private validateSymbols(): ISymbolData[] {
+    const symbols = SymbolData.getAllSymbols();
+
+    if (!symbols || symbols.length === 0) {
+      throw new Error("No symbols available for initialization");
+    }
+
+    return symbols;
+  }
+
+  private resetReelState(): void {
+    this.originalPositions.clear();
+    this.containerLaps.clear();
+    this.reelContainer.clearContainers();
+  }
+
+  private async createAllSymbolContainers(
+    symbols: ISymbolData[]
+  ): Promise<void> {
+    const centerIndex = Math.floor(this.totalSymbols / 2);
+
+    const createPromises = Array.from({ length: this.totalSymbols }, (_, i) =>
+      this.createSingleSymbolContainer(symbols, i, centerIndex)
+    );
+
+    await Promise.all(createPromises);
+  }
+
+  private async createSingleSymbolContainer(
+    symbols: ISymbolData[],
+    index: number,
+    centerIndex: number
+  ): Promise<void> {
+    const randomSymbol = this.getRandomSymbol(symbols);
+    const container = await this.reelContainer.createSymbolContainer(
+      randomSymbol.id
+    );
+
+    if (container) {
+      const posY = (centerIndex - index) * this.symbolSpacing;
+      this.setupContainer(container, posY);
+    }
+  }
+
+  private getRandomSymbol(symbols: ISymbolData[]): ISymbolData {
+    return symbols[Math.floor(Math.random() * symbols.length)];
   }
 
   private setupContainer(container: SymbolContainer, posY: number): void {

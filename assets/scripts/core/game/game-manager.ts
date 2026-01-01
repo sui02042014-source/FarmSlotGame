@@ -168,6 +168,7 @@ export class GameManager extends Component {
       bundleManager.loadBundle(BundleName.GAME),
     ]);
 
+    const startTime = Date.now();
     const symbolFrames = await bundleManager.loadDir(
       BundleName.SYMBOLS,
       "",
@@ -178,10 +179,23 @@ export class GameManager extends Component {
       symbolFrames.forEach((f) => {
         cache.setStaticCache(BundleName.SYMBOLS, f.name, f);
       });
+      console.log(
+        `[GameManager] Cached ${symbolFrames.length} sprite frames in ${
+          Date.now() - startTime
+        }ms`
+      );
     }
 
     const slotSct = this.getSlotMachine();
-    if (slotSct) await slotSct.initializeSlot();
+    if (slotSct) {
+      const initStartTime = Date.now();
+      await slotSct.initializeSlot();
+      console.log(
+        `[GameManager] Initialized slot machine in ${
+          Date.now() - initStartTime
+        }ms`
+      );
+    }
 
     this.setupWinCounter();
     this.updateUI();
