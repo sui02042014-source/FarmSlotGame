@@ -4,7 +4,6 @@ import {
   game,
   Label,
   Node,
-  SpriteFrame,
   tween,
   UITransform,
   Vec2,
@@ -20,7 +19,6 @@ import { CoinFlyEffect } from "../../utils/effects/coin-fly-effect";
 import { CoinRainEffect } from "../../utils/effects/coin-rain-effect";
 import { Logger } from "../../utils/helpers/logger";
 import { NumberCounter } from "../../utils/helpers/number-counter";
-import { AssetBundleManager } from "../assets/asset-bundle-manager";
 import { AudioManager } from "../audio/audio-manager";
 import { EventManager } from "../events/event-manager";
 import { SlotMachine } from "../slot-machine/slot-machine";
