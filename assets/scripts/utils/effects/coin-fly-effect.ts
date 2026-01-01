@@ -122,7 +122,21 @@ export class CoinFlyEffect {
 
     for (let i = 0; i < coinCount; i++) {
       const coin = this.coinPool.get(parent, coinSize);
-      // ... existing code ...
+      const sprite = coin.getComponent(Sprite)!;
+      sprite.spriteFrame = sf;
+      sprite.color = Color.WHITE;
+
+      coin.setPosition(startPos);
+      coin.setScale(Vec3.ZERO);
+
+      const angle = math.randomRange(0, Math.PI * 2);
+      const dist = math.randomRange(scatterRadius * 0.4, scatterRadius);
+      const scatterPos = new Vec3(
+        startPos.x + Math.cos(angle) * dist,
+        startPos.y + Math.sin(angle) * dist,
+        0
+      );
+
       const delay = i * stagger;
 
       const p = new Promise<void>((resolve) => {
