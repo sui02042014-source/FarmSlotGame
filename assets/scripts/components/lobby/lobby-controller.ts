@@ -1,4 +1,4 @@
-import { _decorator, Button, Component, Node, sys, tween, Vec3 } from "cc";
+import { _decorator, Button, Component, Node, tween, Vec3 } from "cc";
 import { AudioManager } from "../../core/audio/audio-manager";
 import { SceneManager } from "../../core/scenes/scene-manager";
 import {
@@ -8,6 +8,16 @@ import {
 import { ModalManager } from "../modals/modal-manager";
 
 const { ccclass, property } = _decorator;
+
+const BUTTON_SCALE_DURATION = 0.1;
+const BUTTON_SCALE_DOWN = 0.9;
+const BUTTON_STAGGER_DELAY = 0.05;
+const BUTTON_ANIM_DURATION = 0.3;
+const LOGO_ANIM_DELAY = 0.1;
+const LOGO_ANIM_DURATION = 0.4;
+const TRANSITION_DELAY = 0.5;
+const SFX_BUTTON_CLICK = "button_click";
+const BGM_LOBBY = "lobby_bgm";
 
 @ccclass("LobbyController")
 export class LobbyController extends Component {
@@ -24,120 +34,85 @@ export class LobbyController extends Component {
   logoNode: Node = null!;
 
   protected onLoad(): void {
-    this.setupButtons();
+    this.initializeButtons();
   }
 
   protected start(): void {
-    this.initAudio();
+    this.initializeAudio();
   }
 
   protected onDestroy(): void {
-    this.cleanupButtons();
+    this.cleanup();
   }
 
-  private setupButtons(): void {
-    if (this.playButton) {
-      this.playButton.on(Button.EventType.CLICK, this.onPlayButtonClick, this);
-      this.setupButtonAnimation(this.playButton);
-    }
-
-    if (this.settingsButton) {
-      this.settingsButton.on(
-        Button.EventType.CLICK,
-        this.onSettingsButtonClick,
-        this
-      );
-      this.setupButtonAnimation(this.settingsButton);
-    }
-
-    if (this.quitButton) {
-      this.quitButton.on(Button.EventType.CLICK, this.onQuitButtonClick, this);
-      this.setupButtonAnimation(this.quitButton);
-    }
+  private initializeButtons(): void {
+    this.setupButton(this.playButton, this.onPlayButtonClick);
+    this.setupButton(this.settingsButton, this.onSettingsButtonClick);
+    this.setupButton(this.quitButton, this.onQuitButtonClick);
   }
 
-  private cleanupButtons(): void {
-    if (this.playButton?.isValid) {
-      this.playButton.off(Button.EventType.CLICK, this.onPlayButtonClick, this);
-    }
-    if (this.settingsButton?.isValid) {
-      this.settingsButton.off(
-        Button.EventType.CLICK,
-        this.onSettingsButtonClick,
-        this
-      );
-    }
-    if (this.quitButton?.isValid) {
-      this.quitButton.off(Button.EventType.CLICK, this.onQuitButtonClick, this);
-    }
+  private setupButton(button: Node, clickHandler: () => void): void {
+    if (!button) return;
+
+    button.on(Button.EventType.CLICK, clickHandler, this);
+    this.addButtonAnimation(button);
   }
 
-  private async initAudio(): Promise<void> {
+  private addButtonAnimation(button: Node): void {
+    button.on(
+      Node.EventType.TOUCH_START,
+      () => this.scaleButton(button, BUTTON_SCALE_DOWN),
+      this
+    );
+    button.on(
+      Node.EventType.TOUCH_END,
+      () => this.scaleButton(button, 1),
+      this
+    );
+    button.on(
+      Node.EventType.TOUCH_CANCEL,
+      () => this.scaleButton(button, 1),
+      this
+    );
+  }
+
+  private scaleButton(button: Node, scale: number): void {
+    tween(button)
+      .to(BUTTON_SCALE_DURATION, { scale: new Vec3(scale, scale, 1) })
+      .start();
+  }
+
+  private cleanup(): void {
+    this.removeButtonListeners(this.playButton, this.onPlayButtonClick);
+    this.removeButtonListeners(this.settingsButton, this.onSettingsButtonClick);
+    this.removeButtonListeners(this.quitButton, this.onQuitButtonClick);
+  }
+
+  private removeButtonListeners(button: Node, clickHandler: () => void): void {
+    if (!button?.isValid) return;
+
+    button.off(Button.EventType.CLICK, clickHandler, this);
+    button.off(Node.EventType.TOUCH_START);
+    button.off(Node.EventType.TOUCH_END);
+    button.off(Node.EventType.TOUCH_CANCEL);
+  }
+
+  private async initializeAudio(): Promise<void> {
     try {
-      const bundleManager = AssetBundleManager.getInstance();
-      await bundleManager.loadBundle(BundleName.AUDIO);
-
-      const audioManager = AudioManager.getInstance();
-      if (audioManager && audioManager.isMusicEnabled()) {
-        await audioManager.playBGM("lobby_bgm");
-      }
+      await this.loadAudioBundle();
+      await this.playLobbyMusic();
     } catch (error) {}
   }
 
-  private setupButtonAnimation(button: Node): void {
-    button.on(
-      Node.EventType.TOUCH_START,
-      () => {
-        tween(button)
-          .to(0.1, { scale: new Vec3(0.9, 0.9, 1) })
-          .start();
-      },
-      this
-    );
-
-    button.on(
-      Node.EventType.TOUCH_END,
-      () => {
-        tween(button)
-          .to(0.1, { scale: new Vec3(1, 1, 1) })
-          .start();
-      },
-      this
-    );
-
-    button.on(
-      Node.EventType.TOUCH_CANCEL,
-      () => {
-        tween(button)
-          .to(0.1, { scale: new Vec3(1, 1, 1) })
-          .start();
-      },
-      this
-    );
+  private async loadAudioBundle(): Promise<void> {
+    const bundleManager = AssetBundleManager.getInstance();
+    await bundleManager.loadBundle(BundleName.AUDIO);
   }
 
-  private onPlayButtonClick(): void {
-    if (this.playButton) {
-      tween(this.playButton).stop();
-    }
-
-    this.playSFX("button_click");
-    this.animateOutAndTransition();
-  }
-
-  private onSettingsButtonClick(): void {
-    this.playSFX("button_click");
-
-    const modalManager = ModalManager.getInstance();
-    if (modalManager) {
-      modalManager.showSettingsModal();
-    }
-  }
-
-  private onQuitButtonClick(): void {
-    this.playSFX("button_click");
-
-    if (!sys.isBrowser) {
+  private async playLobbyMusic(): Promise<void> {
+    const audioManager = AudioManager.getInstance();
+    if (audioManager && audioManager.isMusicEnabled()) {
+      await audioManager.playBGM(BGM_LOBBY);
     }
   }
 
@@ -148,36 +123,76 @@ export class LobbyController extends Component {
     }
   }
 
-  private animateOutAndTransition(): void {
+  private onPlayButtonClick(): void {
+    if (this.playButton) {
+      tween(this.playButton).stop();
+    }
+
+    this.playSFX(SFX_BUTTON_CLICK);
+    this.transitionToGameScene();
+  }
+
+  private onSettingsButtonClick(): void {
+    this.playSFX(SFX_BUTTON_CLICK);
+    this.openSettingsModal();
+  }
+
+  private onQuitButtonClick(): void {
+    this.playSFX(SFX_BUTTON_CLICK);
+  }
+
+  private openSettingsModal(): void {
+    const modalManager = ModalManager.getInstance();
+    if (modalManager) {
+      modalManager.showSettingsModal();
+    }
+  }
+
+  private transitionToGameScene(): void {
+    this.disableAllButtons();
+    this.animateButtonsOut();
+    this.animateLogoOut();
+    this.scheduleSceneTransition();
+  }
+
+  private disableAllButtons(): void {
     const buttons = [this.playButton, this.settingsButton, this.quitButton];
+    buttons.forEach((btn) => this.disableButton(btn));
+  }
 
-    buttons.forEach((btn) => {
-      if (btn) {
-        const buttonComp = btn.getComponent(Button);
-        if (buttonComp) {
-          buttonComp.interactable = false;
-        }
-      }
-    });
+  private disableButton(button: Node): void {
+    if (!button) return;
 
+    const buttonComp = button.getComponent(Button);
+    if (buttonComp) {
+      buttonComp.interactable = false;
+    }
+  }
+
+  private animateButtonsOut(): void {
+    const buttons = [this.playButton, this.settingsButton, this.quitButton];
     buttons.forEach((btn, index) => {
       if (btn) {
         tween(btn)
-          .delay(index * 0.05)
-          .to(0.3, { scale: Vec3.ZERO }, { easing: "backIn" })
+          .delay(index * BUTTON_STAGGER_DELAY)
+          .to(BUTTON_ANIM_DURATION, { scale: Vec3.ZERO }, { easing: "backIn" })
           .start();
       }
     });
+  }
 
-    if (this.logoNode) {
-      tween(this.logoNode)
-        .delay(0.1)
-        .to(0.4, { scale: Vec3.ZERO }, { easing: "backIn" })
-        .start();
-    }
+  private animateLogoOut(): void {
+    if (!this.logoNode) return;
 
+    tween(this.logoNode)
+      .delay(LOGO_ANIM_DELAY)
+      .to(LOGO_ANIM_DURATION, { scale: Vec3.ZERO }, { easing: "backIn" })
+      .start();
+  }
+
+  private scheduleSceneTransition(): void {
     this.scheduleOnce(() => {
       SceneManager.instance.loadGameSceneFromLobby();
-    }, 0.5);
+    }, TRANSITION_DELAY);
   }
 }
