@@ -61,12 +61,43 @@ export class SceneManager {
     this.isLoading = true;
 
     const loadingUI = this.getLoadingScreen();
+
     if (loadingUI) {
       this.setupLoadingScreen(loadingUI);
     }
 
-    await this.loadAllBundles(loadingUI);
-    await this.preloadGameScene(loadingUI);
+    let loadingSuccess = false;
+
+    try {
+      await this.loadAllBundles(loadingUI);
+      await this.preloadGameScene(loadingUI);
+      loadingSuccess = true;
+      logger.info("All assets loaded successfully");
+    } catch (error) {
+      logger.error("Failed to bootstrap app:", error);
+      this.handleLoadingError(loadingUI, error);
+    } finally {
+      this.resetLoadingState();
+    }
+
+    if (!loadingSuccess && loadingUI) {
+      loadingUI.setOnComplete(() => {
+        logger.error("Loading failed - preventing scene transition");
+      });
+    }
+  }
+
+  private handleLoadingError(
+    loadingUI: LoadingScreen | null,
+    error: unknown
+  ): void {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+    logger.error("Loading failed:", errorMessage);
+
+    if (loadingUI?.messageLabel?.isValid) {
+      loadingUI.messageLabel.string = "Failed to load game. Please refresh.";
+    }
   }
 
   private getLoadingScreen(): LoadingScreen | null {
@@ -76,38 +107,61 @@ export class SceneManager {
   private setupLoadingScreen(loadingUI: LoadingScreen): void {
     loadingUI.startLoading();
     loadingUI.setOnComplete(async () => {
+      logger.info("Loading complete - transitioning to game scene");
       await this.loadGameScene();
     });
   }
 
   private async loadAllBundles(loadingUI: LoadingScreen | null): Promise<void> {
-    if (!this.bundleManager) return;
+    if (!this.bundleManager) {
+      throw new Error("AssetBundleManager not initialized");
+    }
 
     let currentProgress = 0;
 
     // Step 1: Load all bundles in parallel (0 → 40%)
     logger.info("Loading asset bundles...");
-    await Promise.all([
-      this.bundleManager.loadBundle(BundleName.GAME),
-      this.bundleManager.loadBundle(BundleName.SYMBOLS),
-      this.bundleManager.loadBundle(BundleName.AUDIO),
-    ]);
-    currentProgress += SCENE_CONSTANTS.LOADING_STEPS.BUNDLES;
-    loadingUI?.updateProgress(currentProgress);
+    try {
+      await Promise.all([
+        this.bundleManager.loadBundle(BundleName.GAME),
+        this.bundleManager.loadBundle(BundleName.SYMBOLS),
+        this.bundleManager.loadBundle(BundleName.AUDIO),
+      ]);
+      currentProgress += SCENE_CONSTANTS.LOADING_STEPS.BUNDLES;
+      loadingUI?.updateProgress(currentProgress);
+      logger.info("Asset bundles loaded successfully");
+    } catch (error) {
+      logger.error("Failed to load asset bundles:", error);
+      throw new Error("Failed to load required asset bundles");
+    }
 
     // Step 2: Load and cache symbol frames (40% → 60%)
-    await this.loadSymbolFrames();
-    currentProgress += SCENE_CONSTANTS.LOADING_STEPS.SYMBOL_FRAMES;
-    loadingUI?.updateProgress(currentProgress);
+    try {
+      await this.loadSymbolFrames();
+      currentProgress += SCENE_CONSTANTS.LOADING_STEPS.SYMBOL_FRAMES;
+      loadingUI?.updateProgress(currentProgress);
+      logger.info("Symbol frames loaded successfully");
+    } catch (error) {
+      logger.error("Failed to load symbol frames:", error);
+      throw new Error("Failed to load symbol frames");
+    }
 
     // Step 3: Preload all symbols (60% → 90%)
-    await SymbolPreloader.preloadAll();
-    currentProgress += SCENE_CONSTANTS.LOADING_STEPS.PRELOAD_SYMBOLS;
-    loadingUI?.updateProgress(currentProgress);
+    try {
+      await SymbolPreloader.preloadAll();
+      currentProgress += SCENE_CONSTANTS.LOADING_STEPS.PRELOAD_SYMBOLS;
+      loadingUI?.updateProgress(currentProgress);
+      logger.info("Symbols preloaded successfully");
+    } catch (error) {
+      logger.error("Failed to preload symbols:", error);
+      throw new Error("Failed to preload symbols");
+    }
   }
 
   private async loadSymbolFrames(): Promise<void> {
-    if (!this.bundleManager) return;
+    if (!this.bundleManager) {
+      throw new Error("AssetBundleManager not initialized");
+    }
 
     const symbolFrames = await this.bundleManager.loadDir(
       BundleName.SYMBOLS,
@@ -115,13 +169,15 @@ export class SceneManager {
       SpriteFrame
     );
 
-    if (symbolFrames && symbolFrames.length > 0) {
-      const cache = SpriteFrameCache.getInstance();
-      symbolFrames.forEach((frame) => {
-        cache.setStaticCache(BundleName.SYMBOLS, frame.name, frame);
-      });
-      logger.info(`Cached ${symbolFrames.length} symbol frames`);
+    if (!symbolFrames || symbolFrames.length === 0) {
+      throw new Error("No symbol frames found in bundle");
     }
+
+    const cache = SpriteFrameCache.getInstance();
+    symbolFrames.forEach((frame) => {
+      cache.setStaticCache(BundleName.SYMBOLS, frame.name, frame);
+    });
+    logger.info(`Cached ${symbolFrames.length} symbol frames`);
   }
 
   private async preloadGameScene(

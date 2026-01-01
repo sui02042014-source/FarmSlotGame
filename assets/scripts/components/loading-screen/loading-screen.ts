@@ -42,8 +42,10 @@ export class LoadingScreen extends Component {
   }
 
   protected start() {
-    this.initLoadingAnimation().then(() => {
-      SceneManager.instance.bootstrapApp();
+    SceneManager.instance.bootstrapApp();
+
+    this.initLoadingAnimation().catch((error) => {
+      logger.error("Failed to load loading bar animation:", error);
     });
   }
 
@@ -69,7 +71,7 @@ export class LoadingScreen extends Component {
       await this.bundleManager.loadBundle(BundleName.GAME);
       await this.loadLoadingBarFrames();
     } catch (error) {
-      logger.error("Failed to initialize loading animation:", error);
+      logger.warn("Loading bar animation unavailable, using text only:", error);
     }
   }
 
@@ -119,6 +121,13 @@ export class LoadingScreen extends Component {
 
   public setOnComplete(cb: () => void): void {
     this.onComplete = cb;
+  }
+
+  public showError(message: string): void {
+    if (this.messageLabel?.isValid) {
+      this.messageLabel.string = message;
+      logger.error(message);
+    }
   }
 
   // ==========================================
