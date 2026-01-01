@@ -6,6 +6,7 @@ import { SpinResult } from "../../types";
 import { Logger } from "../../utils/helpers/logger";
 import { GameManager } from "../game/game-manager";
 import { ReelController } from "./reel-controller";
+import { EventManager } from "../events/event-manager";
 
 const { ccclass, property } = _decorator;
 
@@ -47,13 +48,11 @@ export class SlotMachine extends Component {
 
   public async spin(): Promise<void> {
     const gameManager = GameManager.getInstance();
-    if (gameManager?.isGamePaused()) {
+    if (!gameManager || gameManager.isGamePaused()) {
       return;
     }
 
-    // Prevent multiple concurrent spins
     if (this.isSpinning) {
-      logger.warn("Spin already in progress");
       return;
     }
 
@@ -72,8 +71,12 @@ export class SlotMachine extends Component {
         lines: 20,
       });
 
-      if (!gameManager || gameManager.isGamePaused()) {
-        logger.info("Game paused during spin result fetch");
+      const currentGameManager = GameManager.getInstance();
+      if (
+        !currentGameManager ||
+        currentGameManager.isGamePaused() ||
+        !this.node?.isValid
+      ) {
         this.isSpinning = false;
         return;
       }
@@ -83,14 +86,13 @@ export class SlotMachine extends Component {
       this.reelControllers.forEach((controller, col) => {
         this.scheduleOnce(() => {
           if (!controller?.node?.isValid) {
-            logger.warn(`Controller ${col} is invalid, skipping stop`);
             this.handleReelStopped();
             return;
           }
 
           controller.stopSpin(result.symbolGrid[col]);
 
-          controller.node.once("REEL_STOPPED", () => {
+          controller.node.once(GameConfig.EVENTS.REEL_STOPPED, () => {
             this.handleReelStopped();
           });
         }, col * 0.2);
@@ -99,11 +101,12 @@ export class SlotMachine extends Component {
       logger.error("Failed to fetch spin result:", error);
       this.isSpinning = false;
 
-      if (gameManager && !gameManager.isGamePaused()) {
+      const currentGameManager = GameManager.getInstance();
+      if (currentGameManager && !currentGameManager.isGamePaused()) {
         this.stopAllReels();
 
-        gameManager.addCoins(bet);
-        gameManager.setState(GameConfig.GAME_STATES.IDLE);
+        currentGameManager.addCoins(bet);
+        currentGameManager.setState(GameConfig.GAME_STATES.IDLE);
 
         ToastManager.getInstance()?.show("Connection error. Bet refunded.");
       }
@@ -114,10 +117,7 @@ export class SlotMachine extends Component {
     this.finishedReelsCount++;
     if (this.finishedReelsCount === this.reelControllers.length) {
       this.isSpinning = false;
-      const gm = GameManager.getInstance();
-      if (gm && !gm.isGamePaused()) {
-        gm.onSpinComplete();
-      }
+      EventManager.emit(GameConfig.EVENTS.SPIN_COMPLETE);
     }
   }
 

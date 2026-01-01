@@ -367,11 +367,15 @@ export class AudioManager extends Component {
 
       if (clip) {
         this._audioCache.set(path, clip);
+        return clip;
+      } else {
+        // Don't cache null results - allow retry on next attempt
+        console.warn(`[AudioManager] Failed to load audio clip: ${path}`);
+        return null;
       }
-
-      return clip;
     } catch (error) {
-      console.warn(`[AudioManager] Failed to load audio: ${path}`, error);
+      console.warn(`[AudioManager] Exception loading audio: ${path}`, error);
+      // Don't cache error results - allow retry
       return null;
     } finally {
       this._loadingPromises.delete(path);
@@ -425,7 +429,6 @@ export class AudioManager extends Component {
   public clearCache(): void {
     this._audioCache.clear();
     this._loadingPromises.clear();
-    console.log("[AudioManager] Audio cache cleared");
   }
 
   /**

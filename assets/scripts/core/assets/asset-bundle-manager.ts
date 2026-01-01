@@ -5,6 +5,7 @@ import {
   Constructor,
   SpriteAtlas,
 } from "cc";
+import { SpriteFrameCache } from "../../utils/helpers/sprite-frame-cache";
 
 export enum BundleName {
   SYMBOLS = "symbols",
@@ -96,10 +97,12 @@ export class AssetBundleManager {
   public releaseBundle(bundleName: string): void {
     const bundle = this._loadedBundles.get(bundleName);
     if (bundle) {
+      // Clear associated caches before releasing bundle
+      SpriteFrameCache.getInstance().clearBundle(bundleName);
+
       bundle.releaseAll();
       assetManager.removeBundle(bundle);
       this._loadedBundles.delete(bundleName);
-      console.log(`[AssetBundleManager] Released bundle: ${bundleName}`);
     }
   }
 
@@ -107,10 +110,11 @@ export class AssetBundleManager {
    * Release all loaded bundles
    */
   public releaseAll(): void {
+    SpriteFrameCache.getInstance().clear();
+
     this._loadedBundles.forEach((bundle, name) => {
       bundle.releaseAll();
       assetManager.removeBundle(bundle);
-      console.log(`[AssetBundleManager] Released bundle: ${name}`);
     });
     this._loadedBundles.clear();
     this._loadingPromises.clear();

@@ -58,7 +58,10 @@ export class PlayerDataStorage {
       bet > GameConfig.MAX_BET ||
       !GameConfig.BET_STEPS.includes(bet)
     ) {
-      logger.warn(`Bet ${bet} is not in valid BET_STEPS`);
+      logger.warn(
+        `Bet ${bet} is not in valid BET_STEPS - data may be corrupted`
+      );
+      return false;
     }
 
     return true;

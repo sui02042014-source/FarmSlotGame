@@ -15,13 +15,9 @@ enum GridRow {
 }
 
 const REEL_CONSTANTS = {
-  ACCELERATION: 3500,
-  STOP_DURATION: 2.2,
   FRAME_TIME: 0.016,
   POSITION_TOLERANCE: 30,
   VISIBILITY_TOLERANCE: 10,
-  EXTRA_WRAP_MULTIPLIER: 1.0,
-  SYNC_THRESHOLD: 1.0,
 } as const;
 
 @ccclass("ReelController")
@@ -81,7 +77,7 @@ export class ReelController extends Component {
       const positionDelta = Math.abs(
         this.positionOffset - this.lastPositionOffset
       );
-      if (positionDelta >= REEL_CONSTANTS.SYNC_THRESHOLD) {
+      if (positionDelta >= GameConfig.REEL_PARAMS.SYNC_THRESHOLD) {
         this.syncSymbols();
       }
     }
@@ -129,7 +125,7 @@ export class ReelController extends Component {
     const wasMaxSpeed = this.currentSpeed >= GameConfig.SPIN_SPEED_MAX;
 
     this.currentSpeed = Math.min(
-      this.currentSpeed + REEL_CONSTANTS.ACCELERATION * dt,
+      this.currentSpeed + GameConfig.REEL_PARAMS.ACCELERATION * dt,
       GameConfig.SPIN_SPEED_MAX
     );
 
@@ -146,10 +142,10 @@ export class ReelController extends Component {
     const distToSnap = this.symbolSpacing - currentSnap;
 
     const idealDistance =
-      (this.currentSpeed * REEL_CONSTANTS.STOP_DURATION) / 4;
+      (this.currentSpeed * GameConfig.REEL_PARAMS.STOP_DURATION) / 4;
     let extraDistance = Math.max(
       idealDistance - distToSnap,
-      this.wrapHeight * REEL_CONSTANTS.EXTRA_WRAP_MULTIPLIER
+      this.wrapHeight * GameConfig.REEL_PARAMS.EXTRA_WRAP_MULTIPLIER
     );
 
     extraDistance =
@@ -161,7 +157,7 @@ export class ReelController extends Component {
     this.reelContainer.setUseBlur(false);
     tween(this.tweenData)
       .to(
-        REEL_CONSTANTS.STOP_DURATION,
+        GameConfig.REEL_PARAMS.STOP_DURATION,
         { offset: this.finalOffset },
         {
           easing: "quartOut",
@@ -188,7 +184,7 @@ export class ReelController extends Component {
     }
 
     this.stateMachine.setResult();
-    this.node.emit("REEL_STOPPED");
+    this.node.emit(GameConfig.EVENTS.REEL_STOPPED);
   }
 
   // ==========================================

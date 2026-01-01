@@ -59,7 +59,6 @@ export class SpriteFrameCache {
 
   public clear(): void {
     this._cache.clear();
-    console.log("[SpriteFrameCache] Cache cleared");
   }
 
   /**
@@ -73,9 +72,6 @@ export class SpriteFrameCache {
       }
     });
     keysToDelete.forEach((key) => this._cache.delete(key));
-    console.log(
-      `[SpriteFrameCache] Cleared ${keysToDelete.length} frames from bundle: ${bundleName}`
-    );
   }
 
   /**

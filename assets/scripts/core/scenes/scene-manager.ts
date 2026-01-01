@@ -37,12 +37,21 @@ export class SceneManager {
 
     for (let i = 0; i < bundles.length; i++) {
       await manager.loadBundle(bundles[i]);
-      loadingUI?.updateProgress((i + 1) / bundles.length);
+      loadingUI?.updateProgress((i + 1) / (bundles.length + 1));
     }
 
     const gameBundle = manager.getBundle(BundleName.GAME);
-    gameBundle?.preloadScene(`scene/${SceneName.GAME}`, () => {
-      loadingUI?.updateProgress(1.0);
+
+    await new Promise<void>((resolve, reject) => {
+      gameBundle?.preloadScene(`scene/${SceneName.GAME}`, (err) => {
+        if (err) {
+          console.error("[SceneManager] Failed to preload game scene:", err);
+          reject(err);
+        } else {
+          loadingUI?.updateProgress(1.0);
+          resolve();
+        }
+      });
     });
   }
 

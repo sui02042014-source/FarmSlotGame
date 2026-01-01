@@ -63,10 +63,35 @@ export class SlotLogic {
     symbolGrid: string[][],
     bet: number
   ): { totalWin: number; winLines: WinLine[] } {
+    // Validate inputs
+    if (!symbolGrid || !Array.isArray(symbolGrid) || symbolGrid.length === 0) {
+      console.warn("[SlotLogic] Invalid symbolGrid provided");
+      return { totalWin: 0, winLines: [] };
+    }
+
+    if (typeof bet !== "number" || bet <= 0 || isNaN(bet)) {
+      console.warn("[SlotLogic] Invalid bet amount provided:", bet);
+      return { totalWin: 0, winLines: [] };
+    }
+
     const winLines: WinLine[] = [];
     const seenLines = new Set<string>();
     const cols = symbolGrid.length;
     const rows = symbolGrid[0]?.length || 0;
+
+    // Validate grid dimensions
+    if (cols === 0 || rows === 0) {
+      console.warn("[SlotLogic] Invalid grid dimensions:", { cols, rows });
+      return { totalWin: 0, winLines: [] };
+    }
+
+    // Validate all rows have same length
+    for (let i = 0; i < symbolGrid.length; i++) {
+      if (!symbolGrid[i] || symbolGrid[i].length !== rows) {
+        console.warn("[SlotLogic] Inconsistent row lengths in symbolGrid");
+        return { totalWin: 0, winLines: [] };
+      }
+    }
 
     for (const direction of SlotLogic.WIN_DIRECTIONS) {
       const startPositions = this.getValidStartPositions(direction, cols, rows);
@@ -210,26 +235,30 @@ export class SlotLogic {
       return false;
     }
 
-    const nonWildSymbols = symbols.filter(
-      (s) => s !== "wild" && s !== "" && s !== null
+    // Find first non-wild symbol to use as base for comparison
+    const baseSymbol = symbols.find(
+      (s) => !GameConfig.SYMBOL_PROPERTIES[s]?.isWild
     );
 
-    if (nonWildSymbols.length === 0) {
+    if (!baseSymbol) {
+      // All symbols are wild! This is a valid win.
       return true;
     }
 
-    const baseSymbol = nonWildSymbols[0];
-    const allNonWildMatch = nonWildSymbols.every((s) => s === baseSymbol);
+    const baseProps = GameConfig.SYMBOL_PROPERTIES[baseSymbol];
 
-    if (!allNonWildMatch) {
+    return symbols.every((s) => {
+      if (s === baseSymbol) return true;
+
+      const sProps = GameConfig.SYMBOL_PROPERTIES[s];
+
+      // Wild can substitute for anything except Scatters and Bonus symbols (standard slot rules)
+      if (sProps?.isWild) {
+        return !baseProps?.isScatter && !baseProps?.isBonus;
+      }
+
       return false;
-    }
-
-    if (baseSymbol === "scatter" || baseSymbol === "bonus") {
-      return symbols.every((s) => s === baseSymbol);
-    }
-
-    return true;
+    });
   }
 
   private static calculateWin(

@@ -24,6 +24,8 @@ import { PlayerDataStorage } from "../../utils/storage/player-data-storage";
 import { AssetBundleManager, BundleName } from "../assets/asset-bundle-manager";
 import { SlotMachine } from "../slot-machine/slot-machine";
 import { ToastManager } from "../../components/toast/toast-manager";
+import { EventManager } from "../events/event-manager";
+import { WalletService } from "../../services/wallet-service";
 
 const { ccclass, property } = _decorator;
 
@@ -52,11 +54,9 @@ export class GameManager extends Component {
   @property(Node)
   spinButton: SpinButtonController = null!;
 
+  private walletService: WalletService = null!;
   private currentState: GameState = GameConfig.GAME_STATES.IDLE;
-  private playerCoins: number = GameConfig.DEFAULT_COINS;
-  private currentBet: number =
-    GameConfig.BET_STEPS[GameConfig.DEFAULT_BET_INDEX];
-  private currentBetIndex: number = GameConfig.DEFAULT_BET_INDEX;
+  private stateBeforePause: GameState | null = null;
   private lastWin: number = 0;
   private isAutoPlay: boolean = false;
   private isPaused: boolean = false;
@@ -66,6 +66,7 @@ export class GameManager extends Component {
   private isLowFPS: boolean = false;
 
   private static instance: GameManager = null!;
+  private static isInitializing: boolean = false;
 
   // ==========================================
   // Lifecycle Methods
@@ -76,15 +77,37 @@ export class GameManager extends Component {
   }
 
   protected async onLoad(): Promise<void> {
-    if (GameManager.instance) {
+    // Check if already initializing or initialized
+    if (GameManager.instance || GameManager.isInitializing) {
+      logger.warn(
+        "GameManager already exists or is initializing. Destroying duplicate."
+      );
       this.node.destroy();
       return;
     }
+
+    GameManager.isInitializing = true;
     GameManager.instance = this;
 
     this.node.on(Node.EventType.TOUCH_START, this.resetIdleTime, this);
 
-    await this.initGame();
+    try {
+      await this.initGame();
+
+      // Register events after successful initialization
+      EventManager.on(
+        GameConfig.EVENTS.SPIN_COMPLETE,
+        this.onSpinComplete,
+        this
+      );
+
+      GameManager.isInitializing = false;
+    } catch (error) {
+      logger.error("Failed to initialize game:", error);
+      GameManager.isInitializing = false;
+      // Cleanup and show error to user
+      this.handleInitializationError();
+    }
   }
 
   private idleCallback = (): void => {
@@ -122,7 +145,6 @@ export class GameManager extends Component {
   private setFPS(fps: number): void {
     game.frameRate = fps;
     this.isLowFPS = fps <= GameConfig.GAMEPLAY.IDLE_FPS;
-    logger.debug(`Frame rate set to: ${fps}`);
   }
 
   protected onDestroy(): void {
@@ -132,12 +154,22 @@ export class GameManager extends Component {
     this.cancelIdleFPSReduction();
     CoinFlyEffect.clearPool();
     CoinRainEffect.clear();
+
+    EventManager.off(
+      GameConfig.EVENTS.SPIN_COMPLETE,
+      this.onSpinComplete,
+      this
+    );
   }
 
   // ==========================================
   // Initialization
   // ==========================================
+
   private async initGame(): Promise<void> {
+    this.walletService = WalletService.getInstance();
+    await this.walletService.init(); // Wait for mock API data
+
     const bundleManager = AssetBundleManager.getInstance();
     const cache = SpriteFrameCache.getInstance();
 
@@ -161,11 +193,6 @@ export class GameManager extends Component {
 
     const slotSct = this.getSlotMachine();
     if (slotSct) await slotSct.initializeSlot();
-
-    const loaded = PlayerDataStorage.load(this.playerCoins, this.currentBet);
-    this.playerCoins = loaded.coins;
-    this.currentBet = loaded.bet;
-    this.currentBetIndex = loaded.betIndex;
 
     this.setupWinCounter();
     this.updateUI();
@@ -256,30 +283,20 @@ export class GameManager extends Component {
 
   public increaseBet(): void {
     if (!this.isIdle()) return;
-    if (this.currentBetIndex >= GameConfig.BET_STEPS.length - 1) return;
-
-    this.setBetByIndex(this.currentBetIndex + 1);
+    this.walletService.increaseBet();
+    this.updateUI();
   }
 
   public decreaseBet(): void {
     if (!this.isIdle()) return;
-    if (this.currentBetIndex <= 0) return;
-
-    this.setBetByIndex(this.currentBetIndex - 1);
+    this.walletService.decreaseBet();
+    this.updateUI();
   }
 
   public setMaxBet(): void {
     if (!this.isIdle()) return;
-    this.setBetByIndex(GameConfig.BET_STEPS.length - 1);
-  }
-
-  private setBetByIndex(index: number): void {
-    this.currentBetIndex = index;
-    this.currentBet = GameConfig.BET_STEPS[this.currentBetIndex];
-    if (this.betLabel) {
-      this.betLabel.string = this.currentBet.toFixed(2);
-    }
-    this.savePlayerData();
+    this.walletService.setMaxBet();
+    this.updateUI();
   }
 
   // ==========================================
@@ -300,12 +317,23 @@ export class GameManager extends Component {
       return;
     }
 
-    if (this.playerCoins < this.currentBet) {
+    const betAmount = this.walletService.currentBet;
+
+    if (!this.walletService.canAfford(betAmount)) {
       this.handleInsufficientCoins();
       return;
     }
 
-    this.playerCoins -= this.currentBet;
+    // Deduct coins and check if successful
+    const deducted = this.walletService.deductCoins(betAmount);
+    if (!deducted) {
+      logger.error("Failed to deduct coins for spin");
+      ToastManager.getInstance()?.show(
+        "Failed to place bet. Please try again."
+      );
+      return;
+    }
+
     this.lastWin = 0;
     this.updateUI();
     this.setState(GameConfig.GAME_STATES.SPINNING);
@@ -356,7 +384,7 @@ export class GameManager extends Component {
   private onWin(amount: number): void {
     this.setState(GameConfig.GAME_STATES.WIN_SHOW);
     this.lastWin = amount;
-    this.playerCoins += amount;
+    this.walletService.addCoins(amount);
 
     if (this.winCounter) {
       this.winCounter.setValue(0);
@@ -369,7 +397,6 @@ export class GameManager extends Component {
     }
 
     this.updateUI();
-    this.savePlayerData();
     this.handleWinPresentation(amount);
 
     this.scheduleOnce(() => {
@@ -401,7 +428,7 @@ export class GameManager extends Component {
     if (this.shouldShowWinModal(amount) && modalManager) {
       const delay = Math.max(GameConfig.ANIM.WIN_POPUP_DELAY ?? 0, 0);
       this.scheduleOnce(
-        () => modalManager.showWinModal(amount, this.currentBet),
+        () => modalManager.showWinModal(amount, this.walletService.currentBet),
         delay
       );
     } else {
@@ -470,18 +497,21 @@ export class GameManager extends Component {
     return this.isAutoPlay;
   }
 
-  // ==========================================
-  // Data Management
-  // ==========================================
-
-  private savePlayerData(): void {
-    PlayerDataStorage.save(this.playerCoins, this.currentBet);
-  }
-
   private updateUI(): void {
-    if (this.coinLabel) this.coinLabel.string = this.playerCoins.toFixed(2);
-    if (this.betLabel) this.betLabel.string = this.currentBet.toFixed(2);
+    if (this.coinLabel)
+      this.coinLabel.string = this.walletService.coins.toFixed(2);
+    if (this.betLabel)
+      this.betLabel.string = this.walletService.currentBet.toFixed(2);
     if (this.winLabel) this.winLabel.string = this.lastWin.toFixed(2);
+
+    EventManager.emit(
+      GameConfig.EVENTS.COINS_CHANGED,
+      this.walletService.coins
+    );
+    EventManager.emit(
+      GameConfig.EVENTS.BET_CHANGED,
+      this.walletService.currentBet
+    );
   }
 
   // ==========================================
@@ -489,18 +519,16 @@ export class GameManager extends Component {
   // ==========================================
 
   public addCoins(amount: number): void {
-    if (amount <= 0) return;
-    this.playerCoins += amount;
-    if (this.coinLabel) this.coinLabel.string = this.playerCoins.toFixed(2);
-    this.savePlayerData();
+    this.walletService.addCoins(amount);
+    this.updateUI();
   }
 
   public getCurrentBet(): number {
-    return this.currentBet;
+    return this.walletService.currentBet;
   }
 
   public getPlayerCoins(): number {
-    return this.playerCoins;
+    return this.walletService.coins;
   }
 
   // ==========================================
@@ -511,14 +539,19 @@ export class GameManager extends Component {
     this.isPaused = true;
     this.unscheduleAllCallbacks();
 
+    // Save current state before pausing
+    this.stateBeforePause = this.currentState;
+
     const slot = this.getSlotMachine();
     if (slot) {
       slot.stopAllReels();
       slot.setBlurAll(true);
     }
 
+    // Force to idle state when paused
     if (this.currentState === GameConfig.GAME_STATES.SPINNING) {
-      this.setState(GameConfig.GAME_STATES.IDLE);
+      this.currentState = GameConfig.GAME_STATES.IDLE;
+      this.updateSpinButtonsInteractable();
     }
   }
 
@@ -529,6 +562,10 @@ export class GameManager extends Component {
     if (slot) {
       slot.setBlurAll(false);
     }
+
+    // Restore state or remain idle
+    // Note: We don't resume spinning state as reels were stopped
+    this.stateBeforePause = null;
 
     if (this.isAutoPlay && this.isIdle()) {
       this.continueAutoPlay();
@@ -548,7 +585,8 @@ export class GameManager extends Component {
     const modalManager = ModalManager.getInstance();
 
     // Give player some free coins to continue playing
-    const freeCoins = GameConfig.DEFAULT_COINS * 0.5; // 50% of default coins
+    const freeCoins =
+      GameConfig.DEFAULT_COINS * GameConfig.FREE_COINS_MULTIPLIER;
 
     if (toastManager) {
       toastManager.show(
@@ -557,11 +595,19 @@ export class GameManager extends Component {
       );
     }
 
-    this.addCoins(freeCoins);
+    this.walletService.addCoins(freeCoins);
+    this.updateUI();
+  }
 
-    // Log for analytics/debugging
-    console.log(
-      `[GameManager] Player received ${freeCoins} free coins (balance was ${this.playerCoins})`
-    );
+  private handleInitializationError(): void {
+    const toastManager = ToastManager.getInstance();
+    if (toastManager) {
+      toastManager.show("Failed to initialize game. Please refresh.", 5.0);
+    }
+
+    // Clean up partial initialization
+    if (GameManager.instance === this) {
+      GameManager.instance = null!;
+    }
   }
 }

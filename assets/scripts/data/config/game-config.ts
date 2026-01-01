@@ -83,6 +83,31 @@ export class GameConfig {
     BONUS_GAME: "bonus_game",
     FREE_SPINS: "free_spins",
   } as const;
+
+  static readonly EVENTS = {
+    GAME_STATE_CHANGED: "GAME_STATE_CHANGED",
+    COINS_CHANGED: "COINS_CHANGED",
+    BET_CHANGED: "BET_CHANGED",
+    SPIN_STARTED: "SPIN_STARTED",
+    SPIN_COMPLETE: "SPIN_COMPLETE",
+    REEL_STOPPED: "REEL_STOPPED",
+    BIG_WIN: "BIG_WIN",
+  } as const;
+
+  static readonly FREE_COINS_MULTIPLIER = 0.5; // 50% of default coins when insufficient
+
+  static readonly SYMBOL_PROPERTIES = {
+    [GameConfig.SYMBOL_TYPES.WILD]: { isWild: true, isSpecial: true },
+    [GameConfig.SYMBOL_TYPES.SCATTER]: { isScatter: true, isSpecial: true },
+    [GameConfig.SYMBOL_TYPES.BONUS]: { isBonus: true, isSpecial: true },
+  } as const;
+
+  static readonly REEL_PARAMS = {
+    ACCELERATION: 3500,
+    STOP_DURATION: 2.2,
+    SYNC_THRESHOLD: 1.0,
+    EXTRA_WRAP_MULTIPLIER: 1.0,
+  } as const;
 }
 
 export type GameState =
