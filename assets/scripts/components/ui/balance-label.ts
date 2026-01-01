@@ -5,10 +5,6 @@ import { WalletService } from "../../services/wallet-service";
 
 const { ccclass, property } = _decorator;
 
-/**
- * BalanceLabel automatically updates its string value when coins change.
- * This decouples UI labels from the GameManager's update loop.
- */
 @ccclass("BalanceLabel")
 export class BalanceLabel extends Component {
   @property(Label)

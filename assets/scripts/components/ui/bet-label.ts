@@ -5,9 +5,6 @@ import { WalletService } from "../../services/wallet-service";
 
 const { ccclass, property } = _decorator;
 
-/**
- * BetLabel automatically updates its string value when the bet changes.
- */
 @ccclass("BetLabel")
 export class BetLabel extends Component {
   @property(Label)

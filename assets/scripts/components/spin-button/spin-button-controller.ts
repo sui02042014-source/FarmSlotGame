@@ -14,13 +14,31 @@ import {
 } from "cc";
 import { GameManager } from "../../core/game/game-manager";
 import { GameConfig } from "../../data/config/game-config";
+import { Logger } from "../../utils/helpers/logger";
 
 const { ccclass, property } = _decorator;
+
+const logger = Logger.create("SpinButtonController");
+
+const SPIN_BUTTON_CONSTANTS = {
+  DEFAULT_HOLD_DURATION: 1.0,
+  DEFAULT_HOVER_SCALE: 1.05,
+  DEFAULT_DISABLED_OPACITY: 120,
+  ENABLED_OPACITY: 255,
+  HOLD_SCALE_MULTIPLIER: 0.1,
+  BREATHE_SCALE: 1.03,
+  HOVER_ANIMATION_DURATION: 0.1,
+  BREATHE_ANIMATION_DURATION: 0.8,
+} as const;
+
+const CACHED_SCALES = {
+  ONE: new Vec3(1, 1, 1),
+} as const;
 
 @ccclass("SpinButtonController")
 export class SpinButtonController extends Component {
   @property({ tooltip: "Time to hold for Auto Play activation" })
-  holdDuration: number = 1.0;
+  holdDuration: number = SPIN_BUTTON_CONSTANTS.DEFAULT_HOLD_DURATION;
 
   @property(Sprite)
   targetSprite: Sprite = null!;
@@ -38,41 +56,61 @@ export class SpinButtonController extends Component {
   disabledSprite: SpriteFrame = null!;
 
   @property
-  hoverScale: number = 1.05;
+  hoverScale: number = SPIN_BUTTON_CONSTANTS.DEFAULT_HOVER_SCALE;
 
   @property
-  disabledOpacity: number = 120;
+  disabledOpacity: number = SPIN_BUTTON_CONSTANTS.DEFAULT_DISABLED_OPACITY;
 
   @property
   enableBreathing: boolean = false;
 
-  private _isHolding: boolean = false;
-  private _holdTime: number = 0;
-  private _autoPlayActivated: boolean = false;
-  private _originalScale: Vec3 = new Vec3(1, 1, 1);
-  private _isEnabled: boolean = true;
-  private _isHovering: boolean = false;
-  private _button: Button | null = null;
+  private isHolding: boolean = false;
+  private holdTime: number = 0;
+  private autoPlayActivated: boolean = false;
+  private originalScale: Vec3 = CACHED_SCALES.ONE.clone();
+  private isEnabled: boolean = true;
+  private isHovering: boolean = false;
+  private button: Button | null = null;
+  private gameManager: GameManager | null = null;
+  private tempScale: Vec3 = new Vec3();
 
   protected onLoad(): void {
-    this._originalScale = this.node.scale.clone();
-    this._button = this.node.getComponent(Button);
+    this.cacheManagers();
+    this.setupButton();
+    this.setupEventListeners();
+    this.initializeState();
+  }
 
-    if (this._button) {
-      this._button.transition = Button.Transition.NONE;
+  private cacheManagers(): void {
+    this.gameManager = GameManager.getInstance();
+    if (!this.gameManager) {
+      logger.error("GameManager not available");
+    }
+  }
+
+  private setupButton(): void {
+    this.originalScale = this.node.scale.clone();
+    this.button = this.node.getComponent(Button);
+
+    if (this.button) {
+      this.button.transition = Button.Transition.NONE;
       if (!this.targetSprite) {
         this.targetSprite =
-          this._button.target?.getComponent(Sprite) ||
+          this.button.target?.getComponent(Sprite) ||
           this.node.getComponent(Sprite)!;
       }
     }
+  }
 
+  private setupEventListeners(): void {
     this.node.on(Node.EventType.TOUCH_START, this.onTouchStart, this);
     this.node.on(Node.EventType.TOUCH_END, this.onTouchEnd, this);
     this.node.on(Node.EventType.TOUCH_CANCEL, this.onTouchCancel, this);
     this.node.on(Node.EventType.MOUSE_ENTER, this.onMouseEnter, this);
     this.node.on(Node.EventType.MOUSE_LEAVE, this.onMouseLeave, this);
+  }
 
+  private initializeState(): void {
     this.updateVisualState();
     this.playBreathingAnimation();
   }
@@ -82,194 +120,275 @@ export class SpinButtonController extends Component {
   }
 
   protected update(dt: number): void {
-    if (!this._isHolding || this._autoPlayActivated) return;
+    if (!this.isHolding || this.autoPlayActivated) return;
 
-    this._holdTime += dt;
-    const progress = math.clamp01(this._holdTime / this.holdDuration);
-    const scaleEffect = 1 + progress * 0.1;
+    this.holdTime += dt;
+    this.updateHoldingScale();
 
-    this.node.setScale(
-      this._originalScale.x * scaleEffect,
-      this._originalScale.y * scaleEffect,
-      1
-    );
-
-    if (this._holdTime >= this.holdDuration) {
+    if (this.holdTime >= this.holdDuration) {
       this.onAutoPlayActivated();
     }
   }
 
+  private updateHoldingScale(): void {
+    const progress = math.clamp01(this.holdTime / this.holdDuration);
+    const scaleEffect =
+      1 + progress * SPIN_BUTTON_CONSTANTS.HOLD_SCALE_MULTIPLIER;
+
+    // Reuse tempScale to avoid creating new Vec3 every frame
+    this.tempScale.set(
+      this.originalScale.x * scaleEffect,
+      this.originalScale.y * scaleEffect,
+      1
+    );
+    this.node.setScale(this.tempScale);
+  }
+
+  // ==========================================
+  // Touch Event Handlers
+  // ==========================================
+
   private onTouchStart(event: EventTouch): void {
-    const gm = GameManager.getInstance();
-    if (
-      !this._isEnabled ||
-      !gm ||
-      gm.getState() !== GameConfig.GAME_STATES.IDLE
-    )
-      return;
+    if (!this.canInteract()) return;
 
-    this._isHolding = true;
-    this._isHovering = false;
-    this._holdTime = 0;
-    this._autoPlayActivated = false;
+    this.isHolding = true;
+    this.isHovering = false;
+    this.holdTime = 0;
+    this.autoPlayActivated = false;
 
-    Tween.stopAllByTarget(this.node);
+    this.stopAllTweens();
     this.updateVisualState();
   }
 
-  private onTouchEnd(event: EventTouch): void {
-    if (!this._isHolding) return;
+  private canInteract(): boolean {
+    return (
+      this.isEnabled &&
+      this.gameManager !== null &&
+      this.gameManager.getState() === GameConfig.GAME_STATES.IDLE
+    );
+  }
 
-    const activatedAuto = this._autoPlayActivated;
-    const timeHeld = this._holdTime;
-    const gm = GameManager.getInstance();
+  private stopAllTweens(): void {
+    Tween.stopAllByTarget(this.node);
+  }
+
+  private onTouchEnd(event: EventTouch): void {
+    if (!this.isHolding) return;
+
+    const activatedAuto = this.autoPlayActivated;
+    const timeHeld = this.holdTime;
 
     this.resetHoldState();
 
-    if (
-      gm &&
-      gm.isAutoPlayActive() &&
-      timeHeld < this.holdDuration &&
-      !activatedAuto
-    ) {
-      gm.toggleAutoPlay();
+    if (this.shouldToggleAutoPlay(timeHeld, activatedAuto)) {
+      this.gameManager?.toggleAutoPlay();
       return;
     }
 
-    if (timeHeld < this.holdDuration && !activatedAuto) {
-      gm?.startSpin();
+    if (this.shouldStartSpin(timeHeld, activatedAuto)) {
+      this.gameManager?.startSpin();
     }
 
+    this.updateAfterTouch();
+  }
+
+  private shouldToggleAutoPlay(
+    timeHeld: number,
+    activatedAuto: boolean
+  ): boolean {
+    return (
+      this.gameManager !== null &&
+      this.gameManager.isAutoPlayActive() &&
+      timeHeld < this.holdDuration &&
+      !activatedAuto
+    );
+  }
+
+  private shouldStartSpin(timeHeld: number, activatedAuto: boolean): boolean {
+    return timeHeld < this.holdDuration && !activatedAuto;
+  }
+
+  private updateAfterTouch(): void {
     this.updateVisualState();
-    if (this._isEnabled) this.playBreathingAnimation();
+    if (this.isEnabled) {
+      this.playBreathingAnimation();
+    }
   }
 
   private onTouchCancel(): void {
     this.resetHoldState();
-    this.updateVisualState();
-    if (this._isEnabled) this.playBreathingAnimation();
+    this.updateAfterTouch();
   }
 
+  // ==========================================
+  // Mouse Event Handlers
+  // ==========================================
+
   private onMouseEnter(): void {
-    if (!this._isEnabled || this._isHolding) return;
+    if (!this.isEnabled || this.isHolding) return;
 
-    this._isHovering = true;
-    Tween.stopAllByTarget(this.node);
+    this.isHovering = true;
+    this.stopAllTweens();
     this.updateVisualState();
-
-    tween(this.node)
-      .to(
-        0.1,
-        {
-          scale: new Vec3(
-            this._originalScale.x * this.hoverScale,
-            this._originalScale.y * this.hoverScale,
-            1
-          ),
-        },
-        { easing: "sineOut" }
-      )
-      .start();
+    this.playHoverAnimation();
   }
 
   private onMouseLeave(): void {
-    this._isHovering = false;
-    if (!this._isEnabled || this._isHolding) return;
+    this.isHovering = false;
+    if (!this.isEnabled || this.isHolding) return;
 
-    Tween.stopAllByTarget(this.node);
-    this.node.setScale(this._originalScale);
+    this.stopAllTweens();
+    this.node.setScale(this.originalScale);
     this.updateVisualState();
     this.playBreathingAnimation();
   }
 
+  // ==========================================
+  // Visual State Management
+  // ==========================================
+
   private updateVisualState(): void {
     if (!this.targetSprite?.isValid) return;
 
-    let frame: SpriteFrame | null = this.normalSprite;
-
-    if (!this._isEnabled) {
-      if (this.disabledSprite) {
-        frame = this.disabledSprite;
-      } else {
-        frame = this.normalSprite;
-      }
-    } else if (this._isHolding) {
-      frame = this.pressedSprite || this.normalSprite;
-    } else if (this._isHovering) {
-      frame = this.hoverSprite || this.normalSprite;
-    }
-
+    const frame = this.getSpriteFrameForCurrentState();
     if (frame) {
       this.targetSprite.spriteFrame = frame;
     }
   }
 
-  private resetHoldState(): void {
-    this._isHolding = false;
-    this._autoPlayActivated = false;
-    this.node.setScale(this._originalScale);
+  private getSpriteFrameForCurrentState(): SpriteFrame | null {
+    if (!this.isEnabled) {
+      return this.disabledSprite || this.normalSprite;
+    }
+
+    if (this.isHolding) {
+      return this.pressedSprite || this.normalSprite;
+    }
+
+    if (this.isHovering) {
+      return this.hoverSprite || this.normalSprite;
+    }
+
+    return this.normalSprite;
   }
+
+  private resetHoldState(): void {
+    this.isHolding = false;
+    this.autoPlayActivated = false;
+    this.node.setScale(this.originalScale);
+  }
+
+  // ==========================================
+  // Auto Play
+  // ==========================================
 
   private onAutoPlayActivated(): void {
-    this._autoPlayActivated = true;
-    const gm = GameManager.getInstance();
-    if (!gm) return;
+    this.autoPlayActivated = true;
+    if (!this.gameManager) return;
 
-    if (!gm.isAutoPlayActive()) gm.toggleAutoPlay();
-    if (gm.getState() === GameConfig.GAME_STATES.IDLE) gm.startSpin();
+    if (!this.gameManager.isAutoPlayActive()) {
+      this.gameManager.toggleAutoPlay();
+    }
+
+    if (this.gameManager.getState() === GameConfig.GAME_STATES.IDLE) {
+      this.gameManager.startSpin();
+    }
   }
 
-  private playBreathingAnimation(): void {
-    if (
-      !this._isEnabled ||
-      this._isHolding ||
-      this._isHovering ||
-      !this.enableBreathing
-    )
-      return;
+  // ==========================================
+  // Animations
+  // ==========================================
 
-    Tween.stopAllByTarget(this.node);
-    const breatheScale = 1.03;
+  private playHoverAnimation(): void {
+    this.tempScale.set(
+      this.originalScale.x * this.hoverScale,
+      this.originalScale.y * this.hoverScale,
+      1
+    );
 
     tween(this.node)
       .to(
-        0.8,
-        {
-          scale: new Vec3(
-            this._originalScale.x * breatheScale,
-            this._originalScale.y * breatheScale,
-            1
-          ),
-        },
+        SPIN_BUTTON_CONSTANTS.HOVER_ANIMATION_DURATION,
+        { scale: this.tempScale },
+        { easing: "sineOut" }
+      )
+      .start();
+  }
+
+  private playBreathingAnimation(): void {
+    if (!this.shouldPlayBreathingAnimation()) return;
+
+    this.stopAllTweens();
+
+    this.tempScale.set(
+      this.originalScale.x * SPIN_BUTTON_CONSTANTS.BREATHE_SCALE,
+      this.originalScale.y * SPIN_BUTTON_CONSTANTS.BREATHE_SCALE,
+      1
+    );
+
+    tween(this.node)
+      .to(
+        SPIN_BUTTON_CONSTANTS.BREATHE_ANIMATION_DURATION,
+        { scale: this.tempScale },
         { easing: "sineInOut" }
       )
-      .to(0.8, { scale: this._originalScale }, { easing: "sineInOut" })
+      .to(
+        SPIN_BUTTON_CONSTANTS.BREATHE_ANIMATION_DURATION,
+        { scale: this.originalScale },
+        { easing: "sineInOut" }
+      )
       .union()
       .repeatForever()
       .start();
   }
 
-  public setEnabled(enabled: boolean): void {
-    this._isEnabled = enabled;
+  private shouldPlayBreathingAnimation(): boolean {
+    return (
+      this.isEnabled &&
+      !this.isHolding &&
+      !this.isHovering &&
+      this.enableBreathing
+    );
+  }
 
-    if (this._button?.isValid) {
-      this._button.interactable = enabled;
+  // ==========================================
+  // Public API
+  // ==========================================
+
+  public setEnabled(enabled: boolean): void {
+    this.isEnabled = enabled;
+    this.updateButtonInteractivity(enabled);
+    this.updateOpacity(enabled);
+
+    if (enabled) {
+      this.playBreathingAnimation();
+    } else {
+      this.resetToDisabledState();
     }
 
+    this.updateVisualState();
+  }
+
+  private updateButtonInteractivity(enabled: boolean): void {
+    if (this.button?.isValid) {
+      this.button.interactable = enabled;
+    }
+  }
+
+  private updateOpacity(enabled: boolean): void {
     const uiOpacity =
       this.node.getComponent(UIOpacity) || this.node.addComponent(UIOpacity);
-    uiOpacity.opacity = enabled ? 255 : this.disabledOpacity;
+    uiOpacity.opacity = enabled
+      ? SPIN_BUTTON_CONSTANTS.ENABLED_OPACITY
+      : this.disabledOpacity;
+  }
 
-    if (!enabled) {
-      Tween.stopAllByTarget(this.node);
-      this._isHovering = false;
-      this._isHolding = false;
-      this._holdTime = 0;
-      this._autoPlayActivated = false;
-      this.node.setScale(this._originalScale);
-    } else {
-      this.playBreathingAnimation();
-    }
-    this.updateVisualState();
+  private resetToDisabledState(): void {
+    this.stopAllTweens();
+    this.isHovering = false;
+    this.isHolding = false;
+    this.holdTime = 0;
+    this.autoPlayActivated = false;
+    this.node.setScale(this.originalScale);
   }
 }

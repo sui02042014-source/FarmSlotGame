@@ -6,6 +6,13 @@ export enum LogLevel {
   NONE = 4,
 }
 
+const LOG_COLORS = {
+  DEBUG: "color: #888",
+  INFO: "color: #2196F3",
+  WARN: "color: #FF9800",
+  ERROR: "color: #F44336",
+} as const;
+
 const IS_PRODUCTION = (() => {
   // @ts-ignore - CC_DEBUG is a Cocos Creator constant
   if (typeof CC_DEBUG !== "undefined" && CC_DEBUG === false) {
@@ -24,14 +31,17 @@ export class Logger {
     : LogLevel.DEBUG;
   private static enableTimestamp: boolean = true;
   private static enableColors: boolean = true;
-  private static isProduction: boolean = IS_PRODUCTION;
+
+  // ==========================================
+  // Configuration
+  // ==========================================
 
   public static setLevel(level: LogLevel): void {
     this.currentLevel = level;
   }
 
   public static isProductionMode(): boolean {
-    return this.isProduction;
+    return IS_PRODUCTION;
   }
 
   public static setTimestamp(enabled: boolean): void {
@@ -42,73 +52,112 @@ export class Logger {
     this.enableColors = enabled;
   }
 
-  public static debug(context: string, message: string, ...args: any[]): void {
-    if (this.isProduction) return;
+  // ==========================================
+  // Logging Methods
+  // ==========================================
+
+  public static debug(
+    context: string,
+    message: string,
+    ...args: unknown[]
+  ): void {
+    if (IS_PRODUCTION) return;
 
     if (this.currentLevel <= LogLevel.DEBUG) {
-      this.log("DEBUG", context, message, "color: #888", ...args);
+      this.log("DEBUG", context, message, LOG_COLORS.DEBUG, ...args);
     }
   }
 
-  public static info(context: string, message: string, ...args: any[]): void {
-    if (this.isProduction) return;
+  public static info(
+    context: string,
+    message: string,
+    ...args: unknown[]
+  ): void {
+    if (IS_PRODUCTION) return;
 
     if (this.currentLevel <= LogLevel.INFO) {
-      this.log("INFO", context, message, "color: #2196F3", ...args);
+      this.log("INFO", context, message, LOG_COLORS.INFO, ...args);
     }
   }
 
-  public static warn(context: string, message: string, ...args: any[]): void {
+  public static warn(
+    context: string,
+    message: string,
+    ...args: unknown[]
+  ): void {
     if (this.currentLevel <= LogLevel.WARN) {
-      this.log("WARN", context, message, "color: #FF9800", ...args);
+      this.log("WARN", context, message, LOG_COLORS.WARN, ...args);
     }
   }
 
-  public static error(context: string, message: string, ...args: any[]): void {
+  public static error(
+    context: string,
+    message: string,
+    ...args: unknown[]
+  ): void {
     if (this.currentLevel <= LogLevel.ERROR) {
-      this.log("ERROR", context, message, "color: #F44336", ...args);
+      this.log("ERROR", context, message, LOG_COLORS.ERROR, ...args);
     }
   }
+
+  // ==========================================
+  // Internal Helpers
+  // ==========================================
 
   private static log(
     level: string,
     context: string,
     message: string,
     color: string,
-    ...args: any[]
+    ...args: unknown[]
   ): void {
-    const timestamp = this.enableTimestamp
-      ? `[${new Date().toISOString().split("T")[1].split(".")[0]}]`
-      : "";
+    const prefix = this.buildLogPrefix(context);
+    const fullMessage = `${prefix} ${level}: ${message}`;
 
-    const prefix = `${timestamp}[${context}]`;
+    this.outputLog(level, fullMessage, ...args);
+  }
 
-    if (this.enableColors && typeof window !== "undefined") {
-    } else {
-      const fullMessage = `${prefix} ${level}: ${message}`;
+  private static buildLogPrefix(context: string): string {
+    const timestamp = this.enableTimestamp ? this.getFormattedTime() : "";
+    return `${timestamp}[${context}]`;
+  }
 
-      switch (level) {
-        case "ERROR":
-          console.error(fullMessage, ...args);
-          break;
-        case "WARN":
-          console.warn(fullMessage, ...args);
-          break;
-        default:
-          console.log(fullMessage, ...args);
-      }
+  private static getFormattedTime(): string {
+    const now = new Date();
+    const time = now.toISOString().split("T")[1].split(".")[0];
+    return `[${time}]`;
+  }
+
+  private static outputLog(
+    level: string,
+    message: string,
+    ...args: unknown[]
+  ): void {
+    switch (level) {
+      case "ERROR":
+        console.error(message, ...args);
+        break;
+      case "WARN":
+        console.warn(message, ...args);
+        break;
+      default:
+        console.log(message, ...args);
     }
   }
 
+  // ==========================================
+  // Factory Method
+  // ==========================================
+
   public static create(context: string) {
     return {
-      debug: (message: string, ...args: any[]) =>
+      debug: (message: string, ...args: unknown[]) =>
         Logger.debug(context, message, ...args),
-      info: (message: string, ...args: any[]) =>
+      info: (message: string, ...args: unknown[]) =>
         Logger.info(context, message, ...args),
-      warn: (message: string, ...args: any[]) =>
+      warn: (message: string, ...args: unknown[]) =>
         Logger.warn(context, message, ...args),
-      error: (message: string, ...args: any[]) =>
+      error: (message: string, ...args: unknown[]) =>
         Logger.error(context, message, ...args),
     };
   }

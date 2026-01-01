@@ -1,7 +1,16 @@
 import { _decorator, Slider, Toggle } from "cc";
 import { AudioManager } from "../../core/audio/audio-manager";
 import { BaseModal } from "./base-modal";
+import { Logger } from "../../utils/helpers/logger";
+
 const { ccclass, property } = _decorator;
+
+const logger = Logger.create("SettingsModal");
+
+const EVENT_NAMES = {
+  TOGGLE: "toggle",
+  SLIDE: "slide",
+} as const;
 
 @ccclass("SettingsModal")
 export class SettingsModal extends BaseModal {
@@ -21,71 +30,116 @@ export class SettingsModal extends BaseModal {
 
   protected onLoad(): void {
     super.onLoad();
+    this.cacheAudioManager();
+    this.setupEventListeners();
+  }
 
+  private cacheAudioManager(): void {
     this.audioManager = AudioManager.getInstance();
-
-    if (this.musicToggle) {
-      this.musicToggle.node.on("toggle", this.onMusicToggle, this);
+    if (!this.audioManager) {
+      logger.error("AudioManager not available");
     }
+  }
 
-    if (this.musicVolumeSlider) {
-      this.musicVolumeSlider.node.on("slide", this.onMusicVolumeChange, this);
+  private setupEventListeners(): void {
+    this.registerToggleEvent(this.musicToggle, this.onMusicToggle);
+    this.registerSliderEvent(this.musicVolumeSlider, this.onMusicVolumeChange);
+    this.registerToggleEvent(this.soundToggle, this.onSoundToggle);
+    this.registerSliderEvent(this.soundVolumeSlider, this.onSoundVolumeChange);
+  }
+
+  private registerToggleEvent(
+    toggle: Toggle | null,
+    handler: (toggle: Toggle) => void
+  ): void {
+    if (toggle) {
+      toggle.node.on(EVENT_NAMES.TOGGLE, handler, this);
     }
+  }
 
-    if (this.soundToggle) {
-      this.soundToggle.node.on("toggle", this.onSoundToggle, this);
-    }
-
-    if (this.soundVolumeSlider) {
-      this.soundVolumeSlider.node.on("slide", this.onSoundVolumeChange, this);
+  private registerSliderEvent(
+    slider: Slider | null,
+    handler: (slider: Slider) => void
+  ): void {
+    if (slider) {
+      slider.node.on(EVENT_NAMES.SLIDE, handler, this);
     }
   }
 
   protected onDestroy(): void {
     super.onDestroy();
+    this.cleanupEventListeners();
+  }
 
-    if (this.musicToggle?.isValid) {
-      this.musicToggle.node.off("toggle", this.onMusicToggle, this);
-    }
+  private cleanupEventListeners(): void {
+    this.unregisterToggleEvent(this.musicToggle, this.onMusicToggle);
+    this.unregisterSliderEvent(
+      this.musicVolumeSlider,
+      this.onMusicVolumeChange
+    );
+    this.unregisterToggleEvent(this.soundToggle, this.onSoundToggle);
+    this.unregisterSliderEvent(
+      this.soundVolumeSlider,
+      this.onSoundVolumeChange
+    );
+  }
 
-    if (this.musicVolumeSlider?.isValid) {
-      this.musicVolumeSlider.node.off("slide", this.onMusicVolumeChange, this);
-    }
-
-    if (this.soundToggle?.isValid) {
-      this.soundToggle.node.off("toggle", this.onSoundToggle, this);
-    }
-
-    if (this.soundVolumeSlider?.isValid) {
-      this.soundVolumeSlider.node.off("slide", this.onSoundVolumeChange, this);
+  private unregisterToggleEvent(
+    toggle: Toggle | null,
+    handler: (toggle: Toggle) => void
+  ): void {
+    if (toggle?.isValid) {
+      toggle.node.off(EVENT_NAMES.TOGGLE, handler, this);
     }
   }
+
+  private unregisterSliderEvent(
+    slider: Slider | null,
+    handler: (slider: Slider) => void
+  ): void {
+    if (slider?.isValid) {
+      slider.node.off(EVENT_NAMES.SLIDE, handler, this);
+    }
+  }
+
+  // ==========================================
+  // Lifecycle
+  // ==========================================
 
   protected onBeforeShow(): void {
     this.loadCurrentSettings();
   }
+
+  // ==========================================
+  // Settings Management
+  // ==========================================
 
   private loadCurrentSettings(): void {
     if (!this.audioManager) return;
 
     const settings = this.audioManager.getSettings();
 
-    if (this.musicToggle) {
-      this.musicToggle.isChecked = settings.isMusicEnabled;
-    }
+    this.updateToggle(this.musicToggle, settings.isMusicEnabled);
+    this.updateToggle(this.soundToggle, settings.isSoundEnabled);
+    this.updateSlider(this.musicVolumeSlider, settings.bgmVolume);
+    this.updateSlider(this.soundVolumeSlider, settings.sfxVolume);
+  }
 
-    if (this.soundToggle) {
-      this.soundToggle.isChecked = settings.isSoundEnabled;
-    }
-
-    if (this.musicVolumeSlider) {
-      this.musicVolumeSlider.progress = settings.bgmVolume;
-    }
-
-    if (this.soundVolumeSlider) {
-      this.soundVolumeSlider.progress = settings.sfxVolume;
+  private updateToggle(toggle: Toggle | null, value: boolean): void {
+    if (toggle) {
+      toggle.isChecked = value;
     }
   }
+
+  private updateSlider(slider: Slider | null, value: number): void {
+    if (slider) {
+      slider.progress = value;
+    }
+  }
+
+  // ==========================================
+  // Event Handlers
+  // ==========================================
 
   private onMusicToggle(toggle: Toggle): void {
     this.audioManager?.setMusicEnabled(toggle.isChecked);
@@ -95,11 +149,11 @@ export class SettingsModal extends BaseModal {
     this.audioManager?.setSoundEnabled(toggle.isChecked);
   }
 
-  private onSoundVolumeChange(slider: Slider): void {
-    this.audioManager?.setSFXVolume(slider.progress);
-  }
-
   private onMusicVolumeChange(slider: Slider): void {
     this.audioManager?.setBGMVolume(slider.progress);
+  }
+
+  private onSoundVolumeChange(slider: Slider): void {
+    this.audioManager?.setSFXVolume(slider.progress);
   }
 }

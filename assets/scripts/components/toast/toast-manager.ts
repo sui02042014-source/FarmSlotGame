@@ -12,12 +12,19 @@ import {
   AssetBundleManager,
   BundleName,
 } from "../../core/assets/asset-bundle-manager";
+import { Logger } from "../../utils/helpers/logger";
 
 const { ccclass, property } = _decorator;
 
-const TOAST_PREFAB_PATH = "Toast";
-const SCENE_WAIT_TIMEOUT = 2000;
-const SCENE_CHECK_INTERVAL = 16;
+const logger = Logger.create("ToastManager");
+
+const TOAST_CONSTANTS = {
+  PREFAB_PATH: "Toast",
+  PREFAB_PATH_WITH_DIR: "prefabs/Toast",
+  SCENE_WAIT_TIMEOUT: 2000,
+  SCENE_CHECK_INTERVAL: 16,
+  CANVAS_COMPONENT_NAME: "cc.Canvas",
+} as const;
 
 @ccclass("ToastManager")
 export class ToastManager extends Component {
@@ -27,6 +34,7 @@ export class ToastManager extends Component {
   private static instance: ToastManager = null!;
   private toastPool: Node[] = [];
   private prefabLoadPromise: Promise<Prefab | null> | null = null;
+  private bundleManager: AssetBundleManager | null = null;
 
   public static getInstance(): ToastManager | null {
     if (this.instance && !this.instance.isNodeValid()) {
@@ -36,7 +44,12 @@ export class ToastManager extends Component {
   }
 
   protected onLoad(): void {
+    this.cacheManagers();
     this.initializeSingleton();
+  }
+
+  private cacheManagers(): void {
+    this.bundleManager = AssetBundleManager.getInstance();
   }
 
   protected start(): void {
@@ -47,9 +60,13 @@ export class ToastManager extends Component {
     this.cleanup();
   }
 
+  // ==========================================
+  // Public API
+  // ==========================================
+
   public async show(message: string, duration: number = 2.0): Promise<void> {
     try {
-      if (!this.validateNode()) return;
+      if (!this.isNodeValid()) return;
       if (!(await this.ensureNodeInScene())) return;
       if (!(await this.ensurePrefabLoaded())) return;
 
@@ -60,9 +77,13 @@ export class ToastManager extends Component {
 
       this.displayToast(toastNode, message, duration);
     } catch (error) {
-      console.error("[ToastManager] Failed to show toast:", message, error);
+      logger.error("Failed to show toast:", message, error);
     }
   }
+
+  // ==========================================
+  // Singleton Management
+  // ==========================================
 
   private initializeSingleton(): void {
     if (ToastManager.instance && ToastManager.instance !== this) {
@@ -74,26 +95,30 @@ export class ToastManager extends Component {
       return;
     }
 
+    this.setupAsSingleton();
+  }
+
+  private setupAsSingleton(): void {
     ToastManager.instance = this;
-
-    // Only persist if this node is at root level (direct child of scene)
-    if (this.node.parent && this.node.parent === this.node.scene) {
-      game.addPersistRootNode(this.node);
-    }
-
-    this.ensurePrefabLoaded().catch((error) => {
-      console.error("[ToastManager] Failed to load prefab during init:", error);
-    });
+    this.persistNodeIfNeeded();
+    this.preloadPrefab();
   }
 
   private replaceSingleton(): void {
     ToastManager.instance = this;
     game.addPersistRootNode(this.node);
+    this.preloadPrefab();
+  }
+
+  private persistNodeIfNeeded(): void {
+    if (this.node.parent && this.node.parent === this.node.scene) {
+      game.addPersistRootNode(this.node);
+    }
+  }
+
+  private preloadPrefab(): void {
     this.ensurePrefabLoaded().catch((error) => {
-      console.error(
-        "[ToastManager] Failed to load prefab during replacement:",
-        error
-      );
+      logger.error("Failed to load prefab:", error);
     });
   }
 
@@ -112,18 +137,15 @@ export class ToastManager extends Component {
         toast.destroy();
       }
     }
-    this.toastPool = [];
+    this.toastPool.length = 0;
   }
+
+  // ==========================================
+  // Validation
+  // ==========================================
 
   private isNodeValid(): boolean {
     return this.node?.isValid ?? false;
-  }
-
-  private validateNode(): boolean {
-    if (!this.isNodeValid()) {
-      return false;
-    }
-    return true;
   }
 
   private async ensureNodeInScene(): Promise<boolean> {
@@ -143,10 +165,13 @@ export class ToastManager extends Component {
       const checkScene = () => {
         if (this.node?.scene) {
           resolve();
-        } else if (Date.now() - startTime > SCENE_WAIT_TIMEOUT) {
+        } else if (
+          Date.now() - startTime >
+          TOAST_CONSTANTS.SCENE_WAIT_TIMEOUT
+        ) {
           reject(new Error("Timeout waiting for scene"));
         } else {
-          setTimeout(checkScene, SCENE_CHECK_INTERVAL);
+          setTimeout(checkScene, TOAST_CONSTANTS.SCENE_CHECK_INTERVAL);
         }
       };
 
@@ -154,10 +179,17 @@ export class ToastManager extends Component {
     });
   }
 
+  // ==========================================
+  // Positioning
+  // ==========================================
+
   private repositionToCanvas(): void {
     if (!this.isNodeValid() || !this.node.scene) return;
 
-    const canvas = this.node.scene.getComponentInChildren("cc.Canvas")?.node;
+    const canvas = this.node.scene.getComponentInChildren(
+      TOAST_CONSTANTS.CANVAS_COMPONENT_NAME
+    )?.node;
+
     if (canvas && this.node.parent !== canvas) {
       this.node.setParent(canvas);
       this.node.setSiblingIndex(this.node.parent!.children.length - 1);
@@ -166,20 +198,39 @@ export class ToastManager extends Component {
     this.node.setPosition(Vec3.ZERO);
   }
 
+  // ==========================================
+  // Toast Display
+  // ==========================================
+
   private displayToast(
     toastNode: Node,
     message: string,
     duration: number
   ): void {
+    this.activateToastNode(toastNode);
+    this.showToastMessage(toastNode, message, duration);
+  }
+
+  private activateToastNode(toastNode: Node): void {
     toastNode.active = true;
     toastNode.setParent(this.node);
     toastNode.setSiblingIndex(this.node.children.length - 1);
+  }
 
+  private showToastMessage(
+    toastNode: Node,
+    message: string,
+    duration: number
+  ): void {
     const toastItem = toastNode.getComponent(ToastItem);
     if (toastItem) {
       toastItem.show(message, duration);
     }
   }
+
+  // ==========================================
+  // Toast Pool Management
+  // ==========================================
 
   private getOrCreateToast(): Node | null {
     if (!this.toastPool) {
@@ -208,6 +259,10 @@ export class ToastManager extends Component {
     return toast;
   }
 
+  // ==========================================
+  // Prefab Loading
+  // ==========================================
+
   private async ensurePrefabLoaded(): Promise<boolean> {
     if (this.toastPrefab) {
       return true;
@@ -222,20 +277,19 @@ export class ToastManager extends Component {
     await this.prefabLoadPromise;
     this.prefabLoadPromise = null;
 
-    if (!this.toastPrefab) {
-      return false;
-    }
-
-    return true;
+    return this.toastPrefab !== null;
   }
 
   private async loadPrefabFromBundle(): Promise<Prefab | null> {
-    try {
-      const bundleManager = AssetBundleManager.getInstance();
+    if (!this.bundleManager) {
+      logger.error("AssetBundleManager not available");
+      return null;
+    }
 
-      let prefab = await this.tryLoadFromPrefabsBundle(bundleManager);
+    try {
+      let prefab = await this.tryLoadFromPrefabsBundle();
       if (!prefab) {
-        prefab = await this.tryLoadFromGameBundle(bundleManager);
+        prefab = await this.tryLoadFromGameBundle();
       }
 
       if (prefab) {
@@ -244,27 +298,23 @@ export class ToastManager extends Component {
 
       return prefab;
     } catch (error) {
-      console.error("[ToastManager] Failed to load prefab from bundle:", error);
+      logger.error("Failed to load prefab from bundle:", error);
       return null;
     }
   }
 
-  private async tryLoadFromPrefabsBundle(
-    bundleManager: AssetBundleManager
-  ): Promise<Prefab | null> {
-    return await bundleManager.load(
+  private async tryLoadFromPrefabsBundle(): Promise<Prefab | null> {
+    return await this.bundleManager!.load(
       BundleName.PREFABS,
-      TOAST_PREFAB_PATH,
+      TOAST_CONSTANTS.PREFAB_PATH,
       Prefab
     );
   }
 
-  private async tryLoadFromGameBundle(
-    bundleManager: AssetBundleManager
-  ): Promise<Prefab | null> {
-    return await bundleManager.load(
+  private async tryLoadFromGameBundle(): Promise<Prefab | null> {
+    return await this.bundleManager!.load(
       BundleName.GAME,
-      `prefabs/${TOAST_PREFAB_PATH}`,
+      TOAST_CONSTANTS.PREFAB_PATH_WITH_DIR,
       Prefab
     );
   }

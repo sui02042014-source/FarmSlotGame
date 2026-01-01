@@ -6,6 +6,12 @@ import { SlotService } from "./slot-service";
 
 const logger = Logger.create("WalletService");
 
+const WALLET_CONSTANTS = {
+  MAX_TRANSACTION_HISTORY: 100,
+  DEFAULT_SYNC_RETRIES: 3,
+  RETRY_BASE_DELAY_MS: 500,
+} as const;
+
 export enum TransactionType {
   BET = "bet",
   WIN = "win",
@@ -26,11 +32,11 @@ export interface Transaction {
   amount: number;
   timestamp: number;
   status: TransactionStatus;
-  details?: any;
+  details?: unknown;
 }
 
 export class WalletService {
-  private static _instance: WalletService | null = null;
+  private static instance: WalletService | null = null;
 
   private _coins: number = 0;
   private _currentBet: number = 0;
@@ -40,45 +46,60 @@ export class WalletService {
   private _isSyncing: boolean = false;
   private _transactions: Transaction[] = [];
   private _pendingTransaction: Transaction | null = null;
-  private readonly MAX_TRANSACTION_HISTORY = 100;
+
+  private slotService = SlotService.getInstance();
+
+  // ==========================================
+  // Singleton
+  // ==========================================
 
   public static getInstance(): WalletService {
-    if (!this._instance) {
-      this._instance = new WalletService();
+    if (!this.instance) {
+      this.instance = new WalletService();
     }
-    return this._instance;
+    return this.instance;
   }
+
+  // ==========================================
+  // Initialization
+  // ==========================================
 
   public async init(): Promise<void> {
     if (this._isInitialized) return;
 
-    await new Promise((resolve) =>
-      setTimeout(resolve, GameConfig.NETWORK.INIT_DELAY_MS)
-    );
+    await this.delay(GameConfig.NETWORK.INIT_DELAY_MS);
 
-    const mockApiResponse = {
-      success: true,
-      data: {
-        coins:
-          GameConfig.DEFAULT_COINS +
-          Math.floor(Math.random() * GameConfig.RANDOM_COINS_BONUS_MAX),
-        bet: GameConfig.BET_STEPS[GameConfig.DEFAULT_BET_INDEX],
-        betIndex: GameConfig.DEFAULT_BET_INDEX,
-      },
-    };
+    const apiData = this.generateMockApiData();
+    const localData = PlayerDataStorage.load(apiData.coins, apiData.bet);
 
-    const localData = PlayerDataStorage.load(
-      mockApiResponse.data.coins,
-      mockApiResponse.data.bet
-    );
-
-    this._coins = localData.coins;
-    this._currentBet = localData.bet;
-    this._currentBetIndex = localData.betIndex;
+    this.applyInitialData(localData);
     this._isInitialized = true;
-
     this.onDataChanged();
   }
+
+  private generateMockApiData() {
+    return {
+      coins:
+        GameConfig.DEFAULT_COINS +
+        Math.floor(Math.random() * GameConfig.RANDOM_COINS_BONUS_MAX),
+      bet: GameConfig.BET_STEPS[GameConfig.DEFAULT_BET_INDEX],
+      betIndex: GameConfig.DEFAULT_BET_INDEX,
+    };
+  }
+
+  private applyInitialData(data: {
+    coins: number;
+    bet: number;
+    betIndex: number;
+  }): void {
+    this._coins = data.coins;
+    this._currentBet = data.bet;
+    this._currentBetIndex = data.betIndex;
+  }
+
+  // ==========================================
+  // Getters
+  // ==========================================
 
   public get coins(): number {
     return this._coins;
@@ -93,33 +114,32 @@ export class WalletService {
   }
 
   public canAfford(amount: number): boolean {
-    if (!Number.isFinite(amount) || amount < 0) {
-      return false;
-    }
-    return this._coins >= amount;
+    return this.isValidPositiveAmount(amount) && this._coins >= amount;
   }
 
+  // ==========================================
+  // Coin Operations
+  // ==========================================
+
   public addCoins(amount: number): boolean {
-    if (!Number.isFinite(amount) || amount <= 0) {
+    if (!this.isValidPositiveAmount(amount)) {
       logger.warn("Invalid amount for addCoins:", amount);
       return false;
     }
 
-    const newCoins = this._coins + amount;
-
-    if (!Number.isFinite(newCoins) || newCoins > Number.MAX_SAFE_INTEGER) {
+    if (!this.isWithinSafeRange(amount)) {
       logger.error("Coin overflow detected, amount:", amount);
       return false;
     }
 
-    this._coins = newCoins;
+    this._coins += amount;
     this.onDataChanged();
     this.queueSync();
     return true;
   }
 
   public deductCoins(amount: number): boolean {
-    if (!Number.isFinite(amount) || amount <= 0) {
+    if (!this.isValidPositiveAmount(amount)) {
       logger.warn("Invalid amount for deductCoins:", amount);
       return false;
     }
@@ -141,27 +161,23 @@ export class WalletService {
     return true;
   }
 
+  // ==========================================
+  // Transaction Management
+  // ==========================================
+
   public completeBetTransaction(winAmount: number): void {
-    if (
-      this._pendingTransaction &&
-      this._pendingTransaction.type === TransactionType.BET
-    ) {
-      this._pendingTransaction.status = TransactionStatus.COMPLETED;
-      this._pendingTransaction.details = { winAmount };
-      this.addTransactionToHistory(this._pendingTransaction);
+    if (!this.hasPendingBetTransaction()) return;
 
-      if (winAmount > 0) {
-        const winTransaction = this.createTransaction(
-          TransactionType.WIN,
-          winAmount,
-          TransactionStatus.COMPLETED
-        );
-        this.addTransactionToHistory(winTransaction);
-      }
+    this._pendingTransaction!.status = TransactionStatus.COMPLETED;
+    this._pendingTransaction!.details = { winAmount };
+    this.addTransactionToHistory(this._pendingTransaction!);
 
-      this._pendingTransaction = null;
-      logger.info(`Transaction completed. Win: ${winAmount}`);
+    if (winAmount > 0) {
+      this.addWinTransaction(winAmount);
     }
+
+    this._pendingTransaction = null;
+    logger.info(`Transaction completed. Win: ${winAmount}`);
   }
 
   public refundPendingTransaction(): boolean {
@@ -171,16 +187,11 @@ export class WalletService {
     }
 
     const refundAmount = this._pendingTransaction.amount;
-    this._pendingTransaction.status = TransactionStatus.REFUNDED;
-    this.addTransactionToHistory(this._pendingTransaction);
-
-    const refundTransaction = this.createTransaction(
-      TransactionType.REFUND,
+    this.markTransactionAsRefunded(this._pendingTransaction);
+    this.createAndAddRefundTransaction(
       refundAmount,
-      TransactionStatus.COMPLETED,
-      { originalTransactionId: this._pendingTransaction.id }
+      this._pendingTransaction.id
     );
-    this.addTransactionToHistory(refundTransaction);
 
     this._coins += refundAmount;
     this._pendingTransaction = null;
@@ -190,11 +201,50 @@ export class WalletService {
     return true;
   }
 
+  private hasPendingBetTransaction(): boolean {
+    return (
+      this._pendingTransaction !== null &&
+      this._pendingTransaction.type === TransactionType.BET
+    );
+  }
+
+  private addWinTransaction(winAmount: number): void {
+    const winTransaction = this.createTransaction(
+      TransactionType.WIN,
+      winAmount,
+      TransactionStatus.COMPLETED
+    );
+    this.addTransactionToHistory(winTransaction);
+  }
+
+  private markTransactionAsRefunded(transaction: Transaction): void {
+    transaction.status = TransactionStatus.REFUNDED;
+    this.addTransactionToHistory(transaction);
+  }
+
+  private createAndAddRefundTransaction(
+    amount: number,
+    originalId: string
+  ): void {
+    const refundTransaction = this.createTransaction(
+      TransactionType.REFUND,
+      amount,
+      TransactionStatus.COMPLETED,
+      { originalTransactionId: originalId }
+    );
+    this.addTransactionToHistory(refundTransaction);
+  }
+
+  // ==========================================
+  // Bet Management
+  // ==========================================
+
   public setBetIndex(index: number): void {
-    if (index < 0 || index >= GameConfig.BET_STEPS.length) return;
+    if (!this.isValidBetIndex(index)) return;
+
     this._currentBetIndex = index;
     this._currentBet = GameConfig.BET_STEPS[this._currentBetIndex];
-    this.onDataChanged(false, true); // Emit bet changed event
+    this.onDataChanged(false, true);
   }
 
   public increaseBet(): void {
@@ -209,6 +259,14 @@ export class WalletService {
     this.setBetIndex(GameConfig.BET_STEPS.length - 1);
   }
 
+  private isValidBetIndex(index: number): boolean {
+    return index >= 0 && index < GameConfig.BET_STEPS.length;
+  }
+
+  // ==========================================
+  // Synchronization
+  // ==========================================
+
   private queueSync(): void {
     this._syncQueue = this._syncQueue
       .then(() => this.syncWithServer())
@@ -217,37 +275,62 @@ export class WalletService {
       });
   }
 
-  private async syncWithServer(retries = 3): Promise<void> {
+  private async syncWithServer(
+    retries = WALLET_CONSTANTS.DEFAULT_SYNC_RETRIES
+  ): Promise<void> {
     this._isSyncing = true;
-    let lastError: any = null;
 
     try {
-      const coinsToSync = this._coins;
-
-      for (let attempt = 0; attempt < retries; attempt++) {
-        try {
-          await SlotService.getInstance().syncPlayerData(coinsToSync);
-          return;
-        } catch (error) {
-          lastError = error;
-          logger.warn(`Sync attempt ${attempt + 1}/${retries} failed:`, error);
-
-          if (attempt < retries - 1) {
-            await new Promise((resolve) =>
-              setTimeout(resolve, Math.pow(2, attempt) * 500)
-            );
-          }
-        }
-      }
-
-      logger.error(
-        "Failed to sync wallet with server after retries",
-        lastError
-      );
+      await this.attemptSyncWithRetry(retries);
     } finally {
       this._isSyncing = false;
     }
   }
+
+  private async attemptSyncWithRetry(retries: number): Promise<void> {
+    const coinsToSync = this._coins;
+    let lastError: unknown = null;
+
+    for (let attempt = 0; attempt < retries; attempt++) {
+      try {
+        await this.slotService.syncPlayerData(coinsToSync);
+        return;
+      } catch (error) {
+        lastError = error;
+        this.logSyncAttemptFailure(attempt, retries, error);
+
+        if (this.shouldRetry(attempt, retries)) {
+          await this.delay(this.calculateRetryDelay(attempt));
+        }
+      }
+    }
+
+    this.logSyncFailure(lastError);
+  }
+
+  private logSyncAttemptFailure(
+    attempt: number,
+    maxRetries: number,
+    error: unknown
+  ): void {
+    logger.warn(`Sync attempt ${attempt + 1}/${maxRetries} failed:`, error);
+  }
+
+  private shouldRetry(attempt: number, maxRetries: number): boolean {
+    return attempt < maxRetries - 1;
+  }
+
+  private calculateRetryDelay(attempt: number): number {
+    return Math.pow(2, attempt) * WALLET_CONSTANTS.RETRY_BASE_DELAY_MS;
+  }
+
+  private logSyncFailure(error: unknown): void {
+    logger.error("Failed to sync wallet with server after retries", error);
+  }
+
+  // ==========================================
+  // Event & Storage
+  // ==========================================
 
   private onDataChanged(
     coinsChanged: boolean = true,
@@ -264,14 +347,18 @@ export class WalletService {
     }
   }
 
+  // ==========================================
+  // Transaction Helpers
+  // ==========================================
+
   private createTransaction(
     type: TransactionType,
     amount: number,
     status: TransactionStatus,
-    details?: any
+    details?: unknown
   ): Transaction {
     return {
-      id: `txn_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`,
+      id: this.generateTransactionId(),
       type,
       amount,
       timestamp: Date.now(),
@@ -280,10 +367,16 @@ export class WalletService {
     };
   }
 
+  private generateTransactionId(): string {
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).slice(2, 11);
+    return `txn_${timestamp}_${random}`;
+  }
+
   private addTransactionToHistory(transaction: Transaction): void {
     this._transactions.push(transaction);
 
-    if (this._transactions.length > this.MAX_TRANSACTION_HISTORY) {
+    if (this._transactions.length > WALLET_CONSTANTS.MAX_TRANSACTION_HISTORY) {
       this._transactions.shift();
     }
   }
@@ -297,7 +390,28 @@ export class WalletService {
   }
 
   public clearTransactionHistory(): void {
-    this._transactions = [];
+    this._transactions.length = 0;
     logger.info("Transaction history cleared");
+  }
+
+  // ==========================================
+  // Validation Helpers
+  // ==========================================
+
+  private isValidPositiveAmount(amount: number): boolean {
+    return Number.isFinite(amount) && amount > 0;
+  }
+
+  private isWithinSafeRange(amount: number): boolean {
+    const newCoins = this._coins + amount;
+    return Number.isFinite(newCoins) && newCoins <= Number.MAX_SAFE_INTEGER;
+  }
+
+  // ==========================================
+  // Utility Methods
+  // ==========================================
+
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }

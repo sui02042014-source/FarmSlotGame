@@ -6,8 +6,11 @@ import {
   BundleName,
 } from "../../core/assets/asset-bundle-manager";
 import { ModalManager } from "../modals/modal-manager";
+import { Logger } from "../../utils/helpers/logger";
 
 const { ccclass, property } = _decorator;
+
+const logger = Logger.create("LobbyController");
 
 const BUTTON_SCALE_DURATION = 0.1;
 const BUTTON_SCALE_DOWN = 0.9;
@@ -102,7 +105,7 @@ export class LobbyController extends Component {
       await this.loadAudioBundle();
       await this.playLobbyMusic();
     } catch (error) {
-      console.error("[LobbyController] Failed to initialize audio:", error);
+      logger.error("Failed to initialize audio:", error);
     }
   }
 
@@ -122,11 +125,7 @@ export class LobbyController extends Component {
     const audioManager = AudioManager.getInstance();
     if (audioManager) {
       audioManager.playSFX(soundName).catch((error) => {
-        console.error(
-          "[LobbyController] Failed to play SFX:",
-          soundName,
-          error
-        );
+        logger.error("Failed to play SFX:", soundName, error);
       });
     }
   }

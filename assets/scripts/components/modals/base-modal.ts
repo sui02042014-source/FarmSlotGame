@@ -10,6 +10,31 @@ import {
 } from "cc";
 const { ccclass, property } = _decorator;
 
+// ==========================================
+// Constants
+// ==========================================
+
+const ANIMATION_CONSTANTS = {
+  BACKGROUND_OPACITY_SHOW: 200,
+  BACKGROUND_OPACITY_HIDE: 0,
+  SCALE_SMALL: 0.5,
+  SCALE_NORMAL: 1,
+  HIDE_SPEED_MULTIPLIER: 0.5,
+} as const;
+
+const CACHED_SCALES = {
+  SMALL: new Vec3(
+    ANIMATION_CONSTANTS.SCALE_SMALL,
+    ANIMATION_CONSTANTS.SCALE_SMALL,
+    1
+  ),
+  NORMAL: new Vec3(
+    ANIMATION_CONSTANTS.SCALE_NORMAL,
+    ANIMATION_CONSTANTS.SCALE_NORMAL,
+    1
+  ),
+} as const;
+
 @ccclass("BaseModal")
 export class BaseModal extends Component {
   @property(Node)
@@ -30,23 +55,27 @@ export class BaseModal extends Component {
   @property
   enableAnimation: boolean = true;
 
-  @property({
-    tooltip: "Nếu bật, modal sẽ chặn mọi tương tác chuột/touch xuống phía dưới",
-  })
+  @property()
   blockInputUnderneath: boolean = true;
 
-  protected modalData: any = {};
+  protected modalData: unknown = null;
   protected closeCallback: (() => void) | null = null;
   private isClosing: boolean = false;
 
   protected onLoad(): void {
-    if (this.blockInputUnderneath) {
-      if (!this.getComponent(BlockInputEvents)) {
-        this.addComponent(BlockInputEvents);
-      }
-    }
+    this.setupBlockInput();
+    this.setupCloseButton();
+    this.setupBackgroundClick();
+    this.node.active = false;
+  }
 
-    // 2. Setup Close Button
+  private setupBlockInput(): void {
+    if (this.blockInputUnderneath && !this.getComponent(BlockInputEvents)) {
+      this.addComponent(BlockInputEvents);
+    }
+  }
+
+  private setupCloseButton(): void {
     if (this.closeButton) {
       this.closeButton.on(
         Button.EventType.CLICK,
@@ -54,18 +83,17 @@ export class BaseModal extends Component {
         this
       );
     }
+  }
 
-    // 3. Setup Background Click
-    if (this.background && this.enableBackgroundClose) {
-      let button = this.background.getComponent(Button);
-      if (!button) {
-        button = this.background.addComponent(Button);
-        button.transition = Button.Transition.NONE;
-      }
-      this.background.on(Button.EventType.CLICK, this.onBackgroundClick, this);
+  private setupBackgroundClick(): void {
+    if (!this.background || !this.enableBackgroundClose) return;
+
+    let button = this.background.getComponent(Button);
+    if (!button) {
+      button = this.background.addComponent(Button);
+      button.transition = Button.Transition.NONE;
     }
-
-    this.node.active = false;
+    this.background.on(Button.EventType.CLICK, this.onBackgroundClick, this);
   }
 
   protected onDestroy(): void {
@@ -82,9 +110,11 @@ export class BaseModal extends Component {
     }
   }
 
-  // --- Public API ---
+  // ==========================================
+  // Public API
+  // ==========================================
 
-  public setData(data: any): void {
+  public setData(data: unknown): void {
     this.modalData = data;
     this.onDataSet(data);
   }
@@ -98,17 +128,19 @@ export class BaseModal extends Component {
 
     this.onBeforeShow();
 
+    const finishShow = () => this.onAfterShow();
+
     if (this.enableAnimation) {
-      this.playShowAnimation(() => this.onAfterShow());
+      this.playShowAnimation(finishShow);
     } else {
-      this.onAfterShow();
+      finishShow();
     }
   }
 
   public hide(): void {
     if (this.isClosing || !this.node.active) return;
-    this.isClosing = true;
 
+    this.isClosing = true;
     this.unscheduleAllCallbacks();
     this.onBeforeHide();
 
@@ -116,11 +148,7 @@ export class BaseModal extends Component {
       this.node.active = false;
       this.isClosing = false;
       this.onAfterHide();
-
-      if (this.closeCallback) {
-        this.closeCallback();
-        this.closeCallback = null;
-      }
+      this.executeCloseCallback();
     };
 
     if (this.enableAnimation) {
@@ -130,68 +158,105 @@ export class BaseModal extends Component {
     }
   }
 
-  // --- Animation Logic ---
+  private executeCloseCallback(): void {
+    if (this.closeCallback) {
+      this.closeCallback();
+      this.closeCallback = null;
+    }
+  }
+
+  // ==========================================
+  // Animation
+  // ==========================================
 
   protected playShowAnimation(callback?: () => void): void {
-    if (this.background) {
-      const opacity =
-        this.background.getComponent(UIOpacity) ||
-        this.background.addComponent(UIOpacity);
-      opacity.opacity = 0;
-      tween(opacity).to(this.animationDuration, { opacity: 200 }).start();
-    }
+    this.animateBackgroundOpacity(
+      ANIMATION_CONSTANTS.BACKGROUND_OPACITY_HIDE,
+      ANIMATION_CONSTANTS.BACKGROUND_OPACITY_SHOW,
+      this.animationDuration
+    );
 
-    // Animation cho nội dung (Scale Up + Back Out)
-    if (this.modalContent) {
-      this.modalContent.setScale(new Vec3(0.5, 0.5, 1));
-      tween(this.modalContent)
-        .to(
-          this.animationDuration,
-          { scale: new Vec3(1, 1, 1) },
-          { easing: "backOut" }
-        )
-        .call(() => callback?.())
-        .start();
-    } else {
-      callback?.();
-    }
+    this.animateContentScale(
+      CACHED_SCALES.SMALL,
+      CACHED_SCALES.NORMAL,
+      this.animationDuration,
+      "backOut",
+      callback
+    );
   }
 
   protected playHideAnimation(callback?: () => void): void {
-    if (this.background) {
-      const opacity = this.background.getComponent(UIOpacity);
-      if (opacity) {
-        tween(opacity)
-          .to(this.animationDuration * 0.5, { opacity: 0 })
-          .start();
-      }
-    }
+    const hideDuration =
+      this.animationDuration * ANIMATION_CONSTANTS.HIDE_SPEED_MULTIPLIER;
 
-    if (this.modalContent) {
-      tween(this.modalContent)
-        .to(
-          this.animationDuration * 0.5,
-          { scale: new Vec3(0.5, 0.5, 1) },
-          { easing: "backIn" }
-        )
-        .call(() => callback?.())
-        .start();
-    } else {
-      callback?.();
-    }
+    this.animateBackgroundOpacity(
+      ANIMATION_CONSTANTS.BACKGROUND_OPACITY_SHOW,
+      ANIMATION_CONSTANTS.BACKGROUND_OPACITY_HIDE,
+      hideDuration
+    );
+
+    this.animateContentScale(
+      CACHED_SCALES.NORMAL,
+      CACHED_SCALES.SMALL,
+      hideDuration,
+      "backIn",
+      callback
+    );
   }
 
-  // --- Event Handlers ---
+  private animateBackgroundOpacity(
+    from: number,
+    to: number,
+    duration: number
+  ): void {
+    if (!this.background) return;
+
+    const opacity =
+      this.background.getComponent(UIOpacity) ||
+      this.background.addComponent(UIOpacity);
+
+    opacity.opacity = from;
+    tween(opacity).to(duration, { opacity: to }).start();
+  }
+
+  private animateContentScale(
+    fromScale: Vec3,
+    toScale: Vec3,
+    duration: number,
+    easing: "backOut" | "backIn",
+    callback?: () => void
+  ): void {
+    if (!this.modalContent) {
+      callback?.();
+      return;
+    }
+
+    this.modalContent.setScale(fromScale);
+    tween(this.modalContent)
+      .to(duration, { scale: toScale }, { easing })
+      .call(() => callback?.())
+      .start();
+  }
+
+  // ==========================================
+  // Event Handlers
+  // ==========================================
 
   protected onCloseButtonClick(): void {
     this.hide();
   }
 
   protected onBackgroundClick(): void {
-    if (this.enableBackgroundClose) this.hide();
+    if (this.enableBackgroundClose) {
+      this.hide();
+    }
   }
 
-  protected onDataSet(data: any): void {}
+  // ==========================================
+  // Lifecycle Hooks (Override in subclasses)
+  // ==========================================
+
+  protected onDataSet(data: unknown): void {}
   protected onBeforeShow(): void {}
   protected onAfterShow(): void {}
   protected onBeforeHide(): void {}

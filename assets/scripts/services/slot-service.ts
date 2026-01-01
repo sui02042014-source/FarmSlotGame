@@ -11,34 +11,9 @@ export interface ISpinRequest {
   lines: number;
 }
 
-/**
- * ⚠️ SECURITY WARNING - FOR DEVELOPMENT/DEMO ONLY ⚠️
- *
- * This service currently generates spin results CLIENT-SIDE using SlotLogic.
- * This is INSECURE for production!
- *
- * FOR PRODUCTION:
- * Replace the mock implementation in fetchSpinResult() with:
- * - Real HTTP request to backend API endpoint
- * - Server generates results using secure RNG
- * - Server validates bet amount and player session
- * - Server updates player balance atomically
- * - Server returns signed/encrypted results
- *
- * Example production implementation:
- * ```typescript
- * public async fetchSpinResult(request: ISpinRequest): Promise<SpinResult> {
- *   const response = await fetch('/api/slot/spin', {
- *     method: 'POST',
- *     headers: { 'Authorization': `Bearer ${sessionToken}` },
- *     body: JSON.stringify(request)
- *   });
- *   return await response.json();
- * }
- * ```
- */
 export class SlotService {
   private static instance: SlotService;
+  private networkConfig = GameConfig.NETWORK;
 
   public static getInstance(): SlotService {
     if (!this.instance) {
@@ -47,14 +22,29 @@ export class SlotService {
     return this.instance;
   }
 
-  /**
-   * Fetch spin result from server (currently mocked)
-   * @param request - Spin request with bet and lines
-   * @returns SpinResult with symbol grid and win information
-   * @throws Error if spin calculation fails
-   */
+  // ==========================================
+  // Spin Result
+  // ==========================================
+
   public async fetchSpinResult(request: ISpinRequest): Promise<SpinResult> {
-    // Validate request
+    this.validateSpinRequest(request);
+
+    try {
+      const result = this.calculateSpinResult(request.bet);
+      this.validateSpinResult(result);
+
+      await this.simulateNetworkLatency();
+
+      this.logSpinResult(result);
+
+      return result;
+    } catch (error) {
+      this.handleSpinError(error);
+      throw error;
+    }
+  }
+
+  private validateSpinRequest(request: ISpinRequest): void {
     if (!Number.isFinite(request.bet) || request.bet <= 0) {
       const error = GameErrorHandler.createError(
         ErrorCode.INVALID_BET_AMOUNT,
@@ -65,65 +55,89 @@ export class SlotService {
         GameErrorHandler.getUserMessage(ErrorCode.INVALID_BET_AMOUNT)
       );
     }
+  }
 
-    try {
-      const result = SlotLogic.calculateSpinResult(
-        GameConfig.REEL_COUNT,
-        GameConfig.SYMBOL_PER_REEL,
-        request.bet
-      );
+  private calculateSpinResult(bet: number): SpinResult {
+    return SlotLogic.calculateSpinResult(
+      GameConfig.REEL_COUNT,
+      GameConfig.SYMBOL_PER_REEL,
+      bet
+    );
+  }
 
-      if (!result || !result.symbolGrid) {
-        throw new Error("Invalid spin result generated");
-      }
-
-      if (GameConfig.NETWORK.ENABLE_FAKE_LATENCY) {
-        const latency =
-          GameConfig.NETWORK.MIN_LATENCY_MS +
-          Math.random() *
-            (GameConfig.NETWORK.MAX_LATENCY_MS -
-              GameConfig.NETWORK.MIN_LATENCY_MS);
-
-        await new Promise((resolve) => setTimeout(resolve, latency));
-      }
-
-      logger.debug("Spin result generated:", {
-        totalWin: result.totalWin,
-        winLines: result.winLines.length,
-      });
-
-      return result;
-    } catch (error) {
-      GameErrorHandler.createError(
-        ErrorCode.SPIN_FAILED,
-        "Failed to calculate spin result",
-        error
-      );
-      logger.error("Spin calculation failed:", error);
-      throw error;
+  private validateSpinResult(result: SpinResult): void {
+    if (!result || !result.symbolGrid) {
+      throw new Error("Invalid spin result generated");
     }
   }
 
+  private async simulateNetworkLatency(): Promise<void> {
+    if (this.networkConfig.ENABLE_FAKE_LATENCY) {
+      const latency = this.calculateRandomLatency();
+      await this.delay(latency);
+    }
+  }
+
+  private calculateRandomLatency(): number {
+    const min = this.networkConfig.MIN_LATENCY_MS;
+    const max = this.networkConfig.MAX_LATENCY_MS;
+    return min + Math.random() * (max - min);
+  }
+
+  private logSpinResult(result: SpinResult): void {
+    logger.debug("Spin result generated:", {
+      totalWin: result.totalWin,
+      winLines: result.winLines.length,
+    });
+  }
+
+  private handleSpinError(error: unknown): void {
+    GameErrorHandler.createError(
+      ErrorCode.SPIN_FAILED,
+      "Failed to calculate spin result",
+      error
+    );
+    logger.error("Spin calculation failed:", error);
+  }
+
+  // ==========================================
+  // Player Data Sync
+  // ==========================================
+
   public async syncPlayerData(coins: number): Promise<boolean> {
-    if (!Number.isFinite(coins) || coins < 0) {
+    if (!this.isValidCoinsAmount(coins)) {
       logger.warn("Invalid coins value for sync:", coins);
       return false;
     }
 
     try {
-      await new Promise((resolve) =>
-        setTimeout(resolve, GameConfig.NETWORK.SYNC_DELAY_MS)
-      );
+      await this.delay(this.networkConfig.SYNC_DELAY_MS);
       logger.debug("Player data synced, coins:", coins);
       return true;
     } catch (error) {
-      GameErrorHandler.createError(
-        ErrorCode.WALLET_SYNC_FAILED,
-        "Failed to sync player data",
-        error
-      );
-      logger.error("Sync failed:", error);
+      this.handleSyncError(error);
       return false;
     }
+  }
+
+  private isValidCoinsAmount(coins: number): boolean {
+    return Number.isFinite(coins) && coins >= 0;
+  }
+
+  private handleSyncError(error: unknown): void {
+    GameErrorHandler.createError(
+      ErrorCode.WALLET_SYNC_FAILED,
+      "Failed to sync player data",
+      error
+    );
+    logger.error("Sync failed:", error);
+  }
+
+  // ==========================================
+  // Utility Methods
+  // ==========================================
+
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }

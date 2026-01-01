@@ -12,8 +12,11 @@ import {
 import { SpriteFrameCache } from "../helpers/sprite-frame-cache";
 import { BundleName } from "../../core/assets/asset-bundle-manager";
 import { GameConfig } from "../../data/config/game-config";
+import { Logger } from "../helpers/logger";
 
 const { ccclass } = _decorator;
+
+const logger = Logger.create("SymbolHighlightEffect");
 
 export type SymbolHighlightOptions = {
   targetNode: Node;
@@ -56,10 +59,7 @@ class RoundAnimationController {
         this.roundFrames = newFrames;
         this.isLoaded = true;
       } catch (error) {
-        console.error(
-          "[SymbolHighlightEffect] Failed to load animation frames:",
-          error
-        );
+        logger.error("Failed to load animation frames:", error);
       } finally {
         this.loadingPromise = null;
       }

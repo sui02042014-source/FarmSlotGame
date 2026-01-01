@@ -28,36 +28,17 @@ export interface GameError {
 }
 
 export class GameErrorHandler {
-  private static errorHistory: GameError[] = [];
-  private static readonly MAX_HISTORY = 50;
-
   public static createError(
     code: ErrorCode,
     message: string,
     details?: any
   ): GameError {
-    const error: GameError = {
+    return {
       code,
       message,
       details,
       timestamp: Date.now(),
     };
-
-    this.errorHistory.push(error);
-
-    if (this.errorHistory.length > this.MAX_HISTORY) {
-      this.errorHistory.shift();
-    }
-
-    return error;
-  }
-
-  public static getErrorHistory(): GameError[] {
-    return [...this.errorHistory];
-  }
-
-  public static clearHistory(): void {
-    this.errorHistory = [];
   }
 
   public static getUserMessage(code: ErrorCode): string {

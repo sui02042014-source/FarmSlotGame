@@ -1,21 +1,24 @@
-import {
-  _decorator,
-  Component,
-  Label,
-  math,
-  Node,
-  Sprite,
-  SpriteFrame,
-  tween,
-  Vec3,
-} from "cc";
-import { SceneManager } from "../../core/scenes/scene-manager";
+import { _decorator, Component, Label, math, Sprite, SpriteFrame } from "cc";
 import {
   AssetBundleManager,
   BundleName,
 } from "../../core/assets/asset-bundle-manager";
+import { SceneManager } from "../../core/scenes/scene-manager";
+import { Logger } from "../../utils/helpers/logger";
 
 const { ccclass, property } = _decorator;
+
+const logger = Logger.create("LoadingScreen");
+
+const LOADING_CONSTANTS = {
+  INITIAL_PROGRESS: "0%",
+  READY_MESSAGE: "READY TO FARM!",
+  LOADING_BAR_PATH: "ui/loading_bar",
+  PROGRESS_THRESHOLD: 0.99,
+  PROGRESS_COMPLETE: 1,
+  PROGRESS_MIN: 0,
+  PERCENT_MULTIPLIER: 100,
+} as const;
 
 @ccclass("LoadingScreen")
 export class LoadingScreen extends Component {
@@ -26,14 +29,16 @@ export class LoadingScreen extends Component {
   @property smoothingSpeed: number = 0.1;
   @property autoTransitionDelay: number = 0.5;
 
-  private _loadingBarFrames: SpriteFrame[] = [];
-  private _targetProgress: number = 0;
-  private _visualProgress: number = 0;
-  private _onComplete: (() => void) | null = null;
-  private _isFinished: boolean = false;
+  private loadingBarFrames: SpriteFrame[] = [];
+  private targetProgress: number = 0;
+  private visualProgress: number = 0;
+  private onComplete: (() => void) | null = null;
+  private isFinished: boolean = false;
+  private bundleManager: AssetBundleManager | null = null;
 
   protected onLoad(): void {
-    this.progressLabel.string = "0%";
+    this.cacheManagers();
+    this.initializeUI();
   }
 
   protected start() {
@@ -42,97 +47,177 @@ export class LoadingScreen extends Component {
     });
   }
 
-  private async initLoadingAnimation() {
-    const manager = AssetBundleManager.getInstance();
+  private cacheManagers(): void {
+    this.bundleManager = AssetBundleManager.getInstance();
+  }
 
-    await manager.loadBundle(BundleName.GAME);
+  private initializeUI(): void {
+    this.progressLabel.string = LOADING_CONSTANTS.INITIAL_PROGRESS;
+  }
 
-    const frames = await manager.loadDir<SpriteFrame>(
+  // ==========================================
+  // Loading Animation Setup
+  // ==========================================
+
+  private async initLoadingAnimation(): Promise<void> {
+    if (!this.bundleManager) {
+      logger.error("AssetBundleManager not available");
+      return;
+    }
+
+    try {
+      await this.bundleManager.loadBundle(BundleName.GAME);
+      await this.loadLoadingBarFrames();
+    } catch (error) {
+      logger.error("Failed to initialize loading animation:", error);
+    }
+  }
+
+  private async loadLoadingBarFrames(): Promise<void> {
+    if (!this.bundleManager) return;
+
+    const frames = await this.bundleManager.loadDir<SpriteFrame>(
       BundleName.GAME,
-      "ui/loading_bar",
+      LOADING_CONSTANTS.LOADING_BAR_PATH,
       SpriteFrame
     );
 
     if (frames && frames.length > 0) {
-      this._loadingBarFrames = frames.sort((a, b) =>
-        a.name.localeCompare(b.name, undefined, { numeric: true })
-      );
-      this.loadingBarSprite.spriteFrame = this._loadingBarFrames[0];
+      this.loadingBarFrames = this.sortFrames(frames);
+      this.setInitialFrame();
     } else {
+      logger.warn("No loading bar frames found");
     }
   }
 
-  public startLoading(onComplete?: () => void) {
-    this._targetProgress = 0;
-    this._visualProgress = 0;
-    this._isFinished = false;
-    this._onComplete = onComplete || null;
+  private sortFrames(frames: SpriteFrame[]): SpriteFrame[] {
+    return frames.sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { numeric: true })
+    );
   }
 
-  public updateProgress(progress: number) {
-    this._targetProgress = math.clamp01(progress);
+  private setInitialFrame(): void {
+    if (this.loadingBarFrames.length > 0 && this.loadingBarSprite) {
+      this.loadingBarSprite.spriteFrame = this.loadingBarFrames[0];
+    }
   }
 
-  public setOnComplete(cb: () => void) {
-    this._onComplete = cb;
+  // ==========================================
+  // Public API
+  // ==========================================
+
+  public startLoading(onComplete?: () => void): void {
+    this.targetProgress = LOADING_CONSTANTS.PROGRESS_MIN;
+    this.visualProgress = LOADING_CONSTANTS.PROGRESS_MIN;
+    this.isFinished = false;
+    this.onComplete = onComplete || null;
   }
 
-  protected update(dt: number) {
-    if (this._isFinished) return;
+  public updateProgress(progress: number): void {
+    this.targetProgress = math.clamp01(progress);
+  }
 
-    if (
-      this._visualProgress < this._targetProgress ||
-      this._targetProgress === 1
-    ) {
-      this._visualProgress = math.lerp(
-        this._visualProgress,
-        this._targetProgress,
-        this.smoothingSpeed
-      );
+  public setOnComplete(cb: () => void): void {
+    this.onComplete = cb;
+  }
 
-      if (this._targetProgress >= 0.99 && this._visualProgress >= 0.99) {
-        this._visualProgress = 1;
-        this.syncUI();
-        this.onLoadDataFinished();
-      } else {
-        this.syncUI();
+  // ==========================================
+  // Update Loop
+  // ==========================================
+
+  protected update(dt: number): void {
+    if (this.isFinished) return;
+
+    if (this.shouldUpdateProgress()) {
+      this.updateVisualProgress();
+      this.syncUI();
+
+      if (this.isProgressComplete()) {
+        this.handleLoadComplete();
       }
     }
   }
 
-  private syncUI() {
-    const percent = Math.floor(this._visualProgress * 100);
+  private shouldUpdateProgress(): boolean {
+    return (
+      this.visualProgress < this.targetProgress ||
+      this.targetProgress === LOADING_CONSTANTS.PROGRESS_COMPLETE
+    );
+  }
+
+  private updateVisualProgress(): void {
+    this.visualProgress = math.lerp(
+      this.visualProgress,
+      this.targetProgress,
+      this.smoothingSpeed
+    );
+  }
+
+  private isProgressComplete(): boolean {
+    return (
+      this.targetProgress >= LOADING_CONSTANTS.PROGRESS_THRESHOLD &&
+      this.visualProgress >= LOADING_CONSTANTS.PROGRESS_THRESHOLD
+    );
+  }
+
+  private handleLoadComplete(): void {
+    this.visualProgress = LOADING_CONSTANTS.PROGRESS_COMPLETE;
+    this.syncUI();
+    this.onLoadDataFinished();
+  }
+
+  // ==========================================
+  // UI Sync
+  // ==========================================
+
+  private syncUI(): void {
+    this.updateProgressLabel();
+    this.updateLoadingBarFrame();
+  }
+
+  private updateProgressLabel(): void {
+    const percent = Math.floor(
+      this.visualProgress * LOADING_CONSTANTS.PERCENT_MULTIPLIER
+    );
     this.progressLabel.string = `${percent}%`;
+  }
 
-    if (this._loadingBarFrames.length > 0 && this.loadingBarSprite) {
-      const frameIdx = Math.floor(
-        this._visualProgress * (this._loadingBarFrames.length - 1)
-      );
-      const targetFrame =
-        this._loadingBarFrames[
-          math.clamp(frameIdx, 0, this._loadingBarFrames.length - 1)
-        ];
+  private updateLoadingBarFrame(): void {
+    if (this.loadingBarFrames.length === 0 || !this.loadingBarSprite) return;
 
-      if (this.loadingBarSprite.spriteFrame !== targetFrame) {
-        this.loadingBarSprite.spriteFrame = targetFrame;
-      }
+    const targetFrame = this.getFrameAtProgress();
+    if (targetFrame && this.loadingBarSprite.spriteFrame !== targetFrame) {
+      this.loadingBarSprite.spriteFrame = targetFrame;
     }
   }
 
-  private onLoadDataFinished() {
-    this._isFinished = true;
-    this.messageLabel.string = "READY TO FARM!";
+  private getFrameAtProgress(): SpriteFrame | null {
+    const maxIndex = this.loadingBarFrames.length - 1;
+    const frameIdx = Math.floor(this.visualProgress * maxIndex);
+    const clampedIdx = math.clamp(frameIdx, 0, maxIndex);
+    return this.loadingBarFrames[clampedIdx] || null;
+  }
 
-    // Auto-transition to game scene after a short delay
+  // ==========================================
+  // Load Complete
+  // ==========================================
+
+  private onLoadDataFinished(): void {
+    this.isFinished = true;
+    this.messageLabel.string = LOADING_CONSTANTS.READY_MESSAGE;
+    this.scheduleAutoTransition();
+  }
+
+  private scheduleAutoTransition(): void {
     this.scheduleOnce(() => {
-      this.autoTransitionToGame();
+      this.executeCompleteCallback();
     }, this.autoTransitionDelay);
   }
 
-  private autoTransitionToGame() {
-    if (this._onComplete) {
-      this._onComplete();
-      this._onComplete = null;
+  private executeCompleteCallback(): void {
+    if (this.onComplete) {
+      this.onComplete();
+      this.onComplete = null;
     }
   }
 }

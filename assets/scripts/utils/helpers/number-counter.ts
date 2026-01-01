@@ -1,6 +1,14 @@
 import { _decorator, CCInteger, Component, Label, tween, Tween } from "cc";
 const { ccclass, property } = _decorator;
 
+const COUNTER_CONSTANTS = {
+  EASING: "sineOut",
+} as const;
+
+interface TweenTarget {
+  value: number;
+}
+
 @ccclass("NumberCounter")
 export class NumberCounter extends Component {
   @property(Label)
@@ -23,12 +31,17 @@ export class NumberCounter extends Component {
 
   @property
   public currentValue: number = 0;
-  private _targetValue: number = 0;
-  private _activeTween: Tween<any> | null = null;
+
+  private targetValue: number = 0;
+  private activeTween: Tween<TweenTarget> | null = null;
+
+  // ==========================================
+  // Public API
+  // ==========================================
 
   public countTo(target: number, duration?: number): Promise<void> {
     return new Promise((resolve) => {
-      this._targetValue = target;
+      this.targetValue = target;
       const animDuration = duration ?? this.duration;
 
       this.stopCurrentAnimation();
@@ -38,50 +51,67 @@ export class NumberCounter extends Component {
         return resolve();
       }
 
-      const tweenObject = { value: this.currentValue };
-      this._activeTween = tween(tweenObject)
-        .to(
-          animDuration,
-          { value: target },
-          {
-            easing: "sineOut",
-            onUpdate: () => {
-              this.currentValue = tweenObject.value;
-              this.updateLabel();
-            },
-          }
-        )
-        .call(() => {
-          this._activeTween = null;
-          this.currentValue = target;
-          this.updateLabel();
-          resolve();
-        })
-        .start();
+      this.startCountAnimation(target, animDuration, resolve);
     });
   }
 
   public setValue(value: number): void {
     this.stopCurrentAnimation();
     this.currentValue = value;
-    this._targetValue = value;
+    this.targetValue = value;
     this.updateLabel();
   }
 
   public addValue(amount: number, duration?: number): Promise<void> {
-    return this.countTo(this._targetValue + amount, duration);
+    return this.countTo(this.targetValue + amount, duration);
   }
 
   public subtractValue(amount: number, duration?: number): Promise<void> {
-    return this.countTo(this._targetValue - amount, duration);
+    return this.countTo(this.targetValue - amount, duration);
+  }
+
+  // ==========================================
+  // Animation
+  // ==========================================
+
+  private startCountAnimation(
+    target: number,
+    duration: number,
+    onComplete: () => void
+  ): void {
+    const tweenObject: TweenTarget = { value: this.currentValue };
+
+    this.activeTween = tween(tweenObject)
+      .to(
+        duration,
+        { value: target },
+        {
+          easing: COUNTER_CONSTANTS.EASING,
+          onUpdate: () => {
+            this.currentValue = tweenObject.value;
+            this.updateLabel();
+          },
+        }
+      )
+      .call(() => {
+        this.activeTween = null;
+        this.currentValue = target;
+        this.updateLabel();
+        onComplete();
+      })
+      .start();
   }
 
   private stopCurrentAnimation(): void {
-    if (this._activeTween) {
-      this._activeTween.stop();
-      this._activeTween = null;
+    if (this.activeTween) {
+      this.activeTween.stop();
+      this.activeTween = null;
     }
   }
+
+  // ==========================================
+  // Label Update & Formatting
+  // ==========================================
 
   private updateLabel(): void {
     if (!this.label?.isValid) return;
@@ -94,21 +124,21 @@ export class NumberCounter extends Component {
     let numStr = value.toFixed(this.decimalPlaces);
 
     if (this.useThousandSeparator) {
-      const parts = numStr.split(".");
-      parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-      numStr = parts.join(".");
+      numStr = this.addThousandSeparators(numStr);
     }
 
     return numStr;
   }
 
-  public getCurrentValue(): number {
-    return this.currentValue;
+  private addThousandSeparators(numStr: string): string {
+    const parts = numStr.split(".");
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    return parts.join(".");
   }
 
-  public get targetValue(): number {
-    return this._targetValue;
-  }
+  // ==========================================
+  // Lifecycle
+  // ==========================================
 
   protected onDestroy(): void {
     this.stopCurrentAnimation();

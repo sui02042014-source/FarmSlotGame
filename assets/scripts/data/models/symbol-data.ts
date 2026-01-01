@@ -21,6 +21,12 @@ export enum SymbolType {
   SCATTER = "scatter",
 }
 
+const SPECIAL_SYMBOL_TYPES: readonly SymbolType[] = [
+  SymbolType.WILD,
+  SymbolType.BONUS,
+  SymbolType.SCATTER,
+];
+
 @ccclass("SymbolData")
 export class SymbolData {
   private static readonly symbols: Map<string, ISymbolData> = new Map([
@@ -209,17 +215,30 @@ export class SymbolData {
     ],
   ]);
 
+  private static cachedSymbols: ISymbolData[] | null = null;
+
+  // ==========================================
+  // Basic Getters
+  // ==========================================
+
   static getSymbol(id: string): ISymbolData | undefined {
     return this.symbols.get(id);
   }
 
   static getAllSymbols(): ISymbolData[] {
-    return Array.from(this.symbols.values());
+    if (!this.cachedSymbols) {
+      this.cachedSymbols = Array.from(this.symbols.values());
+    }
+    return this.cachedSymbols;
   }
 
   static getSymbolCount(): number {
     return this.symbols.size;
   }
+
+  // ==========================================
+  // Type Filtering
+  // ==========================================
 
   static getSymbolsByType(type: SymbolType): ISymbolData[] {
     return this.getAllSymbols().filter((symbol) => symbol.type === type);
@@ -227,17 +246,17 @@ export class SymbolData {
 
   static isSpecialSymbol(id: string): boolean {
     const symbol = this.getSymbol(id);
-    return symbol
-      ? [SymbolType.WILD, SymbolType.BONUS, SymbolType.SCATTER].includes(
-          symbol.type
-        )
-      : false;
+    return symbol ? SPECIAL_SYMBOL_TYPES.includes(symbol.type) : false;
   }
 
   static canSubstitute(id: string): boolean {
     const symbol = this.getSymbol(id);
     return symbol ? symbol.type === SymbolType.WILD : false;
   }
+
+  // ==========================================
+  // Weight & Paytable Getters
+  // ==========================================
 
   static getAllWeights(): Record<string, number> {
     const weights: Record<string, number> = {};
