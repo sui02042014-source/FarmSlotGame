@@ -68,18 +68,40 @@ export class ReelStateMachine extends Component {
     if (this.currentState === newState) return;
 
     const oldState = this.currentState;
-    this.currentState = newState;
 
     if (this.callbacks.onStateExit) {
-      this.callbacks.onStateExit(oldState);
+      try {
+        this.callbacks.onStateExit(oldState);
+      } catch (error) {
+        console.error(
+          `[ReelStateMachine] Error in onStateExit(${oldState}):`,
+          error
+        );
+      }
     }
 
+    this.currentState = newState;
+
     if (this.callbacks.onStateEnter) {
-      this.callbacks.onStateEnter(newState);
+      try {
+        this.callbacks.onStateEnter(newState);
+      } catch (error) {
+        console.error(
+          `[ReelStateMachine] Error in onStateEnter(${newState}):`,
+          error
+        );
+      }
     }
 
     if (this.callbacks.onStateChanged) {
-      this.callbacks.onStateChanged(oldState, newState);
+      try {
+        this.callbacks.onStateChanged(oldState, newState);
+      } catch (error) {
+        console.error(
+          `[ReelStateMachine] Error in onStateChanged(${oldState} -> ${newState}):`,
+          error
+        );
+      }
     }
   }
 

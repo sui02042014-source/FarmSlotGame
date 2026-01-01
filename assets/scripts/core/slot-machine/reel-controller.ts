@@ -4,7 +4,7 @@ import { ISymbolData, SymbolData } from "../../data/models/symbol-data";
 import { SymbolHighlightEffect } from "../../utils/effects/symbol-highlight-effect";
 import { WinGlowHelper } from "../../utils/effects/win-glow-effect";
 import { ReelContainer, SymbolContainer } from "./reel-container";
-import { ReelStateMachine } from "./reel-state-machine";
+import { ReelStateMachine, ReelState } from "./reel-state-machine";
 import { GameManager } from "../game/game-manager";
 import { AudioManager } from "../audio/audio-manager";
 
@@ -17,9 +17,7 @@ enum GridRow {
 }
 
 const REEL_CONSTANTS = {
-  FRAME_TIME: 0.016,
   POSITION_TOLERANCE: 30,
-  VISIBILITY_TOLERANCE: 10,
 } as const;
 
 @ccclass("ReelController")
@@ -67,23 +65,31 @@ export class ReelController extends Component {
     this.containerLaps.clear();
     this.currentSpeed = 0;
     this.isFinalizing = false;
+
+    // Unschedule the update loop if active
+    this.unschedule(this.updateLoop);
   }
 
   protected update(dt: number): void {
+    // Only run update when actually spinning
     if (this.stateMachine.isSpinning() || this.stateMachine.isStopping()) {
-      if (!this.isFinalizing) {
-        this.updateSpeed(dt);
-        this.positionOffset += this.currentSpeed * dt;
-      }
-
-      const positionDelta = Math.abs(
-        this.positionOffset - this.lastPositionOffset
-      );
-      if (positionDelta >= GameConfig.REEL_PARAMS.SYNC_THRESHOLD) {
-        this.syncSymbols();
-      }
+      this.updateLoop(dt);
     }
   }
+
+  private updateLoop = (dt: number): void => {
+    if (!this.isFinalizing) {
+      this.updateSpeed(dt);
+      this.positionOffset += this.currentSpeed * dt;
+    }
+
+    const positionDelta = Math.abs(
+      this.positionOffset - this.lastPositionOffset
+    );
+    if (positionDelta >= GameConfig.REEL_PARAMS.SYNC_THRESHOLD) {
+      this.syncSymbols();
+    }
+  };
 
   // ==========================================
   // Public API - Spin Control
@@ -209,13 +215,17 @@ export class ReelController extends Component {
         {
           easing: "quartOut",
           onUpdate: () => {
-            this.positionOffset = this.tweenData.offset;
+            if (this.node?.isValid) {
+              this.positionOffset = this.tweenData.offset;
+            }
           },
         }
       )
       .call(() => {
-        this.activeTween = null;
-        this.onStopComplete();
+        if (this.node?.isValid) {
+          this.activeTween = null;
+          this.onStopComplete();
+        }
       })
       .start();
   }
@@ -428,11 +438,21 @@ export class ReelController extends Component {
 
   private setupComponents(): void {
     this.reelContainer =
-      this.getComponent(ReelContainer) || this.addComponent(ReelContainer);
+      this.getComponent(ReelContainer) ?? this.addComponent(ReelContainer)!;
+
     this.stateMachine =
-      this.getComponent(ReelStateMachine) ||
-      this.addComponent(ReelStateMachine);
-    this.stateMachine.initialize({});
+      this.getComponent(ReelStateMachine) ??
+      this.addComponent(ReelStateMachine)!;
+
+    this.stateMachine.initialize({
+      onStateEnter: (state) => {},
+      onStateExit: (state) => {},
+      onStateChanged: (oldState, newState) => {
+        if (newState === ReelState.SPINNING_ACCEL) {
+          this.currentSpeed = 0;
+        }
+      },
+    });
   }
 
   public async initializeReel(): Promise<void> {
@@ -513,6 +533,9 @@ export class ReelController extends Component {
   }
 
   private modulo(v: number, m: number): number {
+    if (m === 0) {
+      return 0;
+    }
     return ((v % m) + m) % m;
   }
 }

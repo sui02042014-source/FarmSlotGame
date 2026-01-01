@@ -22,6 +22,7 @@ export class SlotMachine extends Component {
   private reelStopCallbacks: Map<number, () => void> = new Map();
   private isAnticipationActive: boolean = false;
   private scatterPositions: Array<{ col: number; row: number }> = [];
+  private currentSpinId: number = 0;
 
   // ==========================================
   // Lifecycle Methods
@@ -53,19 +54,25 @@ export class SlotMachine extends Component {
       return;
     }
 
+    this.currentSpinId++;
+    const thisSpinId = this.currentSpinId;
+
     this.initializeSpin();
     this.startReelSpinning();
 
     try {
       const result = await this.fetchSpinResult();
-      if (!this.isSpinStillValid()) {
+
+      if (thisSpinId !== this.currentSpinId || !this.isSpinStillValid()) {
         return;
       }
 
       this.lastSpinResult = result;
       this.scheduleReelStops(result);
     } catch (error) {
-      this.handleSpinError(error);
+      if (thisSpinId === this.currentSpinId) {
+        this.handleSpinError(error);
+      }
     }
   }
 
@@ -193,7 +200,6 @@ export class SlotMachine extends Component {
   private checkScatterAnticipation(): void {
     if (!this.lastSpinResult || this.isAnticipationActive) return;
 
-    // Count scatters that have landed so far
     const scatterSymbolId = GameConfig.SYMBOL_TYPES.SCATTER;
     this.scatterPositions = [];
 
@@ -206,7 +212,6 @@ export class SlotMachine extends Component {
       }
     }
 
-    // If exactly 2 scatters have landed, activate anticipation
     if (this.scatterPositions.length === 2) {
       this.startAnticipationEffects();
     }
@@ -235,14 +240,15 @@ export class SlotMachine extends Component {
     this.isAnticipationActive = false;
     this.scatterPositions = [];
 
-    // Stop anticipation audio
     const audioManager = AudioManager.getInstance();
     if (audioManager) {
-      audioManager.stopSpinSound(); // This stops any looping SFX
+      audioManager.stopSpinSound();
     }
   }
 
   public stopAllReels(): void {
+    this.currentSpinId++;
+
     this.unscheduleAllCallbacks();
     this.cleanupReelCallbacks();
     this.isSpinning = false;

@@ -54,8 +54,9 @@ export class ReelContainer extends Component {
   public async createSymbolContainer(
     symbolId: string
   ): Promise<SymbolContainer | null> {
+    let node: Node | null = null;
     try {
-      const node = this.getFromPool(symbolId);
+      node = this.getFromPool(symbolId);
       const sprite = node.getComponent(Sprite)!;
 
       const symbolData = SymbolData.getSymbol(symbolId);
@@ -90,6 +91,10 @@ export class ReelContainer extends Component {
 
       return container;
     } catch (error) {
+      if (node?.isValid) {
+        node.active = false;
+        this._pool.push(node);
+      }
       return null;
     }
   }
@@ -116,7 +121,12 @@ export class ReelContainer extends Component {
         spine.node.active = false;
         container.spine = spine;
       }
-    } catch (error) {}
+    } catch (error) {
+      console.warn(
+        `[ReelContainer] Failed to load spine animation at ${path}:`,
+        error
+      );
+    }
   }
 
   public updateSymbolContainer(
