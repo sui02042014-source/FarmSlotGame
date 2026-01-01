@@ -7,10 +7,8 @@ import { ReelContainer, SymbolContainer } from "./reel-container";
 import { ReelStateMachine } from "./reel-state-machine";
 import { GameManager } from "../game/game-manager";
 import { AudioManager } from "../audio/audio-manager";
-import { Logger } from "../../utils/helpers/logger";
 
 const { ccclass, property } = _decorator;
-const logger = Logger.create("ReelController");
 
 enum GridRow {
   TOP = 1,
@@ -59,15 +57,7 @@ export class ReelController extends Component {
   protected async onLoad(): Promise<void> {
     this.setupDimensions();
     this.setupComponents();
-
-    try {
-      await SymbolHighlightEffect.initialize();
-    } catch (error) {
-      console.error(
-        "[ReelController] Failed to initialize SymbolHighlightEffect:",
-        error
-      );
-    }
+    await SymbolHighlightEffect.initialize();
   }
 
   protected onDestroy(): void {
@@ -135,9 +125,6 @@ export class ReelController extends Component {
     const validatedSymbols = symbols.map((symbolId) => {
       const symbolData = SymbolData.getSymbol(symbolId);
       if (!symbolData) {
-        console.warn(
-          `Invalid symbol ID received: ${symbolId}, using random symbol`
-        );
         return this.getRandomSymbolId();
       }
       return symbolId;
@@ -449,20 +436,9 @@ export class ReelController extends Component {
   }
 
   public async initializeReel(): Promise<void> {
-    const startTime = Date.now();
-    try {
-      const symbols = this.validateSymbols();
-      this.resetReelState();
-      await this.createAllSymbolContainers(symbols);
-      logger.info(
-        `Reel initialized with ${this.totalSymbols} symbols in ${
-          Date.now() - startTime
-        }ms`
-      );
-    } catch (error) {
-      logger.error("Failed to initialize reel:", error);
-      throw error;
-    }
+    const symbols = this.validateSymbols();
+    this.resetReelState();
+    await this.createAllSymbolContainers(symbols);
   }
 
   private validateSymbols(): ISymbolData[] {

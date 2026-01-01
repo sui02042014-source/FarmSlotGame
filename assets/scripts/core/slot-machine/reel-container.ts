@@ -11,10 +11,7 @@ import { AssetBundleManager, BundleName } from "../assets/asset-bundle-manager";
 import { GameConfig } from "../../data/config/game-config";
 import { SymbolData } from "../../data/models/symbol-data";
 import { SpriteFrameCache } from "../../utils/helpers/sprite-frame-cache";
-import { Logger } from "../../utils/helpers/logger";
 const { ccclass } = _decorator;
-
-const logger = Logger.create("ReelContainer");
 
 export interface SymbolContainer {
   node: Node;
@@ -72,8 +69,6 @@ export class ReelContainer extends Component {
       );
 
       if (!normalSF) {
-        logger.error(`Failed to load sprite frame: ${spritePath}`);
-        // Return node to pool
         node.active = false;
         this._pool.push(node);
         return null;
@@ -89,19 +84,12 @@ export class ReelContainer extends Component {
         blurSpriteFrame: blurSF,
       };
 
-      // Load spine animation asynchronously (non-blocking)
       if (symbolData?.animationPath) {
-        this.initSpineForContainer(container, symbolData.animationPath).catch(
-          (err) => {
-            // Animation is optional, log but don't fail
-            logger.warn(`Spine animation load failed for ${symbolId}:`, err);
-          }
-        );
+        this.initSpineForContainer(container, symbolData.animationPath);
       }
 
       return container;
     } catch (error) {
-      logger.error(`Failed to create symbol container for ${symbolId}:`, error);
       return null;
     }
   }
@@ -128,10 +116,7 @@ export class ReelContainer extends Component {
         spine.node.active = false;
         container.spine = spine;
       }
-    } catch (error) {
-      logger.warn(`Failed to load spine animation: ${path}`, error);
-      // Continue without animation - sprite will be used instead
-    }
+    } catch (error) {}
   }
 
   public updateSymbolContainer(

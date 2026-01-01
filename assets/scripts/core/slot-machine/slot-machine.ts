@@ -3,15 +3,12 @@ import { ToastManager } from "../../components/toast/toast-manager";
 import { GameConfig } from "../../data/config/game-config";
 import { SlotService } from "../../services/slot-service";
 import { SpinResult } from "../../types";
-import { Logger } from "../../utils/helpers/logger";
 import { GameManager } from "../game/game-manager";
 import { ReelController } from "./reel-controller";
 import { EventManager } from "../events/event-manager";
 import { AudioManager } from "../audio/audio-manager";
 
 const { ccclass, property } = _decorator;
-
-const logger = Logger.create("SlotMachine");
 
 @ccclass("SlotMachine")
 export class SlotMachine extends Component {
@@ -45,15 +42,10 @@ export class SlotMachine extends Component {
       .map((reel) => reel.getComponent(ReelController))
       .filter((c): c is ReelController => !!c);
 
-    try {
-      const initPromises = this.reelControllers.map((controller) =>
-        controller.initializeReel()
-      );
-      await Promise.all(initPromises);
-    } catch (error) {
-      logger.error("Failed to initialize slot reels:", error);
-      throw error;
-    }
+    const initPromises = this.reelControllers.map((controller) =>
+      controller.initializeReel()
+    );
+    await Promise.all(initPromises);
   }
 
   public async spin(): Promise<void> {
@@ -164,7 +156,6 @@ export class SlotMachine extends Component {
   }
 
   private handleSpinError(error: unknown): void {
-    logger.error("Failed to fetch spin result:", error);
     this.isSpinning = false;
 
     const currentGameManager = GameManager.getInstance();
@@ -230,17 +221,12 @@ export class SlotMachine extends Component {
       audioManager.playSFX(GameConfig.SOUNDS.SCATTER_ANTICIPATION);
     }
 
-    // Visual feedback: highlight the 2 scatters
     this.scatterPositions.forEach((pos) => {
       const controller = this.reelControllers[pos.col];
       if (controller) {
         controller.highlightSymbol(pos.row);
       }
     });
-
-    logger.info(
-      "Anticipation activated! 2 scatters landed, waiting for 3rd..."
-    );
   }
 
   private stopAnticipationEffects(): void {
