@@ -252,7 +252,7 @@ export class ReelController extends Component {
 
     this.stateMachine.initialize({
       onStateChanged: (oldState, newState) => {
-        if (newState === ReelState.SPINNING_ACCEL) {
+        if (newState === ReelState.SPINNING) {
           this.currentSpeed = 0;
         }
       },

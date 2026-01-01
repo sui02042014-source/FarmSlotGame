@@ -27,8 +27,14 @@ import { EventManager } from "../events/event-manager";
 import { SlotMachine } from "../slot-machine/slot-machine";
 
 const { ccclass, property } = _decorator;
-
 const logger = Logger.create("GameManager");
+
+const GAME_CONSTANTS = {
+  COIN_LABEL_LEFT_OFFSET: 100,
+  COIN_FLY_DELAY: 0.5,
+  COIN_ICON_SCALE_UP: 1.2,
+  COIN_ICON_SCALE_DURATION: 0.1,
+} as const;
 
 @ccclass("GameManager")
 export class GameManager extends Component {
@@ -53,23 +59,35 @@ export class GameManager extends Component {
   @property(Node)
   spinButton: SpinButtonController = null!;
 
+  // Services & managers (cached)
   private walletService: WalletService = null!;
+  private audioManager: AudioManager | null = null;
+  private toastManager: ToastManager | null = null;
+  private modalManager: ModalManager | null = null;
+  private slotMachineComponent: SlotMachine | null = null;
+
+  // Game state
   private currentState: GameState = GameConfig.GAME_STATES.IDLE;
-  private stateBeforePause: GameState | null = null;
   private lastWin: number = 0;
   private lastBetAmount: number = 0;
   private isAutoPlay: boolean = false;
   private isPaused: boolean = false;
 
+  // UI components
   private winCounter: NumberCounter = null!;
 
+  // FPS management
   private isLowFPS: boolean = false;
+  private idleCallback = (): void => {
+    if (this.shouldReduceFPS()) {
+      this.setFPS(GameConfig.GAMEPLAY.IDLE_FPS);
+    }
+  };
 
   private static instance: GameManager = null!;
-  private static isInitializing: boolean = false;
 
   // ==========================================
-  // Lifecycle Methods
+  // Lifecycle
   // ==========================================
 
   public static getInstance(): GameManager {
@@ -77,98 +95,62 @@ export class GameManager extends Component {
   }
 
   protected async onLoad(): Promise<void> {
-    if (GameManager.instance && GameManager.instance !== this) {
-      logger.warn("GameManager already exists. Destroying duplicate.");
-      this.node.destroy();
+    if (!this.initializeSingleton()) {
       return;
     }
 
-    GameManager.instance = this;
     this.node.on(Node.EventType.TOUCH_START, this.resetIdleTime, this);
 
     try {
       await this.initGame();
-
-      EventManager.off(
-        GameConfig.EVENTS.SPIN_COMPLETE,
-        this.onSpinComplete,
-        this
-      );
-      EventManager.on(
-        GameConfig.EVENTS.SPIN_COMPLETE,
-        this.onSpinComplete,
-        this
-      );
+      this.setupEventListeners();
     } catch (error) {
       logger.error("Failed to initialize game:", error);
       this.handleInitializationError();
     }
   }
 
-  private idleCallback = (): void => {
-    if (
-      this.currentState === GameConfig.GAME_STATES.IDLE &&
-      !this.isAutoPlay &&
-      !this.isLowFPS
-    ) {
-      this.setFPS(GameConfig.GAMEPLAY.IDLE_FPS);
-    }
-  };
-
-  private scheduleIdleFPSReduction(): void {
-    this.cancelIdleFPSReduction();
-    this.scheduleOnce(
-      this.idleCallback,
-      GameConfig.GAMEPLAY.IDLE_FPS_THRESHOLD
-    );
-  }
-
-  private cancelIdleFPSReduction(): void {
-    this.unschedule(this.idleCallback);
-  }
-
-  private resetIdleTime(): void {
-    this.cancelIdleFPSReduction();
-    if (this.isLowFPS) {
-      this.setFPS(GameConfig.GAMEPLAY.ACTIVE_FPS);
-    }
-    if (this.currentState === GameConfig.GAME_STATES.IDLE && !this.isAutoPlay) {
-      this.scheduleIdleFPSReduction();
-    }
-  }
-
-  private setFPS(fps: number): void {
-    game.frameRate = fps;
-    this.isLowFPS = fps <= GameConfig.GAMEPLAY.IDLE_FPS;
-  }
-
   protected onDestroy(): void {
-    if (GameManager.instance === this) {
-      GameManager.instance = null!;
-    }
-    this.cancelIdleFPSReduction();
-    CoinFlyEffect.clearPool();
-    CoinRainEffect.clear();
-
-    EventManager.off(
-      GameConfig.EVENTS.SPIN_COMPLETE,
-      this.onSpinComplete,
-      this
-    );
+    this.cleanup();
   }
 
   // ==========================================
   // Initialization
   // ==========================================
 
-  private async initGame(): Promise<void> {
-    this.walletService = WalletService.getInstance();
-    await this.walletService.init(); // Wait for mock API data
+  private initializeSingleton(): boolean {
+    if (GameManager.instance && GameManager.instance !== this) {
+      logger.warn("GameManager already exists. Destroying duplicate.");
+      this.node.destroy();
+      return false;
+    }
 
+    GameManager.instance = this;
+    return true;
+  }
+
+  private async initGame(): Promise<void> {
+    await this.initializeServices();
+    await this.loadAssetBundles();
+    await this.initializeSlotMachine();
+    this.setupUI();
+    this.setState(GameConfig.GAME_STATES.IDLE);
+  }
+
+  private async initializeServices(): Promise<void> {
+    this.walletService = WalletService.getInstance();
+    await this.walletService.init();
+
+    this.audioManager = AudioManager.getInstance();
+    this.toastManager = ToastManager.getInstance();
+    this.modalManager = ModalManager.getInstance();
+  }
+
+  private async loadAssetBundles(): Promise<void> {
     const bundleManager = AssetBundleManager.getInstance();
     const cache = SpriteFrameCache.getInstance();
 
-    const [_symbolsBundle, _audio, _game] = await Promise.all([
+    await Promise.all([
       bundleManager.loadBundle(BundleName.SYMBOLS),
       bundleManager.loadBundle(BundleName.AUDIO),
       bundleManager.loadBundle(BundleName.GAME),
@@ -185,16 +167,28 @@ export class GameManager extends Component {
         cache.setStaticCache(BundleName.SYMBOLS, f.name, f);
       });
     }
+  }
 
-    const slotSct = this.getSlotMachine();
-    if (slotSct) {
-      await slotSct.initializeSlot();
+  private async initializeSlotMachine(): Promise<void> {
+    this.slotMachineComponent = this.getSlotMachine();
+    if (this.slotMachineComponent) {
+      await this.slotMachineComponent.initializeSlot();
     }
+  }
 
+  private setupUI(): void {
     this.setupWinCounter();
-    this.updateUI();
     this.setupCoinAmountLayout();
-    this.setState(GameConfig.GAME_STATES.IDLE);
+    this.updateAllDisplays();
+  }
+
+  private setupEventListeners(): void {
+    EventManager.off(
+      GameConfig.EVENTS.SPIN_COMPLETE,
+      this.onSpinComplete,
+      this
+    );
+    EventManager.on(GameConfig.EVENTS.SPIN_COMPLETE, this.onSpinComplete, this);
   }
 
   private setupWinCounter(): void {
@@ -203,6 +197,7 @@ export class GameManager extends Component {
     this.winCounter =
       this.winLabelNode.getComponent(NumberCounter) ||
       this.winLabelNode.addComponent(NumberCounter);
+
     if (this.winCounter) {
       this.winCounter.label = this.winLabel;
       this.winCounter.duration = GameConfig.ANIM.NUMBER_COUNT_DURATION;
@@ -222,7 +217,7 @@ export class GameManager extends Component {
     const widget =
       coinNode.getComponent(Widget) || coinNode.addComponent(Widget);
     widget.isAlignLeft = true;
-    widget.left = 100;
+    widget.left = GAME_CONSTANTS.COIN_LABEL_LEFT_OFFSET;
     widget.updateAlignment();
 
     this.coinLabel.updateRenderData(true);
@@ -233,26 +228,35 @@ export class GameManager extends Component {
   // ==========================================
 
   public setState(state: GameState): void {
-    const audioManager = AudioManager.getInstance();
+    const oldState = this.currentState;
+    this.currentState = state;
 
-    const wasSpinning = this.currentState === GameConfig.GAME_STATES.SPINNING;
-    const isSpinning = state === GameConfig.GAME_STATES.SPINNING;
+    this.handleStateTransitionAudio(oldState, state);
+    this.updateSpinButtonsInteractable();
+    this.handleFPSOptimization(state, oldState);
+  }
+
+  private handleStateTransitionAudio(
+    oldState: GameState,
+    newState: GameState
+  ): void {
+    const wasSpinning = oldState === GameConfig.GAME_STATES.SPINNING;
+    const isSpinning = newState === GameConfig.GAME_STATES.SPINNING;
 
     if (wasSpinning && !isSpinning) {
-      audioManager?.stopSpinSound();
+      this.audioManager?.stopSpinSound();
     }
 
     if (!wasSpinning && isSpinning) {
-      const soundPath = GameConfig.SOUNDS.SPIN;
-      audioManager?.playSpinSound(soundPath);
+      this.audioManager?.playSpinSound(GameConfig.SOUNDS.SPIN);
     }
+  }
 
-    const oldState = this.currentState;
-    this.currentState = state;
-    this.updateSpinButtonsInteractable();
-
-    // Manage FPS optimization
-    if (state === GameConfig.GAME_STATES.IDLE && !this.isAutoPlay) {
+  private handleFPSOptimization(
+    newState: GameState,
+    oldState: GameState
+  ): void {
+    if (newState === GameConfig.GAME_STATES.IDLE && !this.isAutoPlay) {
       this.scheduleIdleFPSReduction();
     } else if (oldState === GameConfig.GAME_STATES.IDLE) {
       this.resetIdleTime();
@@ -268,11 +272,52 @@ export class GameManager extends Component {
   }
 
   private updateSpinButtonsInteractable(): void {
-    const canSpin = this.currentState === GameConfig.GAME_STATES.IDLE;
+    const canSpin = this.isIdle();
 
     if (this.spinButton?.isValid) {
       this.spinButton.setEnabled(canSpin);
     }
+  }
+
+  // ==========================================
+  // FPS Management
+  // ==========================================
+
+  private shouldReduceFPS(): boolean {
+    return (
+      this.currentState === GameConfig.GAME_STATES.IDLE &&
+      !this.isAutoPlay &&
+      !this.isLowFPS
+    );
+  }
+
+  private scheduleIdleFPSReduction(): void {
+    this.cancelIdleFPSReduction();
+    this.scheduleOnce(
+      this.idleCallback,
+      GameConfig.GAMEPLAY.IDLE_FPS_THRESHOLD
+    );
+  }
+
+  private cancelIdleFPSReduction(): void {
+    this.unschedule(this.idleCallback);
+  }
+
+  private resetIdleTime(): void {
+    this.cancelIdleFPSReduction();
+
+    if (this.isLowFPS) {
+      this.setFPS(GameConfig.GAMEPLAY.ACTIVE_FPS);
+    }
+
+    if (this.currentState === GameConfig.GAME_STATES.IDLE && !this.isAutoPlay) {
+      this.scheduleIdleFPSReduction();
+    }
+  }
+
+  private setFPS(fps: number): void {
+    game.frameRate = fps;
+    this.isLowFPS = fps <= GameConfig.GAMEPLAY.IDLE_FPS;
   }
 
   // ==========================================
@@ -282,19 +327,19 @@ export class GameManager extends Component {
   public increaseBet(): void {
     if (!this.isIdle()) return;
     this.walletService.increaseBet();
-    this.updateUI();
+    this.updateBetDisplay();
   }
 
   public decreaseBet(): void {
     if (!this.isIdle()) return;
     this.walletService.decreaseBet();
-    this.updateUI();
+    this.updateBetDisplay();
   }
 
   public setMaxBet(): void {
     if (!this.isIdle()) return;
     this.walletService.setMaxBet();
-    this.updateUI();
+    this.updateBetDisplay();
   }
 
   // ==========================================
@@ -302,16 +347,7 @@ export class GameManager extends Component {
   // ==========================================
 
   public startSpin(): void {
-    const modalManager = ModalManager.getInstance();
-    if (modalManager?.isAnyModalActive()) {
-      return;
-    }
-
-    if (this.isPaused) {
-      return;
-    }
-
-    if (!this.isIdle()) {
+    if (!this.canStartSpin()) {
       return;
     }
 
@@ -322,38 +358,59 @@ export class GameManager extends Component {
       return;
     }
 
+    if (!this.deductBet(betAmount)) {
+      return;
+    }
+
+    this.executeSpin();
+  }
+
+  private canStartSpin(): boolean {
+    if (this.modalManager?.isAnyModalActive()) {
+      return false;
+    }
+
+    if (this.isPaused || !this.isIdle()) {
+      return false;
+    }
+
+    return true;
+  }
+
+  private deductBet(betAmount: number): boolean {
     const deducted = this.walletService.deductCoins(betAmount);
+
     if (!deducted) {
       logger.error("Failed to deduct coins for spin");
-      ToastManager.getInstance()?.show(
-        "Failed to place bet. Please try again."
-      );
-      return;
+      this.toastManager?.show("Failed to place bet. Please try again.");
+      return false;
     }
 
     this.lastBetAmount = betAmount;
     this.lastWin = 0;
-    this.updateUI();
+    return true;
+  }
+
+  private executeSpin(): void {
+    this.updateAllDisplays();
     this.setState(GameConfig.GAME_STATES.SPINNING);
 
-    const slot = this.getSlotMachine();
-    if (slot) {
-      slot.resetAllReels();
-      slot.spin();
+    if (this.slotMachineComponent) {
+      this.slotMachineComponent.resetAllReels();
+      this.slotMachineComponent.spin();
     }
   }
 
   public onSpinComplete(): void {
     this.setState(GameConfig.GAME_STATES.STOPPING);
 
-    const slot = this.getSlotMachine();
-    if (!slot) {
+    if (!this.slotMachineComponent) {
       this.setState(GameConfig.GAME_STATES.IDLE);
       return;
     }
 
-    const winResult = slot.checkWin();
-    this.handleWinResult(slot, winResult.totalWin, winResult.winLines);
+    const winResult = this.slotMachineComponent.checkWin();
+    this.handleWinResult(winResult.totalWin, winResult.winLines);
   }
 
   private getSlotMachine(): SlotMachine | null {
@@ -365,14 +422,11 @@ export class GameManager extends Component {
   // Win / Lose Handling
   // ==========================================
 
-  private handleWinResult(
-    slot: SlotMachine,
-    totalWin: number,
-    winLines: any[]
-  ): void {
+  private handleWinResult(totalWin: number, winLines: any[]): void {
     if (totalWin > 0) {
-      slot.showWinEffects(winLines);
-
+      if (this.slotMachineComponent) {
+        this.slotMachineComponent.showWinEffects(winLines);
+      }
       this.onWin(totalWin);
     } else {
       this.onLose();
@@ -386,17 +440,9 @@ export class GameManager extends Component {
     this.walletService.completeBetTransaction(amount);
     this.walletService.addCoins(amount);
 
-    if (this.winCounter) {
-      this.winCounter.setValue(0);
-      this.winCounter.countTo(amount, GameConfig.ANIM.NUMBER_COUNT_DURATION);
-    }
-
-    const audioManager = AudioManager.getInstance();
-    if (audioManager) {
-      audioManager.playSFX(GameConfig.SOUNDS.WIN);
-    }
-
-    this.updateUI();
+    this.animateWinCounter(amount);
+    this.playWinSound();
+    this.updateAllDisplays();
     this.handleWinPresentation(amount);
 
     this.scheduleOnce(() => {
@@ -405,65 +451,93 @@ export class GameManager extends Component {
     }, GameConfig.EFFECTS.WIN_SHOW_DURATION);
   }
 
-  private shouldShowWinModal(amount: number): boolean {
-    return amount >= GameConfig.GAMEPLAY.BIG_WIN_THRESHOLD;
+  private animateWinCounter(amount: number): void {
+    if (this.winCounter) {
+      this.winCounter.setValue(0);
+      this.winCounter.countTo(amount, GameConfig.ANIM.NUMBER_COUNT_DURATION);
+    }
+  }
+
+  private playWinSound(): void {
+    this.audioManager?.playSFX(GameConfig.SOUNDS.WIN);
   }
 
   private onLose(): void {
     this.walletService.completeBetTransaction(0);
-
-    const audioManager = AudioManager.getInstance();
-    if (audioManager) {
-      audioManager.playSFX(GameConfig.SOUNDS.LOSE);
-    }
+    this.audioManager?.playSFX(GameConfig.SOUNDS.LOSE);
     this.setState(GameConfig.GAME_STATES.IDLE);
     this.continueAutoPlay();
   }
 
   // ==========================================
-  // Coin Fly Effect
+  // Win Presentation
   // ==========================================
 
   private handleWinPresentation(amount: number): void {
-    const modalManager = ModalManager.getInstance();
-
-    if (this.shouldShowWinModal(amount) && modalManager) {
+    if (this.shouldShowWinModal(amount) && this.modalManager) {
       const delay = Math.max(GameConfig.ANIM.WIN_POPUP_DELAY ?? 0, 0);
-      this.scheduleOnce(
-        () => modalManager.showWinModal(amount, this.walletService.currentBet),
-        delay
-      );
+      this.scheduleOnce(() => this.showWinModal(amount), delay);
     } else {
-      this.scheduleOnce(() => this.playCoinFlyEffect(), 0.5);
+      this.scheduleOnce(
+        () => this.playCoinFlyEffect(),
+        GAME_CONSTANTS.COIN_FLY_DELAY
+      );
     }
   }
 
-  private playCoinFlyEffect(): void {
-    const scene = this.node.scene;
-    const canvas =
-      scene?.getComponentInChildren("cc.Canvas")?.node ||
-      scene?.getChildByName("Canvas");
+  private shouldShowWinModal(amount: number): boolean {
+    return amount >= GameConfig.GAMEPLAY.BIG_WIN_THRESHOLD;
+  }
 
-    if (!canvas || !this.winLabelNode?.isValid || !this.coinIconNode?.isValid) {
+  private showWinModal(amount: number): void {
+    this.modalManager?.showWinModal(amount, this.walletService.currentBet);
+  }
+
+  private playCoinFlyEffect(): void {
+    const canvas = this.getCanvasNode();
+
+    if (!this.canPlayCoinFlyEffect(canvas)) {
       return;
     }
 
     CoinFlyEffect.play({
-      parent: canvas,
+      parent: canvas!,
       fromNode: this.winLabelNode,
       toNode: this.coinIconNode,
       coinCount: GameConfig.EFFECTS.COIN_FLY_COUNT,
       scatterRadius: GameConfig.EFFECTS.COIN_SCATTER_RADIUS,
       coinSize: GameConfig.EFFECTS.COIN_SIZE,
-      onAllArrive: () => {
-        if (this.coinIconNode?.isValid) {
-          tween(this.coinIconNode)
-            .to(0.1, { scale: new Vec3(1.2, 1.2, 1) })
-            .to(0.1, { scale: new Vec3(1, 1, 1) })
-            .start();
-        }
-      },
+      onAllArrive: () => this.animateCoinIcon(),
     });
+  }
+
+  private getCanvasNode(): Node | undefined {
+    const scene = this.node.scene;
+    const canvasNode = scene?.getComponentInChildren("cc.Canvas")?.node;
+    if (canvasNode) return canvasNode;
+
+    const namedCanvas = scene?.getChildByName("Canvas");
+    return namedCanvas || undefined;
+  }
+
+  private canPlayCoinFlyEffect(canvas: Node | undefined): boolean {
+    return !!(
+      canvas &&
+      this.winLabelNode?.isValid &&
+      this.coinIconNode?.isValid
+    );
+  }
+
+  private animateCoinIcon(): void {
+    if (!this.coinIconNode?.isValid) return;
+
+    const scaleUp = GAME_CONSTANTS.COIN_ICON_SCALE_UP;
+    const duration = GAME_CONSTANTS.COIN_ICON_SCALE_DURATION;
+
+    tween(this.coinIconNode)
+      .to(duration, { scale: new Vec3(scaleUp, scaleUp, 1) })
+      .to(duration, { scale: new Vec3(1, 1, 1) })
+      .start();
   }
 
   // ==========================================
@@ -486,47 +560,58 @@ export class GameManager extends Component {
   };
 
   public toggleAutoPlay(): void {
-    // DEBUG: Log when toggleAutoPlay is called
-    logger.warn(
-      "🔄 toggleAutoPlay() called. Current:",
-      this.isAutoPlay,
-      "→ New:",
-      !this.isAutoPlay,
-      "Stack:",
-      new Error().stack
-    );
-
     this.isAutoPlay = !this.isAutoPlay;
 
     if (!this.isAutoPlay) {
-      this.unschedule(this.onAutoPlaySpin);
+      this.stopAutoPlay();
     } else if (this.isIdle()) {
-      logger.warn(
-        "▶️ Auto-play enabled and game is IDLE → calling startSpin()"
-      );
       this.startSpin();
     }
+  }
+
+  private stopAutoPlay(): void {
+    this.unschedule(this.onAutoPlaySpin);
   }
 
   public isAutoPlayActive(): boolean {
     return this.isAutoPlay;
   }
 
-  private updateUI(): void {
-    if (this.coinLabel)
+  // ==========================================
+  // UI Updates
+  // ==========================================
+
+  private updateAllDisplays(): void {
+    this.updateCoinDisplay();
+    this.updateBetDisplay();
+    this.updateWinDisplay();
+  }
+
+  private updateCoinDisplay(): void {
+    if (this.coinLabel) {
       this.coinLabel.string = this.walletService.coins.toFixed(2);
-    if (this.betLabel)
+    }
+  }
+
+  private updateBetDisplay(): void {
+    if (this.betLabel) {
       this.betLabel.string = this.walletService.currentBet.toFixed(2);
-    if (this.winLabel) this.winLabel.string = this.lastWin.toFixed(2);
+    }
+  }
+
+  private updateWinDisplay(): void {
+    if (this.winLabel) {
+      this.winLabel.string = this.lastWin.toFixed(2);
+    }
   }
 
   // ==========================================
-  // Public API - External Helpers
+  // Public API
   // ==========================================
 
   public addCoins(amount: number): void {
     this.walletService.addCoins(amount);
-    this.updateUI();
+    this.updateCoinDisplay();
   }
 
   public refundLastBet(): void {
@@ -534,12 +619,12 @@ export class GameManager extends Component {
 
     if (refunded) {
       this.lastBetAmount = 0;
-      this.updateUI();
+      this.updateAllDisplays();
       logger.info("Refunded bet amount due to spin failure");
     } else if (this.lastBetAmount > 0) {
       this.walletService.addCoins(this.lastBetAmount);
       this.lastBetAmount = 0;
-      this.updateUI();
+      this.updateAllDisplays();
       logger.info("Refunded bet amount (fallback) due to spin failure");
     }
   }
@@ -560,12 +645,9 @@ export class GameManager extends Component {
     this.isPaused = true;
     this.unscheduleAllCallbacks();
 
-    this.stateBeforePause = this.currentState;
-
-    const slot = this.getSlotMachine();
-    if (slot) {
-      slot.stopAllReels();
-      slot.setBlurAll(true);
+    if (this.slotMachineComponent) {
+      this.slotMachineComponent.stopAllReels();
+      this.slotMachineComponent.setBlurAll(true);
     }
 
     if (this.currentState === GameConfig.GAME_STATES.SPINNING) {
@@ -577,12 +659,9 @@ export class GameManager extends Component {
   public resumeGame(): void {
     this.isPaused = false;
 
-    const slot = this.getSlotMachine();
-    if (slot) {
-      slot.setBlurAll(false);
+    if (this.slotMachineComponent) {
+      this.slotMachineComponent.setBlurAll(false);
     }
-
-    this.stateBeforePause = null;
 
     if (this.isAutoPlay && this.isIdle()) {
       this.continueAutoPlay();
@@ -594,40 +673,53 @@ export class GameManager extends Component {
   }
 
   // ==========================================
-  // Insufficient Coins Handler
+  // Error Handling
   // ==========================================
 
   private handleInsufficientCoins(): void {
-    const toastManager = ToastManager.getInstance();
-
     if (this.isAutoPlay) {
       this.isAutoPlay = false;
-      this.unschedule(this.onAutoPlaySpin);
+      this.stopAutoPlay();
       logger.info("Auto-play stopped due to insufficient coins");
     }
 
     const freeCoins =
       GameConfig.DEFAULT_COINS * GameConfig.FREE_COINS_MULTIPLIER;
 
-    if (toastManager) {
-      toastManager.show(
-        `Not enough coins! Added ${freeCoins.toFixed(2)} free coins!`,
-        3.0
-      );
-    }
+    this.toastManager?.show(
+      `Not enough coins! Added ${freeCoins.toFixed(2)} free coins!`,
+      3.0
+    );
 
     this.walletService.addCoins(freeCoins);
-    this.updateUI();
+    this.updateCoinDisplay();
   }
 
   private handleInitializationError(): void {
-    const toastManager = ToastManager.getInstance();
-    if (toastManager) {
-      toastManager.show("Failed to initialize game. Please refresh.", 5.0);
-    }
+    this.toastManager?.show("Failed to initialize game. Please refresh.", 5.0);
 
     if (GameManager.instance === this) {
       GameManager.instance = null!;
     }
+  }
+
+  // ==========================================
+  // Cleanup
+  // ==========================================
+
+  private cleanup(): void {
+    if (GameManager.instance === this) {
+      GameManager.instance = null!;
+    }
+
+    this.cancelIdleFPSReduction();
+    CoinFlyEffect.clearPool();
+    CoinRainEffect.clear();
+
+    EventManager.off(
+      GameConfig.EVENTS.SPIN_COMPLETE,
+      this.onSpinComplete,
+      this
+    );
   }
 }

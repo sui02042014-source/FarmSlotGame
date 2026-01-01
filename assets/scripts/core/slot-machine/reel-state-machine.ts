@@ -1,44 +1,31 @@
 import { _decorator, Component } from "cc";
+import { Logger } from "../../utils/helpers/logger";
 
 const { ccclass } = _decorator;
+const logger = Logger.create("ReelStateMachine");
 
 export enum ReelState {
   IDLE = "idle",
-  SPINNING_ACCEL = "spinning_accel",
-  SPINNING_CONST = "spinning_const",
+  SPINNING = "spinning",
   STOPPING = "stopping",
   RESULT = "result",
 }
 
 export interface ReelStateCallbacks {
-  onStateEnter?: (state: ReelState) => void;
-  onStateExit?: (state: ReelState) => void;
   onStateChanged?: (oldState: ReelState, newState: ReelState) => void;
 }
 
 @ccclass("ReelStateMachine")
 export class ReelStateMachine extends Component {
   private currentState: ReelState = ReelState.IDLE;
-  private callbacks: ReelStateCallbacks = {};
-
-  // ==========================================
-  // Initialization
-  // ==========================================
+  private onStateChanged?: (oldState: ReelState, newState: ReelState) => void;
 
   public initialize(callbacks: ReelStateCallbacks): void {
-    this.callbacks = callbacks;
+    this.onStateChanged = callbacks.onStateChanged;
   }
-
-  // ==========================================
-  // State Queries
-  // ==========================================
 
   public getState(): ReelState {
     return this.currentState;
-  }
-
-  public isState(state: ReelState): boolean {
-    return this.currentState === state;
   }
 
   public isIdle(): boolean {
@@ -46,18 +33,7 @@ export class ReelStateMachine extends Component {
   }
 
   public isSpinning(): boolean {
-    return (
-      this.currentState === ReelState.SPINNING_ACCEL ||
-      this.currentState === ReelState.SPINNING_CONST
-    );
-  }
-
-  public isStopping(): boolean {
-    return this.currentState === ReelState.STOPPING;
-  }
-
-  public isResult(): boolean {
-    return this.currentState === ReelState.RESULT;
+    return this.currentState === ReelState.SPINNING;
   }
 
   // ==========================================
@@ -68,55 +44,27 @@ export class ReelStateMachine extends Component {
     if (this.currentState === newState) return;
 
     const oldState = this.currentState;
-
-    if (this.callbacks.onStateExit) {
-      try {
-        this.callbacks.onStateExit(oldState);
-      } catch (error) {
-        console.error(
-          `[ReelStateMachine] Error in onStateExit(${oldState}):`,
-          error
-        );
-      }
-    }
-
     this.currentState = newState;
 
-    if (this.callbacks.onStateEnter) {
-      try {
-        this.callbacks.onStateEnter(newState);
-      } catch (error) {
-        console.error(
-          `[ReelStateMachine] Error in onStateEnter(${newState}):`,
-          error
-        );
-      }
-    }
+    this.executeCallback(oldState, newState);
+  }
 
-    if (this.callbacks.onStateChanged) {
-      try {
-        this.callbacks.onStateChanged(oldState, newState);
-      } catch (error) {
-        console.error(
-          `[ReelStateMachine] Error in onStateChanged(${oldState} -> ${newState}):`,
-          error
-        );
-      }
+  private executeCallback(oldState: ReelState, newState: ReelState): void {
+    if (!this.onStateChanged) return;
+
+    try {
+      this.onStateChanged(oldState, newState);
+    } catch (error) {
+      logger.error(
+        `Error in state change callback (${oldState} -> ${newState}):`,
+        error
+      );
     }
   }
 
   public startSpin(): void {
-    if (
-      this.currentState === ReelState.IDLE ||
-      this.currentState === ReelState.RESULT
-    ) {
-      this.setState(ReelState.SPINNING_ACCEL);
-    }
-  }
-
-  public startConstantSpin(): void {
-    if (this.currentState === ReelState.SPINNING_ACCEL) {
-      this.setState(ReelState.SPINNING_CONST);
+    if (this.canSpin()) {
+      this.setState(ReelState.SPINNING);
     }
   }
 
@@ -145,9 +93,5 @@ export class ReelStateMachine extends Component {
       this.currentState === ReelState.IDLE ||
       this.currentState === ReelState.RESULT
     );
-  }
-
-  public canStop(): boolean {
-    return this.isSpinning() || this.currentState === ReelState.STOPPING;
   }
 }

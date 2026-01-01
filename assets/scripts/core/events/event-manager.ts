@@ -46,11 +46,4 @@ export class EventManager {
   public static off(type: string, callback?: any, target?: any): void {
     this.getInstance().off(type, callback, target);
   }
-
-  /**
-   * Shorthand for subscribing to events once
-   */
-  public static once(type: string, callback: any, target?: any): void {
-    this.getInstance().once(type, callback, target);
-  }
 }

@@ -277,12 +277,6 @@ export class ReelContainer extends Component {
     this.containers.push(container);
   }
 
-  public getSortedContainers(): SymbolContainer[] {
-    return this.containers
-      .filter((c) => c?.node?.isValid)
-      .sort((a, b) => b.node.position.y - a.node.position.y);
-  }
-
   // ==========================================
   // Public API - Cleanup
   // ==========================================
