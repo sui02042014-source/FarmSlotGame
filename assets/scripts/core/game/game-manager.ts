@@ -57,6 +57,7 @@ export class GameManager extends Component {
   private currentState: GameState = GameConfig.GAME_STATES.IDLE;
   private stateBeforePause: GameState | null = null;
   private lastWin: number = 0;
+  private lastBetAmount: number = 0;
   private isAutoPlay: boolean = false;
   private isPaused: boolean = false;
 
@@ -322,6 +323,8 @@ export class GameManager extends Component {
       return;
     }
 
+    // Track the bet amount for potential refund
+    this.lastBetAmount = betAmount;
     this.lastWin = 0;
     this.updateUI();
     this.setState(GameConfig.GAME_STATES.SPINNING);
@@ -502,6 +505,15 @@ export class GameManager extends Component {
     this.updateUI();
   }
 
+  public refundLastBet(): void {
+    if (this.lastBetAmount > 0) {
+      this.walletService.addCoins(this.lastBetAmount);
+      this.lastBetAmount = 0;
+      this.updateUI();
+      logger.info("Refunded bet amount due to spin failure");
+    }
+  }
+
   public getCurrentBet(): number {
     return this.walletService.currentBet;
   }
@@ -560,6 +572,13 @@ export class GameManager extends Component {
   private handleInsufficientCoins(): void {
     const toastManager = ToastManager.getInstance();
     const modalManager = ModalManager.getInstance();
+
+    // Stop auto-play when running out of coins
+    if (this.isAutoPlay) {
+      this.isAutoPlay = false;
+      this.unschedule(this.onAutoPlaySpin);
+      logger.info("Auto-play stopped due to insufficient coins");
+    }
 
     // Give player some free coins to continue playing
     const freeCoins =

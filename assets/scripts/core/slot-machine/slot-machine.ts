@@ -21,6 +21,7 @@ export class SlotMachine extends Component {
   private lastSpinResult: SpinResult | null = null;
   private finishedReelsCount: number = 0;
   private isSpinning: boolean = false;
+  private reelStopCallbacks: Map<number, () => void> = new Map();
 
   // ==========================================
   // Lifecycle Methods
@@ -36,14 +37,20 @@ export class SlotMachine extends Component {
   // Public API - Spin Control
   // ==========================================
 
-  public initializeSlot(): void {
+  public async initializeSlot(): Promise<void> {
     this.reelControllers = this.reels
       .map((reel) => reel.getComponent(ReelController))
       .filter((c): c is ReelController => !!c);
 
-    this.reelControllers.forEach((controller) => {
-      controller.initializeReel();
-    });
+    try {
+      const initPromises = this.reelControllers.map((controller) =>
+        controller.initializeReel()
+      );
+      await Promise.all(initPromises);
+    } catch (error) {
+      logger.error("Failed to initialize slot reels:", error);
+      throw error;
+    }
   }
 
   public async spin(): Promise<void> {
@@ -58,9 +65,10 @@ export class SlotMachine extends Component {
 
     this.isSpinning = true;
     this.finishedReelsCount = 0;
+    this.cleanupReelCallbacks();
 
     const startDelay = 0.1;
-    const minSpinTime = 1.0; // Minimum time reel must spin before stopping
+    const minSpinTime = 1.0;
 
     this.reelControllers.forEach((controller, col) => {
       controller.startSpin([], col * startDelay);
@@ -87,7 +95,6 @@ export class SlotMachine extends Component {
       this.lastSpinResult = result;
 
       this.reelControllers.forEach((controller, col) => {
-        // Stop delay must account for: start delay + minimum spin time + stagger delay
         const reelStartDelay = col * startDelay;
         const stopDelay =
           reelStartDelay + minSpinTime + col * GameConfig.REEL_STOP_DELAY;
@@ -98,10 +105,14 @@ export class SlotMachine extends Component {
             return;
           }
 
-          // Register event listener BEFORE calling stopSpin to prevent race condition
-          controller.node.once(GameConfig.EVENTS.REEL_STOPPED, () => {
+          const callback = () => {
+            this.reelStopCallbacks.delete(col);
             this.handleReelStopped();
-          });
+          };
+
+          this.reelStopCallbacks.set(col, callback);
+
+          controller.node.once(GameConfig.EVENTS.REEL_STOPPED, callback);
 
           controller.stopSpin(result.symbolGrid[col]);
         }, stopDelay);
@@ -114,10 +125,12 @@ export class SlotMachine extends Component {
       if (currentGameManager && !currentGameManager.isGamePaused()) {
         this.stopAllReels();
 
+        currentGameManager.refundLastBet();
+
         currentGameManager.setState(GameConfig.GAME_STATES.IDLE);
 
         ToastManager.getInstance()?.show(
-          "Connection error. Please check your balance."
+          "Connection error. Bet has been refunded."
         );
       }
     }
@@ -133,6 +146,7 @@ export class SlotMachine extends Component {
 
   public stopAllReels(): void {
     this.unscheduleAllCallbacks();
+    this.cleanupReelCallbacks();
     this.isSpinning = false;
     this.finishedReelsCount = 0;
     this.reelControllers.forEach((controller) => {
@@ -140,6 +154,18 @@ export class SlotMachine extends Component {
         controller.forceStop();
       }
     });
+  }
+
+  private cleanupReelCallbacks(): void {
+    this.reelControllers.forEach((controller, col) => {
+      if (controller?.node?.isValid) {
+        const callback = this.reelStopCallbacks.get(col);
+        if (callback) {
+          controller.node.off(GameConfig.EVENTS.REEL_STOPPED, callback);
+        }
+      }
+    });
+    this.reelStopCallbacks.clear();
   }
 
   // ==========================================

@@ -41,6 +41,7 @@ export class ReelController extends Component {
   private lastPositionOffset = 0;
   private finalOffset = 0;
   private tweenData = { offset: 0 };
+  private activeTween: any = null;
 
   private originalPositions: Map<SymbolContainer, number> = new Map();
   private containerLaps: Map<SymbolContainer, number> = new Map();
@@ -55,12 +56,20 @@ export class ReelController extends Component {
     this.setupDimensions();
     this.setupComponents();
 
-    await SymbolHighlightEffect.initialize();
+    try {
+      await SymbolHighlightEffect.initialize();
+    } catch (error) {
+      console.error(
+        "[ReelController] Failed to initialize SymbolHighlightEffect:",
+        error
+      );
+      // Continue even if highlight effect fails - it's not critical
+    }
   }
 
   protected onDestroy(): void {
     this.unscheduleAllCallbacks();
-    tween(this.tweenData).stop();
+    this.stopActiveTween();
     this.originalPositions.clear();
     this.containerLaps.clear();
     this.currentSpeed = 0;
@@ -120,11 +129,23 @@ export class ReelController extends Component {
   private validateAndNormalizeSymbols(symbols: string[]): string[] {
     const expected = GameConfig.SYMBOL_PER_REEL;
 
-    if (symbols.length === expected) {
-      return symbols;
+    // Validate each symbol ID exists, replace invalid ones
+    const validatedSymbols = symbols.map((symbolId) => {
+      const symbolData = SymbolData.getSymbol(symbolId);
+      if (!symbolData) {
+        console.warn(
+          `Invalid symbol ID received: ${symbolId}, using random symbol`
+        );
+        return this.getRandomSymbolId();
+      }
+      return symbolId;
+    });
+
+    if (validatedSymbols.length === expected) {
+      return validatedSymbols;
     }
 
-    const normalized = [...symbols];
+    const normalized = [...validatedSymbols];
     while (normalized.length < expected) {
       normalized.push(this.getRandomSymbolId());
     }
@@ -145,7 +166,7 @@ export class ReelController extends Component {
 
   public forceStop(): void {
     this.unscheduleAllCallbacks();
-    tween(this.tweenData).stop();
+    this.stopActiveTween();
     this.currentSpeed = 0;
     this.isFinalizing = false;
     this.stateMachine.reset();
@@ -189,7 +210,10 @@ export class ReelController extends Component {
 
     this.tweenData.offset = this.positionOffset;
     this.reelContainer.setUseBlur(false);
-    tween(this.tweenData)
+
+    this.stopActiveTween();
+
+    this.activeTween = tween(this.tweenData)
       .to(
         GameConfig.REEL_PARAMS.STOP_DURATION,
         { offset: this.finalOffset },
@@ -201,6 +225,7 @@ export class ReelController extends Component {
         }
       )
       .call(() => {
+        this.activeTween = null;
         this.onStopComplete();
       })
       .start();
@@ -406,25 +431,38 @@ export class ReelController extends Component {
   }
 
   public async initializeReel(): Promise<void> {
-    const symbols = SymbolData.getAllSymbols();
+    try {
+      const symbols = SymbolData.getAllSymbols();
 
-    // Clear old references to prevent memory leaks
-    this.originalPositions.clear();
-    this.containerLaps.clear();
-    this.reelContainer.clearContainers();
-
-    const centerIndex = Math.floor(this.totalSymbols / 2);
-
-    for (let i = 0; i < this.totalSymbols; i++) {
-      const randomSymbol = symbols[Math.floor(Math.random() * symbols.length)];
-      const container = await this.reelContainer.createSymbolContainer(
-        randomSymbol.id
-      );
-
-      if (container) {
-        const posY = (centerIndex - i) * this.symbolSpacing;
-        this.setupContainer(container, posY);
+      if (!symbols || symbols.length === 0) {
+        console.error(
+          "[ReelController] No symbols available for initialization"
+        );
+        return;
       }
+
+      // Clear old references to prevent memory leaks
+      this.originalPositions.clear();
+      this.containerLaps.clear();
+      this.reelContainer.clearContainers();
+
+      const centerIndex = Math.floor(this.totalSymbols / 2);
+
+      for (let i = 0; i < this.totalSymbols; i++) {
+        const randomSymbol =
+          symbols[Math.floor(Math.random() * symbols.length)];
+        const container = await this.reelContainer.createSymbolContainer(
+          randomSymbol.id
+        );
+
+        if (container) {
+          const posY = (centerIndex - i) * this.symbolSpacing;
+          this.setupContainer(container, posY);
+        }
+      }
+    } catch (error) {
+      console.error("[ReelController] Failed to initialize reel:", error);
+      throw error; // Re-throw so caller can handle
     }
   }
 
@@ -439,6 +477,13 @@ export class ReelController extends Component {
   // ==========================================
   // Utility Methods
   // ==========================================
+
+  private stopActiveTween(): void {
+    if (this.activeTween) {
+      this.activeTween.stop();
+      this.activeTween = null;
+    }
+  }
 
   private getRowYPosition(row: number): number {
     return (1 - row) * this.symbolSpacing;
