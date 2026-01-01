@@ -17,8 +17,12 @@ export class SettingsModal extends BaseModal {
   @property(Slider)
   soundVolumeSlider: Slider = null!;
 
+  private audioManager: AudioManager | null = null;
+
   protected onLoad(): void {
     super.onLoad();
+
+    this.audioManager = AudioManager.getInstance();
 
     if (this.musicToggle) {
       this.musicToggle.node.on("toggle", this.onMusicToggle, this);
@@ -62,51 +66,40 @@ export class SettingsModal extends BaseModal {
   }
 
   private loadCurrentSettings(): void {
-    const audioManager = AudioManager.getInstance();
-    if (!audioManager) return;
+    if (!this.audioManager) return;
+
+    const settings = this.audioManager.getSettings();
 
     if (this.musicToggle) {
-      this.musicToggle.isChecked = audioManager.isMusicEnabled();
+      this.musicToggle.isChecked = settings.isMusicEnabled;
     }
 
     if (this.soundToggle) {
-      this.soundToggle.isChecked = audioManager.isSoundEnabled();
+      this.soundToggle.isChecked = settings.isSoundEnabled;
     }
 
     if (this.musicVolumeSlider) {
-      this.musicVolumeSlider.progress = audioManager.getBGMVolume();
+      this.musicVolumeSlider.progress = settings.bgmVolume;
     }
 
     if (this.soundVolumeSlider) {
-      this.soundVolumeSlider.progress = audioManager.getSFXVolume();
+      this.soundVolumeSlider.progress = settings.sfxVolume;
     }
   }
 
   private onMusicToggle(toggle: Toggle): void {
-    const audioManager = AudioManager.getInstance();
-    if (audioManager) {
-      audioManager.setMusicEnabled(toggle.isChecked);
-    }
+    this.audioManager?.setMusicEnabled(toggle.isChecked);
   }
 
   private onSoundToggle(toggle: Toggle): void {
-    const audioManager = AudioManager.getInstance();
-    if (audioManager) {
-      audioManager.setSoundEnabled(toggle.isChecked);
-    }
+    this.audioManager?.setSoundEnabled(toggle.isChecked);
   }
 
   private onSoundVolumeChange(slider: Slider): void {
-    const audioManager = AudioManager.getInstance();
-    if (audioManager) {
-      audioManager.setSFXVolume(slider.progress);
-    }
+    this.audioManager?.setSFXVolume(slider.progress);
   }
 
   private onMusicVolumeChange(slider: Slider): void {
-    const audioManager = AudioManager.getInstance();
-    if (audioManager) {
-      audioManager.setBGMVolume(slider.progress);
-    }
+    this.audioManager?.setBGMVolume(slider.progress);
   }
 }

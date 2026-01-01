@@ -8,8 +8,11 @@ import {
   game,
 } from "cc";
 import { AssetBundleManager } from "../assets/asset-bundle-manager";
+import { Logger } from "../../utils/helpers/logger";
 
 const { ccclass } = _decorator;
+
+const logger = Logger.create("AudioManager");
 
 // ==========================================
 // Constants & Types
@@ -23,15 +26,11 @@ const STORAGE_KEYS = {
   SOUND_ENABLED: "soundEnabled",
 } as const;
 
-const AUDIO_BUNDLE = "audio";
-const DEFAULT_BGM_VOLUME = 0.5;
-const DEFAULT_SFX_VOLUME = 0.8;
-
-enum AudioType {
-  BGM = "bgm",
-  SFX = "sfx",
-  SPIN = "spin",
-}
+const AUDIO_CONSTANTS = {
+  BUNDLE: "audio",
+  DEFAULT_BGM_VOLUME: 0.5,
+  DEFAULT_SFX_VOLUME: 0.8,
+} as const;
 
 interface AudioSettings {
   bgmVolume: number;
@@ -41,10 +40,6 @@ interface AudioSettings {
   isSoundEnabled: boolean;
 }
 
-// ==========================================
-// AudioManager Class
-// ==========================================
-
 @ccclass("AudioManager")
 export class AudioManager extends Component {
   private static _instance: AudioManager | null = null;
@@ -52,36 +47,29 @@ export class AudioManager extends Component {
   // Audio Sources
   private _bgmSource!: AudioSource;
   private _sfxSource!: AudioSource;
-  private _spinSource!: AudioSource;
+  private _loopingSfxSource!: AudioSource;
 
-  // Settings State
+  // Settings
   private _settings: AudioSettings = {
-    bgmVolume: DEFAULT_BGM_VOLUME,
-    sfxVolume: DEFAULT_SFX_VOLUME,
+    bgmVolume: AUDIO_CONSTANTS.DEFAULT_BGM_VOLUME,
+    sfxVolume: AUDIO_CONSTANTS.DEFAULT_SFX_VOLUME,
     isMuted: false,
     isMusicEnabled: true,
     isSoundEnabled: true,
   };
 
-  // Playback State
+  // State
   private _currentBGM: string = "";
-  private _isSpinPlaying: boolean = false;
+  private _isLoopingSfxPlaying: boolean = false;
 
-  // Resource Management
+  // Resources
   private _audioCache = new Map<string, AudioClip>();
   private _loadingPromises = new Map<string, Promise<AudioClip | null>>();
-
-  // ==========================================
-  // Singleton
-  // ==========================================
+  private _assetBundleManager!: AssetBundleManager;
 
   public static getInstance(): AudioManager | null {
     return this._instance;
   }
-
-  // ==========================================
-  // Lifecycle
-  // ==========================================
 
   protected onLoad(): void {
     if (AudioManager._instance) {
@@ -109,43 +97,47 @@ export class AudioManager extends Component {
   // ==========================================
 
   private init(): void {
+    this.cacheManagers();
     this.initAudioSources();
     this.loadSettings();
-    this.applySettings();
+    this.updateVolumes();
+  }
+
+  private cacheManagers(): void {
+    const bundleManager = AssetBundleManager.getInstance();
+    if (!bundleManager) {
+      logger.error("AssetBundleManager not initialized");
+      return;
+    }
+    this._assetBundleManager = bundleManager;
   }
 
   private initAudioSources(): void {
-    // BGM Source
-    this._bgmSource = this.node.addComponent(AudioSource);
-    this._bgmSource.loop = true;
+    this._bgmSource = this.createAudioSource(true);
+    this._sfxSource = this.createAudioSource(false);
+    this._loopingSfxSource = this.createAudioSource(true);
+  }
 
-    // SFX Source
-    this._sfxSource = this.node.addComponent(AudioSource);
-    this._sfxSource.loop = false;
-
-    // Spin Source (looping effect)
-    this._spinSource = this.node.addComponent(AudioSource);
-    this._spinSource.loop = true;
+  private createAudioSource(loop: boolean): AudioSource {
+    const source = this.node.addComponent(AudioSource);
+    source.loop = loop;
+    return source;
   }
 
   private loadSettings(): void {
     this._settings = {
-      bgmVolume: this.getStoredNumber(
+      bgmVolume: this.getFromStorage(
         STORAGE_KEYS.BGM_VOLUME,
-        DEFAULT_BGM_VOLUME
+        AUDIO_CONSTANTS.DEFAULT_BGM_VOLUME
       ),
-      sfxVolume: this.getStoredNumber(
+      sfxVolume: this.getFromStorage(
         STORAGE_KEYS.SFX_VOLUME,
-        DEFAULT_SFX_VOLUME
+        AUDIO_CONSTANTS.DEFAULT_SFX_VOLUME
       ),
-      isMuted: this.getStoredBoolean(STORAGE_KEYS.MUTED, false),
-      isMusicEnabled: this.getStoredBoolean(STORAGE_KEYS.MUSIC_ENABLED, true),
-      isSoundEnabled: this.getStoredBoolean(STORAGE_KEYS.SOUND_ENABLED, true),
+      isMuted: this.getFromStorage(STORAGE_KEYS.MUTED, false),
+      isMusicEnabled: this.getFromStorage(STORAGE_KEYS.MUSIC_ENABLED, true),
+      isSoundEnabled: this.getFromStorage(STORAGE_KEYS.SOUND_ENABLED, true),
     };
-  }
-
-  private applySettings(): void {
-    this.updateVolumes();
   }
 
   // ==========================================
@@ -153,44 +145,16 @@ export class AudioManager extends Component {
   // ==========================================
 
   public async playBGM(path: string): Promise<void> {
-    // Skip if same BGM is already playing
-    if (this._currentBGM === path && this._bgmSource.playing) {
-      return;
-    }
+    if (!this.canPlayMusic()) return;
+    if (this._currentBGM === path && this._bgmSource.playing) return;
 
-    // Check if music is enabled
-    if (!this.canPlayMusic()) {
-      return;
-    }
-
-    const clip = await this.loadClip(path);
-    if (!clip) return;
-
-    this.stopAudioSource(this._bgmSource, AudioType.BGM);
-    this._bgmSource.clip = clip;
-    this._bgmSource.play();
+    await this.playLoopingAudio(this._bgmSource, path);
     this._currentBGM = path;
   }
 
   public stopBGM(): void {
-    this.stopAudioSource(this._bgmSource, AudioType.BGM);
+    this.stopSource(this._bgmSource, true);
     this._currentBGM = "";
-  }
-
-  public pauseBGM(): void {
-    if (this._bgmSource.playing) {
-      this._bgmSource.pause();
-    }
-  }
-
-  public resumeBGM(): void {
-    if (
-      this._bgmSource.clip &&
-      !this._bgmSource.playing &&
-      this.canPlayMusic()
-    ) {
-      this._bgmSource.play();
-    }
   }
 
   // ==========================================
@@ -198,37 +162,31 @@ export class AudioManager extends Component {
   // ==========================================
 
   public async playSFX(path: string): Promise<void> {
-    if (!this.canPlaySound()) return;
-
-    const clip = await this.loadClip(path);
-    if (clip) {
-      this._sfxSource.playOneShot(clip, this._settings.sfxVolume);
-    }
-  }
-
-  // ==========================================
-  // Public API - Spin Sound
-  // ==========================================
-
-  public async playSpinSound(path: string): Promise<void> {
-    // Prevent duplicate plays
-    if (this._isSpinPlaying && this._spinSource.playing) {
-      return;
-    }
-
+    if (!this.isAudioSourceValid(this._sfxSource)) return;
     if (!this.canPlaySound()) return;
 
     const clip = await this.loadClip(path);
     if (!clip) return;
 
-    this._spinSource.clip = clip;
-    this._spinSource.play();
-    this._isSpinPlaying = true;
+    const volume = this.getEffectiveVolume(this._settings.sfxVolume);
+    this._sfxSource.playOneShot(clip, volume);
+  }
+
+  // ==========================================
+  // Public API - Looping SFX (Spin Sound)
+  // ==========================================
+
+  public async playSpinSound(path: string): Promise<void> {
+    if (!this.canPlaySound()) return;
+    if (this._isLoopingSfxPlaying && this._loopingSfxSource.playing) return;
+
+    await this.playLoopingAudio(this._loopingSfxSource, path);
+    this._isLoopingSfxPlaying = true;
   }
 
   public stopSpinSound(): void {
-    this.stopAudioSource(this._spinSource, AudioType.SPIN);
-    this._isSpinPlaying = false;
+    this.stopSource(this._loopingSfxSource, true);
+    this._isLoopingSfxPlaying = false;
   }
 
   // ==========================================
@@ -237,39 +195,20 @@ export class AudioManager extends Component {
 
   public setBGMVolume(volume: number): void {
     this._settings.bgmVolume = math.clamp01(volume);
-    this.updateVolumes();
     this.saveToStorage(STORAGE_KEYS.BGM_VOLUME, this._settings.bgmVolume);
+    this.updateVolumes();
   }
 
   public setSFXVolume(volume: number): void {
     this._settings.sfxVolume = math.clamp01(volume);
-    this.updateVolumes();
     this.saveToStorage(STORAGE_KEYS.SFX_VOLUME, this._settings.sfxVolume);
-  }
-
-  public toggleMute(): void {
-    this._settings.isMuted = !this._settings.isMuted;
-    this.saveToStorage(STORAGE_KEYS.MUTED, this._settings.isMuted);
-
-    if (this._settings.isMuted) {
-      this.pauseBGM();
-      this.stopSpinSound();
-    } else {
-      this.resumeBGM();
-    }
-
     this.updateVolumes();
   }
 
   public setMusicEnabled(enabled: boolean): void {
     this._settings.isMusicEnabled = enabled;
     this.saveToStorage(STORAGE_KEYS.MUSIC_ENABLED, enabled);
-
-    if (enabled) {
-      this.resumeBGM();
-    } else {
-      this.pauseBGM();
-    }
+    enabled ? this.resumeBGM() : this.pauseBGM();
   }
 
   public setSoundEnabled(enabled: boolean): void {
@@ -285,29 +224,17 @@ export class AudioManager extends Component {
   // Public API - Getters
   // ==========================================
 
-  public getBGMVolume(): number {
-    return this._settings.bgmVolume;
-  }
-
-  public getSFXVolume(): number {
-    return this._settings.sfxVolume;
-  }
-
-  public isMuted(): boolean {
-    return this._settings.isMuted;
-  }
-
-  public isMusicEnabled(): boolean {
-    return this._settings.isMusicEnabled;
-  }
-
-  public isSoundEnabled(): boolean {
-    return this._settings.isSoundEnabled;
+  public getSettings(): Readonly<AudioSettings> {
+    return { ...this._settings };
   }
 
   // ==========================================
   // Private Helpers - Playback
   // ==========================================
+
+  private isAudioSourceValid(source: AudioSource): boolean {
+    return source?.isValid ?? false;
+  }
 
   private canPlayMusic(): boolean {
     return !this._settings.isMuted && this._settings.isMusicEnabled;
@@ -317,25 +244,60 @@ export class AudioManager extends Component {
     return !this._settings.isMuted && this._settings.isSoundEnabled;
   }
 
-  private stopAudioSource(source: AudioSource, type: AudioType): void {
-    if (!source?.isValid) return;
+  private getEffectiveVolume(baseVolume: number): number {
+    return this._settings.isMuted ? 0 : baseVolume;
+  }
+
+  private async playLoopingAudio(
+    source: AudioSource,
+    path: string
+  ): Promise<void> {
+    if (!this.isAudioSourceValid(source)) return;
+
+    const clip = await this.loadClip(path);
+    if (!clip) return;
+
+    this.stopSource(source, true);
+    source.clip = clip;
+    source.play();
+  }
+
+  private stopSource(source: AudioSource, clearClip: boolean): void {
+    if (!this.isAudioSourceValid(source)) return;
 
     if (source.playing) {
       source.stop();
     }
 
-    // Clear clip for looping sources to prevent auto-replay
-    if (type !== AudioType.SFX) {
+    if (clearClip) {
       source.clip = null;
     }
   }
 
-  private updateVolumes(): void {
-    const muteFactor = this._settings.isMuted ? 0 : 1;
+  private pauseBGM(): void {
+    if (this.isAudioSourceValid(this._bgmSource) && this._bgmSource.playing) {
+      this._bgmSource.pause();
+    }
+  }
 
+  private resumeBGM(): void {
+    if (
+      this.isAudioSourceValid(this._bgmSource) &&
+      this._bgmSource.clip &&
+      !this._bgmSource.playing &&
+      this.canPlayMusic()
+    ) {
+      this._bgmSource.play();
+    }
+  }
+
+  private updateVolumes(): void {
+    if (!this.isAudioSourceValid(this._bgmSource)) return;
+
+    const muteFactor = this._settings.isMuted ? 0 : 1;
     this._bgmSource.volume = this._settings.bgmVolume * muteFactor;
     this._sfxSource.volume = this._settings.sfxVolume * muteFactor;
-    this._spinSource.volume = this._settings.sfxVolume * muteFactor;
+    this._loopingSfxSource.volume = this._settings.sfxVolume * muteFactor;
   }
 
   // ==========================================
@@ -343,17 +305,14 @@ export class AudioManager extends Component {
   // ==========================================
 
   private async loadClip(path: string): Promise<AudioClip | null> {
-    // Return cached clip
     if (this._audioCache.has(path)) {
       return this._audioCache.get(path)!;
     }
 
-    // Return ongoing load promise
     if (this._loadingPromises.has(path)) {
       return this._loadingPromises.get(path)!;
     }
 
-    // Start new load
     const loadPromise = this.loadClipFromBundle(path);
     this._loadingPromises.set(path, loadPromise);
 
@@ -362,20 +321,26 @@ export class AudioManager extends Component {
 
   private async loadClipFromBundle(path: string): Promise<AudioClip | null> {
     try {
-      const bundleManager = AssetBundleManager.getInstance();
-      const clip = await bundleManager.load(AUDIO_BUNDLE, path, AudioClip);
+      if (!this._assetBundleManager) {
+        logger.error("AssetBundleManager not available");
+        return null;
+      }
+
+      const clip = await this._assetBundleManager.load(
+        AUDIO_CONSTANTS.BUNDLE,
+        path,
+        AudioClip
+      );
 
       if (clip) {
         this._audioCache.set(path, clip);
         return clip;
-      } else {
-        // Don't cache null results - allow retry on next attempt
-        console.warn(`[AudioManager] Failed to load audio clip: ${path}`);
-        return null;
       }
+
+      logger.warn(`Failed to load audio clip: ${path}`);
+      return null;
     } catch (error) {
-      console.warn(`[AudioManager] Exception loading audio: ${path}`, error);
-      // Don't cache error results - allow retry
+      logger.warn(`Exception loading audio: ${path}`, error);
       return null;
     } finally {
       this._loadingPromises.delete(path);
@@ -386,14 +351,17 @@ export class AudioManager extends Component {
   // Private Helpers - Storage
   // ==========================================
 
-  private getStoredNumber(key: string, defaultValue: number): number {
+  private getFromStorage<T extends number | boolean>(
+    key: string,
+    defaultValue: T
+  ): T {
     const value = sys.localStorage.getItem(key);
-    return value ? parseFloat(value) : defaultValue;
-  }
+    if (value === null) return defaultValue;
 
-  private getStoredBoolean(key: string, defaultValue: boolean): boolean {
-    const value = sys.localStorage.getItem(key);
-    return value === null ? defaultValue : value === "true";
+    if (typeof defaultValue === "boolean") {
+      return (value === "true") as T;
+    }
+    return parseFloat(value) as T;
   }
 
   private saveToStorage(key: string, value: number | boolean): void {
@@ -405,35 +373,26 @@ export class AudioManager extends Component {
   // ==========================================
 
   private cleanup(): void {
-    // Stop all audio sources
-    this.stopAudioSource(this._bgmSource, AudioType.BGM);
-    this.stopAudioSource(this._sfxSource, AudioType.SFX);
-    this.stopAudioSource(this._spinSource, AudioType.SPIN);
+    this.stopSource(this._bgmSource, true);
+    this.stopSource(this._sfxSource, false);
+    this.stopSource(this._loopingSfxSource, true);
 
-    // Clear resources
     this._audioCache.clear();
     this._loadingPromises.clear();
 
-    // Reset state
     this._currentBGM = "";
-    this._isSpinPlaying = false;
+    this._isLoopingSfxPlaying = false;
   }
 
   // ==========================================
   // Public API - Resource Management
   // ==========================================
 
-  /**
-   * Clear all cached audio clips to free memory
-   */
   public clearCache(): void {
     this._audioCache.clear();
     this._loadingPromises.clear();
   }
 
-  /**
-   * Get cache statistics
-   */
   public getCacheStats(): { cachedClips: number; loadingClips: number } {
     return {
       cachedClips: this._audioCache.size,

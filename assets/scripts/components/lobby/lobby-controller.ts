@@ -113,7 +113,7 @@ export class LobbyController extends Component {
 
   private async playLobbyMusic(): Promise<void> {
     const audioManager = AudioManager.getInstance();
-    if (audioManager && audioManager.isMusicEnabled()) {
+    if (audioManager && audioManager.getSettings().isMusicEnabled) {
       await audioManager.playBGM(BGM_LOBBY);
     }
   }
