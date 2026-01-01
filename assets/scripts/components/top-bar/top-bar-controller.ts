@@ -37,23 +37,25 @@ export class TopBarController extends Component {
 
   private lastClickTime: number = 0;
   private retryCount: number = 0;
-  private gameManager: GameManager | null = null;
-  private modalManager: ModalManager | null = null;
-  private toastManager: ToastManager | null = null;
+
+  private get gameManager(): GameManager | null {
+    return GameManager.getInstance();
+  }
+
+  private get modalManager(): ModalManager | null {
+    return ModalManager.getInstance();
+  }
+
+  private get toastManager(): ToastManager | null {
+    return ToastManager.getInstance();
+  }
 
   protected onLoad(): void {
-    this.cacheManagers();
     this.setupEventListeners();
   }
 
   protected start(): void {
     this.updatePauseButtonUI();
-  }
-
-  private cacheManagers(): void {
-    this.gameManager = GameManager.getInstance();
-    this.modalManager = ModalManager.getInstance();
-    this.toastManager = ToastManager.getInstance();
   }
 
   private setupEventListeners(): void {
@@ -64,7 +66,7 @@ export class TopBarController extends Component {
   }
 
   private registerButtonEvent(button: Node, handler: () => void): void {
-    if (button) {
+    if (button?.isValid) {
       button.on(Node.EventType.TOUCH_END, handler, this);
     }
   }
@@ -104,11 +106,19 @@ export class TopBarController extends Component {
   }
 
   private onInfoButtonClick(): void {
-    this.modalManager?.showPaytableModal();
+    if (!this.modalManager) {
+      return;
+    }
+
+    this.modalManager.showPaytableModal();
   }
 
   private onSettingsButtonClick(): void {
-    this.modalManager?.showSettingsModal();
+    if (!this.modalManager) {
+      return;
+    }
+
+    this.modalManager.showSettingsModal();
   }
 
   private onPauseButtonClick(): void {
