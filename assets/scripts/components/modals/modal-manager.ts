@@ -1,4 +1,4 @@
-import { _decorator, Component, Node, instantiate, Prefab } from "cc";
+import { _decorator, Component, Node, instantiate, Prefab, game } from "cc";
 const { ccclass, property } = _decorator;
 
 @ccclass("ModalManager")
@@ -21,26 +21,64 @@ export class ModalManager extends Component {
     [];
   private isShowingModal: boolean = false;
 
-  public static getInstance(): ModalManager {
+  public static getInstance(): ModalManager | null {
+    if (this.instance && !this.instance.node?.isValid) {
+      this.instance = null!;
+    }
     return this.instance;
   }
 
   protected onLoad(): void {
-    if (ModalManager.instance) {
-      this.node.destroy();
+    if (ModalManager.instance && ModalManager.instance !== this) {
+      if (!ModalManager.instance.node?.isValid) {
+        this.replaceSingleton();
+      } else {
+        this.node.destroy();
+      }
       return;
     }
+
     ModalManager.instance = this;
+    game.addPersistRootNode(this.node);
 
     if (!this.modalContainer) {
       this.modalContainer = new Node("ModalContainer");
       this.modalContainer.setParent(this.node);
     }
+
+    this.repositionToCanvas();
+  }
+
+  protected start(): void {
+    this.repositionToCanvas();
   }
 
   protected onDestroy(): void {
     if (ModalManager.instance === this) {
       ModalManager.instance = null!;
+    }
+    this.closeAllModals();
+  }
+
+  private replaceSingleton(): void {
+    ModalManager.instance = this;
+    game.addPersistRootNode(this.node);
+
+    if (!this.modalContainer) {
+      this.modalContainer = new Node("ModalContainer");
+      this.modalContainer.setParent(this.node);
+    }
+
+    this.repositionToCanvas();
+  }
+
+  private repositionToCanvas(): void {
+    if (!this.node?.isValid || !this.node.scene) return;
+
+    const canvas = this.node.scene.getComponentInChildren("cc.Canvas")?.node;
+    if (canvas && this.node.parent !== canvas) {
+      this.node.setParent(canvas);
+      this.node.setSiblingIndex(this.node.parent!.children.length - 1);
     }
   }
 
@@ -73,9 +111,6 @@ export class ModalManager extends Component {
       this.isModalActive(modalName) ||
       this.modalQueue.some((m) => m.name === modalName)
     ) {
-      console.warn(
-        `[ModalManager] Modal ${modalName} is already active or queued.`
-      );
       return;
     }
 
@@ -85,6 +120,7 @@ export class ModalManager extends Component {
     }
 
     this.isShowingModal = true;
+    this.repositionToCanvas();
 
     const prefab = this.getPrefabByName(modalName);
     if (!prefab) {

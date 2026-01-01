@@ -10,6 +10,7 @@ export enum BundleName {
   SYMBOLS = "symbols",
   AUDIO = "audio",
   GAME = "game",
+  PREFABS = "prefabs",
 }
 
 export class AssetBundleManager {

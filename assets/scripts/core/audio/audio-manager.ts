@@ -11,254 +11,407 @@ import { AssetBundleManager } from "../assets/asset-bundle-manager";
 
 const { ccclass } = _decorator;
 
-const AUDIO_STORAGE_KEYS = {
+// ==========================================
+// Constants & Types
+// ==========================================
+
+const STORAGE_KEYS = {
   BGM_VOLUME: "audio_bgm_vol",
   SFX_VOLUME: "audio_sfx_vol",
   MUTED: "audio_muted",
-};
+  MUSIC_ENABLED: "musicEnabled",
+  SOUND_ENABLED: "soundEnabled",
+} as const;
 
-const BUNDLE_NAME = "audio";
+const AUDIO_BUNDLE = "audio";
+const DEFAULT_BGM_VOLUME = 0.5;
+const DEFAULT_SFX_VOLUME = 0.8;
+
+enum AudioType {
+  BGM = "bgm",
+  SFX = "sfx",
+  SPIN = "spin",
+}
+
+interface AudioSettings {
+  bgmVolume: number;
+  sfxVolume: number;
+  isMuted: boolean;
+  isMusicEnabled: boolean;
+  isSoundEnabled: boolean;
+}
+
+// ==========================================
+// AudioManager Class
+// ==========================================
 
 @ccclass("AudioManager")
 export class AudioManager extends Component {
-  private static _instance: AudioManager = null!;
+  private static _instance: AudioManager | null = null;
 
-  private _bgmSource: AudioSource = null!;
-  private _sfxSource: AudioSource = null!;
-  private _spinSource: AudioSource = null!;
+  // Audio Sources
+  private _bgmSource!: AudioSource;
+  private _sfxSource!: AudioSource;
+  private _spinSource!: AudioSource;
 
-  private _bgmVolume: number = 0.5;
-  private _sfxVolume: number = 0.8;
-  private _isMuted: boolean = false;
-  private _isMusicEnabled: boolean = true;
-  private _isSoundEnabled: boolean = true;
-  private _currentBGMPath: string = "";
+  // Settings State
+  private _settings: AudioSettings = {
+    bgmVolume: DEFAULT_BGM_VOLUME,
+    sfxVolume: DEFAULT_SFX_VOLUME,
+    isMuted: false,
+    isMusicEnabled: true,
+    isSoundEnabled: true,
+  };
 
-  private readonly _audioCache = new Map<string, AudioClip>();
-  private readonly _loadingPromises = new Map<
-    string,
-    Promise<AudioClip | null>
-  >();
+  // Playback State
+  private _currentBGM: string = "";
+  private _isSpinPlaying: boolean = false;
 
-  public static getInstance(): AudioManager {
+  // Resource Management
+  private _audioCache = new Map<string, AudioClip>();
+  private _loadingPromises = new Map<string, Promise<AudioClip | null>>();
+
+  // ==========================================
+  // Singleton
+  // ==========================================
+
+  public static getInstance(): AudioManager | null {
     return this._instance;
   }
 
+  // ==========================================
+  // Lifecycle
+  // ==========================================
+
   protected onLoad(): void {
     if (AudioManager._instance) {
+      this.cleanup();
       this.node.destroy();
       return;
     }
-    AudioManager._instance = this;
 
-    // Make this node persist across scene transitions
+    AudioManager._instance = this;
     game.addPersistRootNode(this.node);
 
+    this.init();
+  }
+
+  protected onDestroy(): void {
+    this.cleanup();
+
+    if (AudioManager._instance === this) {
+      AudioManager._instance = null;
+    }
+  }
+
+  // ==========================================
+  // Initialization
+  // ==========================================
+
+  private init(): void {
     this.initAudioSources();
     this.loadSettings();
-    this.updateVolumes();
+    this.applySettings();
   }
 
   private initAudioSources(): void {
+    // BGM Source
     this._bgmSource = this.node.addComponent(AudioSource);
     this._bgmSource.loop = true;
 
+    // SFX Source
     this._sfxSource = this.node.addComponent(AudioSource);
     this._sfxSource.loop = false;
 
+    // Spin Source (looping effect)
     this._spinSource = this.node.addComponent(AudioSource);
     this._spinSource.loop = true;
   }
 
   private loadSettings(): void {
-    this._bgmVolume = parseFloat(
-      sys.localStorage.getItem(AUDIO_STORAGE_KEYS.BGM_VOLUME) ?? "0.5"
-    );
-    this._sfxVolume = parseFloat(
-      sys.localStorage.getItem(AUDIO_STORAGE_KEYS.SFX_VOLUME) ?? "0.8"
-    );
-    this._isMuted =
-      sys.localStorage.getItem(AUDIO_STORAGE_KEYS.MUTED) === "true";
+    this._settings = {
+      bgmVolume: this.getStoredNumber(
+        STORAGE_KEYS.BGM_VOLUME,
+        DEFAULT_BGM_VOLUME
+      ),
+      sfxVolume: this.getStoredNumber(
+        STORAGE_KEYS.SFX_VOLUME,
+        DEFAULT_SFX_VOLUME
+      ),
+      isMuted: this.getStoredBoolean(STORAGE_KEYS.MUTED, false),
+      isMusicEnabled: this.getStoredBoolean(STORAGE_KEYS.MUSIC_ENABLED, true),
+      isSoundEnabled: this.getStoredBoolean(STORAGE_KEYS.SOUND_ENABLED, true),
+    };
+  }
 
-    // Default to true if not set
-    const musicEnabledValue = sys.localStorage.getItem("musicEnabled");
-    this._isMusicEnabled =
-      musicEnabledValue === null ? true : musicEnabledValue === "true";
-
-    const soundEnabledValue = sys.localStorage.getItem("soundEnabled");
-    this._isSoundEnabled =
-      soundEnabledValue === null ? true : soundEnabledValue === "true";
+  private applySettings(): void {
+    this.updateVolumes();
   }
 
   // ==========================================
-  // PUBLIC API
+  // Public API - BGM
   // ==========================================
 
   public async playBGM(path: string): Promise<void> {
-    // If same BGM is already playing, don't restart it
-    if (this._currentBGMPath === path && this._bgmSource.playing) {
+    // Skip if same BGM is already playing
+    if (this._currentBGM === path && this._bgmSource.playing) {
       return;
     }
 
-    const clip = await this.getOrLoadClip(path);
-    if (!clip || this._isMuted || !this._isMusicEnabled) return;
+    // Check if music is enabled
+    if (!this.canPlayMusic()) {
+      return;
+    }
 
+    const clip = await this.loadClip(path);
+    if (!clip) return;
+
+    this.stopAudioSource(this._bgmSource, AudioType.BGM);
     this._bgmSource.clip = clip;
     this._bgmSource.play();
-    this._currentBGMPath = path;
+    this._currentBGM = path;
   }
 
   public stopBGM(): void {
-    this._bgmSource.stop();
-    this._currentBGMPath = "";
+    this.stopAudioSource(this._bgmSource, AudioType.BGM);
+    this._currentBGM = "";
   }
 
-  public async playSFX(path: string): Promise<void> {
-    if (this._isMuted || !this._isSoundEnabled) return;
-    const clip = await this.getOrLoadClip(path);
-    if (clip) {
-      this._sfxSource.playOneShot(clip, this._sfxVolume);
-    }
-  }
-
-  public async playSpinSound(path: string): Promise<void> {
-    if (this._isMuted || !this._isSoundEnabled) return;
-    const clip = await this.getOrLoadClip(path);
-    if (clip) {
-      this._spinSource.clip = clip;
-      this._spinSource.play();
-    }
-  }
-
-  public stopSpinSound(): void {
-    this._spinSource.stop();
-  }
-
-  // ==========================================
-  // VOLUME CONTROL
-  // ==========================================
-
-  public setBGMVolume(volume: number): void {
-    this._bgmVolume = math.clamp01(volume);
-    this.updateVolumes();
-    sys.localStorage.setItem(
-      AUDIO_STORAGE_KEYS.BGM_VOLUME,
-      this._bgmVolume.toString()
-    );
-  }
-
-  public setSFXVolume(volume: number): void {
-    this._sfxVolume = math.clamp01(volume);
-    this.updateVolumes();
-    sys.localStorage.setItem(
-      AUDIO_STORAGE_KEYS.SFX_VOLUME,
-      this._sfxVolume.toString()
-    );
-  }
-
-  public toggleMute(): void {
-    this._isMuted = !this._isMuted;
-    this.updateVolumes();
-    sys.localStorage.setItem(
-      AUDIO_STORAGE_KEYS.MUTED,
-      this._isMuted.toString()
-    );
-
-    if (this._isMuted) {
+  public pauseBGM(): void {
+    if (this._bgmSource.playing) {
       this._bgmSource.pause();
-      this._spinSource.pause();
-    } else if (this._bgmSource.clip) {
+    }
+  }
+
+  public resumeBGM(): void {
+    if (
+      this._bgmSource.clip &&
+      !this._bgmSource.playing &&
+      this.canPlayMusic()
+    ) {
       this._bgmSource.play();
     }
   }
 
+  // ==========================================
+  // Public API - SFX
+  // ==========================================
+
+  public async playSFX(path: string): Promise<void> {
+    if (!this.canPlaySound()) return;
+
+    const clip = await this.loadClip(path);
+    if (clip) {
+      this._sfxSource.playOneShot(clip, this._settings.sfxVolume);
+    }
+  }
+
+  // ==========================================
+  // Public API - Spin Sound
+  // ==========================================
+
+  public async playSpinSound(path: string): Promise<void> {
+    // Prevent duplicate plays
+    if (this._isSpinPlaying && this._spinSource.playing) {
+      return;
+    }
+
+    if (!this.canPlaySound()) return;
+
+    const clip = await this.loadClip(path);
+    if (!clip) return;
+
+    this._spinSource.clip = clip;
+    this._spinSource.play();
+    this._isSpinPlaying = true;
+  }
+
+  public stopSpinSound(): void {
+    this.stopAudioSource(this._spinSource, AudioType.SPIN);
+    this._isSpinPlaying = false;
+  }
+
+  // ==========================================
+  // Public API - Settings
+  // ==========================================
+
+  public setBGMVolume(volume: number): void {
+    this._settings.bgmVolume = math.clamp01(volume);
+    this.updateVolumes();
+    this.saveToStorage(STORAGE_KEYS.BGM_VOLUME, this._settings.bgmVolume);
+  }
+
+  public setSFXVolume(volume: number): void {
+    this._settings.sfxVolume = math.clamp01(volume);
+    this.updateVolumes();
+    this.saveToStorage(STORAGE_KEYS.SFX_VOLUME, this._settings.sfxVolume);
+  }
+
+  public toggleMute(): void {
+    this._settings.isMuted = !this._settings.isMuted;
+    this.saveToStorage(STORAGE_KEYS.MUTED, this._settings.isMuted);
+
+    if (this._settings.isMuted) {
+      this.pauseBGM();
+      this.stopSpinSound();
+    } else {
+      this.resumeBGM();
+    }
+
+    this.updateVolumes();
+  }
+
   public setMusicEnabled(enabled: boolean): void {
-    this._isMusicEnabled = enabled;
-    sys.localStorage.setItem("musicEnabled", enabled.toString());
+    this._settings.isMusicEnabled = enabled;
+    this.saveToStorage(STORAGE_KEYS.MUSIC_ENABLED, enabled);
 
     if (enabled) {
-      if (this._bgmSource.clip && !this._bgmSource.playing && !this._isMuted) {
-        this._bgmSource.play();
-      }
+      this.resumeBGM();
     } else {
-      this._bgmSource.pause();
+      this.pauseBGM();
     }
   }
 
   public setSoundEnabled(enabled: boolean): void {
-    this._isSoundEnabled = enabled;
-    sys.localStorage.setItem("soundEnabled", enabled.toString());
+    this._settings.isSoundEnabled = enabled;
+    this.saveToStorage(STORAGE_KEYS.SOUND_ENABLED, enabled);
 
-    if (!enabled && this._spinSource.playing) {
-      this._spinSource.stop();
+    if (!enabled) {
+      this.stopSpinSound();
     }
   }
 
+  // ==========================================
+  // Public API - Getters
+  // ==========================================
+
   public getBGMVolume(): number {
-    return this._bgmVolume;
+    return this._settings.bgmVolume;
   }
 
   public getSFXVolume(): number {
-    return this._sfxVolume;
+    return this._settings.sfxVolume;
+  }
+
+  public isMuted(): boolean {
+    return this._settings.isMuted;
   }
 
   public isMusicEnabled(): boolean {
-    return this._isMusicEnabled;
+    return this._settings.isMusicEnabled;
   }
 
   public isSoundEnabled(): boolean {
-    return this._isSoundEnabled;
+    return this._settings.isSoundEnabled;
+  }
+
+  // ==========================================
+  // Private Helpers - Playback
+  // ==========================================
+
+  private canPlayMusic(): boolean {
+    return !this._settings.isMuted && this._settings.isMusicEnabled;
+  }
+
+  private canPlaySound(): boolean {
+    return !this._settings.isMuted && this._settings.isSoundEnabled;
+  }
+
+  private stopAudioSource(source: AudioSource, type: AudioType): void {
+    if (!source?.isValid) return;
+
+    if (source.playing) {
+      source.stop();
+    }
+
+    // Clear clip for looping sources to prevent auto-replay
+    if (type !== AudioType.SFX) {
+      source.clip = null;
+    }
   }
 
   private updateVolumes(): void {
-    const muteFactor = this._isMuted ? 0 : 1;
-    this._bgmSource.volume = this._bgmVolume * muteFactor;
-    this._sfxSource.volume = this._sfxVolume * muteFactor;
-    this._spinSource.volume = this._sfxVolume * muteFactor;
+    const muteFactor = this._settings.isMuted ? 0 : 1;
+
+    this._bgmSource.volume = this._settings.bgmVolume * muteFactor;
+    this._sfxSource.volume = this._settings.sfxVolume * muteFactor;
+    this._spinSource.volume = this._settings.sfxVolume * muteFactor;
   }
 
   // ==========================================
-  // INTERNAL LOADING
+  // Private Helpers - Resource Loading
   // ==========================================
 
-  private async getOrLoadClip(path: string): Promise<AudioClip | null> {
+  private async loadClip(path: string): Promise<AudioClip | null> {
+    // Return cached clip
     if (this._audioCache.has(path)) {
       return this._audioCache.get(path)!;
     }
 
+    // Return ongoing load promise
     if (this._loadingPromises.has(path)) {
       return this._loadingPromises.get(path)!;
     }
 
-    const loadPromise = (async () => {
-      try {
-        const bundleManager = AssetBundleManager.getInstance();
-        const clip = await bundleManager.load(BUNDLE_NAME, path, AudioClip);
-
-        if (clip) {
-          this._audioCache.set(path, clip);
-        }
-        return clip;
-      } catch (err) {
-        return null;
-      } finally {
-        this._loadingPromises.delete(path);
-      }
-    })();
-
+    // Start new load
+    const loadPromise = this.loadClipFromBundle(path);
     this._loadingPromises.set(path, loadPromise);
+
     return loadPromise;
   }
 
-  public isMuted(): boolean {
-    return this._isMuted;
+  private async loadClipFromBundle(path: string): Promise<AudioClip | null> {
+    try {
+      const bundleManager = AssetBundleManager.getInstance();
+      const clip = await bundleManager.load(AUDIO_BUNDLE, path, AudioClip);
+
+      if (clip) {
+        this._audioCache.set(path, clip);
+      }
+
+      return clip;
+    } catch (error) {
+      console.warn(`[AudioManager] Failed to load audio: ${path}`, error);
+      return null;
+    } finally {
+      this._loadingPromises.delete(path);
+    }
   }
 
-  protected onDestroy(): void {
-    if (AudioManager._instance === this) {
-      AudioManager._instance = null!;
-    }
+  // ==========================================
+  // Private Helpers - Storage
+  // ==========================================
+
+  private getStoredNumber(key: string, defaultValue: number): number {
+    const value = sys.localStorage.getItem(key);
+    return value ? parseFloat(value) : defaultValue;
+  }
+
+  private getStoredBoolean(key: string, defaultValue: boolean): boolean {
+    const value = sys.localStorage.getItem(key);
+    return value === null ? defaultValue : value === "true";
+  }
+
+  private saveToStorage(key: string, value: number | boolean): void {
+    sys.localStorage.setItem(key, value.toString());
+  }
+
+  // ==========================================
+  // Cleanup
+  // ==========================================
+
+  private cleanup(): void {
+    // Stop all audio sources
+    this.stopAudioSource(this._bgmSource, AudioType.BGM);
+    this.stopAudioSource(this._sfxSource, AudioType.SFX);
+    this.stopAudioSource(this._spinSource, AudioType.SPIN);
+
+    // Clear resources
     this._audioCache.clear();
     this._loadingPromises.clear();
+
+    // Reset state
+    this._currentBGM = "";
+    this._isSpinPlaying = false;
   }
 }

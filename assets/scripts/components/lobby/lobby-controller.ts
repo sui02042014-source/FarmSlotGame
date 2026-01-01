@@ -5,6 +5,7 @@ import {
   AssetBundleManager,
   BundleName,
 } from "../../core/assets/asset-bundle-manager";
+import { ModalManager } from "../modals/modal-manager";
 
 const { ccclass, property } = _decorator;
 
@@ -22,29 +23,17 @@ export class LobbyController extends Component {
   @property(Node)
   logoNode: Node = null!;
 
-  // ==========================================
-  // Lifecycle Methods
-  // ==========================================
-
   protected onLoad(): void {
     this.setupButtons();
   }
 
   protected start(): void {
-    // Wait for AudioManager to be ready
     this.initAudio();
   }
 
   protected onDestroy(): void {
     this.cleanupButtons();
-
-    // Don't stop BGM - let it continue playing across scenes
-    // AudioManager will handle BGM transitions automatically
   }
-
-  // ==========================================
-  // Initialization
-  // ==========================================
 
   private setupButtons(): void {
     if (this.playButton) {
@@ -85,29 +74,15 @@ export class LobbyController extends Component {
 
   private async initAudio(): Promise<void> {
     try {
-      // Load audio bundle first
       const bundleManager = AssetBundleManager.getInstance();
       await bundleManager.loadBundle(BundleName.AUDIO);
 
-      // Then play BGM
       const audioManager = AudioManager.getInstance();
-
-      if (audioManager) {
-        // Ensure music is enabled
-        if (!audioManager.isMusicEnabled()) {
-          audioManager.setMusicEnabled(true);
-        }
-
+      if (audioManager && audioManager.isMusicEnabled()) {
         await audioManager.playBGM("lobby_bgm");
       }
-    } catch (error) {
-      // Silently handle audio initialization errors
-    }
+    } catch (error) {}
   }
-
-  // ==========================================
-  // Animations
-  // ==========================================
 
   private setupButtonAnimation(button: Node): void {
     button.on(
@@ -141,10 +116,6 @@ export class LobbyController extends Component {
     );
   }
 
-  // ==========================================
-  // Button Handlers
-  // ==========================================
-
   private onPlayButtonClick(): void {
     if (this.playButton) {
       tween(this.playButton).stop();
@@ -156,6 +127,11 @@ export class LobbyController extends Component {
 
   private onSettingsButtonClick(): void {
     this.playSFX("button_click");
+
+    const modalManager = ModalManager.getInstance();
+    if (modalManager) {
+      modalManager.showSettingsModal();
+    }
   }
 
   private onQuitButtonClick(): void {
@@ -171,10 +147,6 @@ export class LobbyController extends Component {
       audioManager.playSFX(soundName).catch(() => {});
     }
   }
-
-  // ==========================================
-  // Scene Transition
-  // ==========================================
 
   private animateOutAndTransition(): void {
     const buttons = [this.playButton, this.settingsButton, this.quitButton];

@@ -57,6 +57,31 @@ export class SettingsModal extends BaseModal {
     }
   }
 
+  protected onBeforeShow(): void {
+    this.loadCurrentSettings();
+  }
+
+  private loadCurrentSettings(): void {
+    const audioManager = AudioManager.getInstance();
+    if (!audioManager) return;
+
+    if (this.musicToggle) {
+      this.musicToggle.isChecked = audioManager.isMusicEnabled();
+    }
+
+    if (this.soundToggle) {
+      this.soundToggle.isChecked = audioManager.isSoundEnabled();
+    }
+
+    if (this.musicVolumeSlider) {
+      this.musicVolumeSlider.progress = audioManager.getBGMVolume();
+    }
+
+    if (this.soundVolumeSlider) {
+      this.soundVolumeSlider.progress = audioManager.getSFXVolume();
+    }
+  }
+
   private onMusicToggle(toggle: Toggle): void {
     const audioManager = AudioManager.getInstance();
     if (audioManager) {
