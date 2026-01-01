@@ -44,7 +44,7 @@ export class SpinButtonController extends Component {
   disabledOpacity: number = 120;
 
   @property
-  enableBreathing: boolean = true;
+  enableBreathing: boolean = false;
 
   private _isHolding: boolean = false;
   private _holdTime: number = 0;
@@ -126,7 +126,6 @@ export class SpinButtonController extends Component {
 
     this.resetHoldState();
 
-    // If auto play is active, stop it when button is clicked
     if (
       gm &&
       gm.isAutoPlayActive() &&

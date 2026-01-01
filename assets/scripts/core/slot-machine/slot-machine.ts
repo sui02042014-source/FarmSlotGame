@@ -2,13 +2,15 @@ import { _decorator, Component, Node } from "cc";
 import { ToastManager } from "../../components/toast/toast-manager";
 import { GameConfig } from "../../data/config/game-config";
 import { SlotService } from "../../services/slot-service";
-import { SpinResult } from "../../types";
+import { WinLine, SpinResult } from "../../types";
 import { GameManager } from "../game/game-manager";
 import { ReelController } from "./reel-controller";
 import { EventManager } from "../events/event-manager";
 import { AudioManager } from "../audio/audio-manager";
+import { Logger } from "../../utils/helpers/logger";
 
 const { ccclass, property } = _decorator;
+const logger = Logger.create("SlotMachine");
 
 @ccclass("SlotMachine")
 export class SlotMachine extends Component {
@@ -23,15 +25,27 @@ export class SlotMachine extends Component {
   private isAnticipationActive: boolean = false;
   private scatterPositions: Array<{ col: number; row: number }> = [];
   private currentSpinId: number = 0;
+  private spinLock: boolean = false;
+  private isInitialized: boolean = false;
 
   // ==========================================
   // Lifecycle Methods
   // ==========================================
 
   protected start(): void {
-    this.reelControllers = this.reels
-      .map((reel) => reel.getComponent(ReelController))
-      .filter((c): c is ReelController => !!c);
+    if (!this.isInitialized) {
+      this.setupReelControllers();
+    }
+  }
+
+  protected onDestroy(): void {
+    this.cleanupReelCallbacks();
+    this.unscheduleAllCallbacks();
+    this.stopAnticipationEffects();
+    this.isSpinning = false;
+    this.spinLock = false;
+    this.isAnticipationActive = false;
+    this.scatterPositions = [];
   }
 
   // ==========================================
@@ -39,28 +53,45 @@ export class SlotMachine extends Component {
   // ==========================================
 
   public async initializeSlot(): Promise<void> {
-    this.reelControllers = this.reels
-      .map((reel) => reel.getComponent(ReelController))
-      .filter((c): c is ReelController => !!c);
+    if (this.isInitialized) {
+      logger.warn("SlotMachine already initialized, skipping");
+      return;
+    }
+
+    this.setupReelControllers();
 
     const initPromises = this.reelControllers.map((controller) =>
       controller.initializeReel()
     );
     await Promise.all(initPromises);
+
+    this.isInitialized = true;
+  }
+
+  private setupReelControllers(): void {
+    this.reelControllers = this.reels
+      .map((reel) => reel.getComponent(ReelController))
+      .filter((c): c is ReelController => !!c);
   }
 
   public async spin(): Promise<void> {
+    if (this.spinLock) {
+      logger.warn("Spin already in progress, ignoring duplicate request");
+      return;
+    }
+
     if (!this.canStartSpin()) {
       return;
     }
 
+    this.spinLock = true;
     this.currentSpinId++;
     const thisSpinId = this.currentSpinId;
 
-    this.initializeSpin();
-    this.startReelSpinning();
-
     try {
+      this.initializeSpin();
+      this.startReelSpinning();
+
       const result = await this.fetchSpinResult();
 
       if (thisSpinId !== this.currentSpinId || !this.isSpinStillValid()) {
@@ -70,6 +101,7 @@ export class SlotMachine extends Component {
       this.lastSpinResult = result;
       this.scheduleReelStops(result);
     } catch (error) {
+      this.spinLock = false;
       if (thisSpinId === this.currentSpinId) {
         this.handleSpinError(error);
       }
@@ -98,15 +130,17 @@ export class SlotMachine extends Component {
   }
 
   private startReelSpinning(): void {
-    const startDelay = 0.1;
     this.reelControllers.forEach((controller, col) => {
-      controller.startSpin([], col * startDelay);
+      controller.startSpin([], col * GameConfig.REEL_PARAMS.START_DELAY);
     });
   }
 
   private async fetchSpinResult(): Promise<SpinResult> {
     const gameManager = GameManager.getInstance();
-    const bet = gameManager!.getCurrentBet();
+    if (!gameManager) {
+      throw new Error("GameManager not available");
+    }
+    const bet = gameManager.getCurrentBet();
 
     return await SlotService.getInstance().fetchSpinResult({
       bet,
@@ -128,13 +162,12 @@ export class SlotMachine extends Component {
   }
 
   private scheduleReelStops(result: SpinResult): void {
-    const startDelay = 0.1;
-    const minSpinTime = 1.0;
-
     this.reelControllers.forEach((controller, col) => {
-      const reelStartDelay = col * startDelay;
+      const reelStartDelay = col * GameConfig.REEL_PARAMS.START_DELAY;
       const stopDelay =
-        reelStartDelay + minSpinTime + col * GameConfig.REEL_STOP_DELAY;
+        reelStartDelay +
+        GameConfig.REEL_PARAMS.MIN_SPIN_TIME +
+        col * GameConfig.REEL_STOP_DELAY;
 
       this.scheduleOnce(() => {
         this.stopReelAtColumn(controller, col, result);
@@ -164,6 +197,8 @@ export class SlotMachine extends Component {
 
   private handleSpinError(error: unknown): void {
     this.isSpinning = false;
+    this.spinLock = false;
+    logger.error("Spin error occurred:", error);
 
     const currentGameManager = GameManager.getInstance();
     if (currentGameManager && !currentGameManager.isGamePaused()) {
@@ -188,6 +223,7 @@ export class SlotMachine extends Component {
 
     if (this.finishedReelsCount === this.reelControllers.length) {
       this.isSpinning = false;
+      this.spinLock = false;
       this.stopAnticipationEffects();
       EventManager.emit(GameConfig.EVENTS.SPIN_COMPLETE);
     }
@@ -252,6 +288,7 @@ export class SlotMachine extends Component {
     this.unscheduleAllCallbacks();
     this.cleanupReelCallbacks();
     this.isSpinning = false;
+    this.spinLock = false;
     this.finishedReelsCount = 0;
     this.reelControllers.forEach((controller) => {
       if (controller) {
@@ -306,21 +343,16 @@ export class SlotMachine extends Component {
     });
   }
 
-  public showWinEffects(winLines: any[]): void {
+  public showWinEffects(winLines: WinLine[]): void {
     this.resetAllReels();
 
     if (!winLines || winLines.length === 0) return;
 
     winLines.forEach((line) => {
-      const positions = line.positions || line;
-
-      if (Array.isArray(positions)) {
-        positions.forEach((pos: any) => {
-          const col = typeof pos.col !== "undefined" ? pos.col : pos[0];
-          const row = typeof pos.row !== "undefined" ? pos.row : pos[1];
-
-          if (this.reelControllers[col]) {
-            this.reelControllers[col].highlightSymbol(row);
+      if (line.positions && Array.isArray(line.positions)) {
+        line.positions.forEach((pos) => {
+          if (this.reelControllers[pos.col]) {
+            this.reelControllers[pos.col].highlightSymbol(pos.row);
           }
         });
       }

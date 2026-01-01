@@ -10,6 +10,25 @@ interface WinDirection {
   rowDelta: number;
 }
 
+/**
+ * ⚠️ SECURITY WARNING - FOR DEVELOPMENT/DEMO ONLY ⚠️
+ *
+ * This class performs RNG (Random Number Generation) on the CLIENT-SIDE.
+ * This is INSECURE for production use with real money!
+ *
+ * ISSUES:
+ * 1. Client-side RNG can be manipulated by hackers
+ * 2. Results can be predicted or modified via browser console
+ * 3. No server-side verification of fairness
+ *
+ * FOR PRODUCTION:
+ * - Move ALL RNG logic to a secure backend server
+ * - Generate spin results server-side only
+ * - Client should only receive and display results
+ * - Implement proper encryption and anti-tampering measures
+ * - Use cryptographically secure random number generators
+ * - Log all transactions for audit purposes
+ */
 export class SlotLogic {
   private static readonly MIN_WIN_LENGTH = 3;
   private static readonly WIN_DIRECTIONS: WinDirection[] = [
@@ -66,7 +85,6 @@ export class SlotLogic {
     symbolGrid: string[][],
     bet: number
   ): { totalWin: number; winLines: WinLine[] } {
-    // Validate inputs
     if (!symbolGrid || !Array.isArray(symbolGrid) || symbolGrid.length === 0) {
       logger.warn("Invalid symbolGrid provided");
       return { totalWin: 0, winLines: [] };
@@ -82,13 +100,11 @@ export class SlotLogic {
     const cols = symbolGrid.length;
     const rows = symbolGrid[0]?.length || 0;
 
-    // Validate grid dimensions
     if (cols === 0 || rows === 0) {
       logger.warn("Invalid grid dimensions:", { cols, rows });
       return { totalWin: 0, winLines: [] };
     }
 
-    // Validate all rows have same length
     for (let i = 0; i < symbolGrid.length; i++) {
       if (!symbolGrid[i] || symbolGrid[i].length !== rows) {
         logger.warn("Inconsistent row lengths in symbolGrid");
@@ -135,25 +151,38 @@ export class SlotLogic {
     const positions: { col: number; row: number }[] = [];
     const { colDelta, rowDelta } = direction;
 
+    // Horizontal lines (left to right)
     if (colDelta === 1 && rowDelta === 0) {
+      // Start from each row on the left edge
       for (let row = 0; row < rows; row++) {
         positions.push({ col: 0, row });
       }
-    } else if (colDelta === 0 && rowDelta === 1) {
+    }
+    // Vertical lines (top to bottom)
+    else if (colDelta === 0 && rowDelta === 1) {
+      // Start from each column on the top edge
       for (let col = 0; col < cols; col++) {
         positions.push({ col, row: 0 });
       }
-    } else if (colDelta === 1 && rowDelta === 1) {
+    }
+    // Diagonal down-right
+    else if (colDelta === 1 && rowDelta === 1) {
+      // Start from left edge (all rows)
       for (let row = 0; row < rows; row++) {
         positions.push({ col: 0, row });
       }
+      // Start from top edge (skip first column to avoid duplicate)
       for (let col = 1; col < cols; col++) {
         positions.push({ col, row: 0 });
       }
-    } else if (colDelta === 1 && rowDelta === -1) {
+    }
+    // Diagonal up-right
+    else if (colDelta === 1 && rowDelta === -1) {
+      // Start from left edge (all rows)
       for (let row = 0; row < rows; row++) {
         positions.push({ col: 0, row });
       }
+      // Start from bottom edge (skip first column to avoid duplicate)
       for (let col = 1; col < cols; col++) {
         positions.push({ col, row: rows - 1 });
       }
@@ -190,7 +219,10 @@ export class SlotLogic {
       );
 
       if (this.isValidWinLine(symbols)) {
-        const baseSymbol = symbols.find((s) => s && s !== "wild") || symbols[0];
+        const baseSymbol =
+          symbols.find((s) => s && s !== GameConfig.SYMBOL_TYPES.WILD) ||
+          GameConfig.SYMBOL_TYPES.WILD;
+
         const win = this.calculateWin(baseSymbol, len, bet);
         if (win > 0) {
           return this.createWinLine(
@@ -228,6 +260,17 @@ export class SlotLogic {
     return symbols;
   }
 
+  private static getSymbolProps(
+    symbolId: string
+  ): { isWild?: boolean; isScatter?: boolean; isBonus?: boolean } | undefined {
+    type SymbolPropsType = typeof GameConfig.SYMBOL_PROPERTIES;
+    type SymbolKey = keyof SymbolPropsType;
+    if (symbolId in GameConfig.SYMBOL_PROPERTIES) {
+      return GameConfig.SYMBOL_PROPERTIES[symbolId as SymbolKey];
+    }
+    return undefined;
+  }
+
   private static isValidWinLine(symbols: string[]): boolean {
     if (symbols.length < SlotLogic.MIN_WIN_LENGTH) {
       return false;
@@ -238,24 +281,19 @@ export class SlotLogic {
       return false;
     }
 
-    // Find first non-wild symbol to use as base for comparison
-    const baseSymbol = symbols.find(
-      (s) => !GameConfig.SYMBOL_PROPERTIES[s]?.isWild
-    );
+    const baseSymbol = symbols.find((s) => !this.getSymbolProps(s)?.isWild);
 
     if (!baseSymbol) {
-      // All symbols are wild! This is a valid win.
       return true;
     }
 
-    const baseProps = GameConfig.SYMBOL_PROPERTIES[baseSymbol];
+    const baseProps = this.getSymbolProps(baseSymbol);
 
     return symbols.every((s) => {
       if (s === baseSymbol) return true;
 
-      const sProps = GameConfig.SYMBOL_PROPERTIES[s];
+      const sProps = this.getSymbolProps(s);
 
-      // Wild can substitute for anything except Scatters and Bonus symbols (standard slot rules)
       if (sProps?.isWild) {
         return !baseProps?.isScatter && !baseProps?.isBonus;
       }

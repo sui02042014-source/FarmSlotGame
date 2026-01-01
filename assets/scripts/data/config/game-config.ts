@@ -8,11 +8,11 @@ export class GameConfig {
   static readonly SYMBOL_SIZE = 200;
   static readonly SYMBOL_SPACING = 50;
 
-  static readonly SPIN_DURATION = 2.0;
-  static readonly REEL_STOP_DELAY = 0.03;
-  static readonly SPIN_SPEED_MIN = 1700;
-  static readonly SPIN_SPEED_MAX = 3000;
-  static readonly BOUNCE_DURATION = 0.2;
+  static readonly SPIN_DURATION = 1.5;
+  static readonly REEL_STOP_DELAY = 0.2;
+  static readonly SPIN_SPEED_MIN = 1200;
+  static readonly SPIN_SPEED_MAX = 2500;
+  static readonly BOUNCE_DURATION = 0.3;
   static readonly DEFAULT_LINES = 20;
 
   static readonly MIN_BET = 0.5;
@@ -77,6 +77,8 @@ export class GameConfig {
     ENABLE_FAKE_LATENCY: false, // Set to true for testing
     MIN_LATENCY_MS: 500,
     MAX_LATENCY_MS: 1500,
+    SYNC_DELAY_MS: 300, // Simulated server sync delay
+    INIT_DELAY_MS: 800, // Wallet initialization delay
   };
 
   static readonly GAME_STATES = {
@@ -99,6 +101,7 @@ export class GameConfig {
   } as const;
 
   static readonly FREE_COINS_MULTIPLIER = 0.5; // 50% of default coins when insufficient
+  static readonly RANDOM_COINS_BONUS_MAX = 500; // Max bonus coins added on init
 
   static readonly SYMBOL_PROPERTIES = {
     [GameConfig.SYMBOL_TYPES.WILD]: { isWild: true, isSpecial: true },
@@ -111,6 +114,8 @@ export class GameConfig {
     STOP_DURATION: 2.2,
     SYNC_THRESHOLD: 1.0,
     EXTRA_WRAP_MULTIPLIER: 1.0,
+    START_DELAY: 0.1,
+    MIN_SPIN_TIME: 1.0,
   } as const;
 }
 

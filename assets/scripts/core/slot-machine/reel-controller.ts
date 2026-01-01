@@ -7,8 +7,10 @@ import { ReelContainer, SymbolContainer } from "./reel-container";
 import { ReelStateMachine, ReelState } from "./reel-state-machine";
 import { GameManager } from "../game/game-manager";
 import { AudioManager } from "../audio/audio-manager";
+import { Logger } from "../../utils/helpers/logger";
 
 const { ccclass, property } = _decorator;
+const logger = Logger.create("ReelController");
 
 enum GridRow {
   TOP = 1,
@@ -25,7 +27,6 @@ export class ReelController extends Component {
   @property({ type: CCInteger })
   private bufferSymbols: number = 2;
 
-  @property({ type: ReelContainer })
   private reelContainer!: ReelContainer;
 
   private stateMachine!: ReelStateMachine;
@@ -61,20 +62,21 @@ export class ReelController extends Component {
   protected onDestroy(): void {
     this.unscheduleAllCallbacks();
     this.stopActiveTween();
+    this.enabled = false;
     this.originalPositions.clear();
     this.containerLaps.clear();
     this.currentSpeed = 0;
     this.isFinalizing = false;
 
-    // Unschedule the update loop if active
-    this.unschedule(this.updateLoop);
+    if (this.reelContainer) {
+      this.reelContainer.destroyAllContainers();
+    }
   }
 
   protected update(dt: number): void {
-    // Only run update when actually spinning
-    if (this.stateMachine.isSpinning() || this.stateMachine.isStopping()) {
-      this.updateLoop(dt);
-    }
+    // Only update when enabled (during spin)
+    if (!this.enabled) return;
+    this.updateLoop(dt);
   }
 
   private updateLoop = (dt: number): void => {
@@ -96,7 +98,13 @@ export class ReelController extends Component {
   // ==========================================
 
   public startSpin(targetSymbols: string[] = [], delay = 0): void {
-    if (!this.stateMachine.canSpin()) return;
+    if (!this.stateMachine.canSpin()) {
+      logger.warn(
+        "Reel cannot start spin in current state:",
+        this.stateMachine.getState()
+      );
+      return;
+    }
 
     this.targetSymbols = targetSymbols;
     this.isFinalizing = false;
@@ -104,11 +112,17 @@ export class ReelController extends Component {
     this.scheduleOnce(() => {
       this.stateMachine.startSpin();
       this.currentSpeed = 0;
+      this.enabled = true;
+      logger.debug("Reel spin started");
     }, delay);
   }
 
   public stopSpin(targetSymbols: string[] = []): void {
     if (!this.canStopReel()) {
+      logger.warn(
+        "Reel cannot stop in current state:",
+        this.stateMachine.getState()
+      );
       this.emitStoppedEventSafely();
       return;
     }
@@ -119,6 +133,7 @@ export class ReelController extends Component {
 
     this.stateMachine.startStopping();
     this.beginSmoothStop();
+    logger.debug("Reel stop initiated with targets:", this.targetSymbols);
   }
 
   private canStopReel(): boolean {
@@ -160,11 +175,16 @@ export class ReelController extends Component {
   }
 
   public forceStop(): void {
+    logger.info("Force stopping reel");
     this.unscheduleAllCallbacks();
     this.stopActiveTween();
+    this.enabled = false;
     this.currentSpeed = 0;
     this.isFinalizing = false;
+    this.positionOffset = this.modulo(this.positionOffset, this.wrapHeight);
+    this.lastPositionOffset = this.positionOffset;
     this.stateMachine.reset();
+    this.syncSymbols();
   }
 
   // ==========================================
@@ -172,6 +192,10 @@ export class ReelController extends Component {
   // ==========================================
 
   private updateSpeed(dt: number): void {
+    if (!this.stateMachine.isSpinning()) {
+      return;
+    }
+
     const wasMaxSpeed = this.currentSpeed >= GameConfig.SPIN_SPEED_MAX;
 
     this.currentSpeed = Math.min(
@@ -235,6 +259,7 @@ export class ReelController extends Component {
     this.lastPositionOffset = this.finalOffset;
     this.currentSpeed = 0;
     this.isFinalizing = false;
+    this.enabled = false;
 
     const gameManager = GameManager.getInstance();
     if (gameManager && !gameManager.isGamePaused()) {

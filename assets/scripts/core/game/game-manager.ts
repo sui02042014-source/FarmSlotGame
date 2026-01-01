@@ -88,6 +88,12 @@ export class GameManager extends Component {
 
     try {
       await this.initGame();
+
+      EventManager.off(
+        GameConfig.EVENTS.SPIN_COMPLETE,
+        this.onSpinComplete,
+        this
+      );
       EventManager.on(
         GameConfig.EVENTS.SPIN_COMPLETE,
         this.onSpinComplete,
@@ -194,13 +200,14 @@ export class GameManager extends Component {
   private setupWinCounter(): void {
     if (!this.winLabelNode) return;
 
-    this.winCounter = this.winLabelNode.getComponent(NumberCounter);
-    if (!this.winCounter) {
-      this.winCounter = this.winLabelNode.addComponent(NumberCounter);
+    this.winCounter =
+      this.winLabelNode.getComponent(NumberCounter) ||
+      this.winLabelNode.addComponent(NumberCounter);
+    if (this.winCounter) {
+      this.winCounter.label = this.winLabel;
+      this.winCounter.duration = GameConfig.ANIM.NUMBER_COUNT_DURATION;
+      this.winCounter.decimalPlaces = 2;
     }
-    this.winCounter.label = this.winLabel;
-    this.winCounter.duration = GameConfig.ANIM.NUMBER_COUNT_DURATION;
-    this.winCounter.decimalPlaces = 2;
   }
 
   private setupCoinAmountLayout(): void {
@@ -315,7 +322,6 @@ export class GameManager extends Component {
       return;
     }
 
-    // Deduct coins and check if successful
     const deducted = this.walletService.deductCoins(betAmount);
     if (!deducted) {
       logger.error("Failed to deduct coins for spin");
@@ -325,7 +331,6 @@ export class GameManager extends Component {
       return;
     }
 
-    // Track the bet amount for potential refund
     this.lastBetAmount = betAmount;
     this.lastWin = 0;
     this.updateUI();
@@ -377,6 +382,8 @@ export class GameManager extends Component {
   private onWin(amount: number): void {
     this.setState(GameConfig.GAME_STATES.WIN_SHOW);
     this.lastWin = amount;
+
+    this.walletService.completeBetTransaction(amount);
     this.walletService.addCoins(amount);
 
     if (this.winCounter) {
@@ -403,6 +410,8 @@ export class GameManager extends Component {
   }
 
   private onLose(): void {
+    this.walletService.completeBetTransaction(0);
+
     const audioManager = AudioManager.getInstance();
     if (audioManager) {
       audioManager.playSFX(GameConfig.SOUNDS.LOSE);
@@ -477,11 +486,24 @@ export class GameManager extends Component {
   };
 
   public toggleAutoPlay(): void {
+    // DEBUG: Log when toggleAutoPlay is called
+    logger.warn(
+      "🔄 toggleAutoPlay() called. Current:",
+      this.isAutoPlay,
+      "→ New:",
+      !this.isAutoPlay,
+      "Stack:",
+      new Error().stack
+    );
+
     this.isAutoPlay = !this.isAutoPlay;
 
     if (!this.isAutoPlay) {
       this.unschedule(this.onAutoPlaySpin);
     } else if (this.isIdle()) {
+      logger.warn(
+        "▶️ Auto-play enabled and game is IDLE → calling startSpin()"
+      );
       this.startSpin();
     }
   }
@@ -508,11 +530,17 @@ export class GameManager extends Component {
   }
 
   public refundLastBet(): void {
-    if (this.lastBetAmount > 0) {
-      this.walletService.addCoins(this.lastBetAmount);
+    const refunded = this.walletService.refundPendingTransaction();
+
+    if (refunded) {
       this.lastBetAmount = 0;
       this.updateUI();
       logger.info("Refunded bet amount due to spin failure");
+    } else if (this.lastBetAmount > 0) {
+      this.walletService.addCoins(this.lastBetAmount);
+      this.lastBetAmount = 0;
+      this.updateUI();
+      logger.info("Refunded bet amount (fallback) due to spin failure");
     }
   }
 
@@ -571,7 +599,6 @@ export class GameManager extends Component {
 
   private handleInsufficientCoins(): void {
     const toastManager = ToastManager.getInstance();
-    const modalManager = ModalManager.getInstance();
 
     if (this.isAutoPlay) {
       this.isAutoPlay = false;

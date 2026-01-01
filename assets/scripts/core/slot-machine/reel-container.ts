@@ -133,6 +133,11 @@ export class ReelContainer extends Component {
     container: SymbolContainer,
     newId: string
   ): void {
+    if (container.symbolId === newId) {
+      this.applyBlurStateToContainer(container);
+      return;
+    }
+
     const cache = SpriteFrameCache.getInstance();
     container.symbolId = newId;
 
@@ -148,9 +153,7 @@ export class ReelContainer extends Component {
       `${spritePath}_2`
     );
 
-    container.sprite.spriteFrame = this._useBlur
-      ? container.blurSpriteFrame || container.normalSpriteFrame
-      : container.normalSpriteFrame;
+    this.applyBlurStateToContainer(container);
 
     if (container.spine) {
       container.spine.node.active = false;
@@ -161,15 +164,16 @@ export class ReelContainer extends Component {
     }
   }
 
+  private applyBlurStateToContainer(container: SymbolContainer): void {
+    container.sprite.spriteFrame = this._useBlur
+      ? container.blurSpriteFrame || container.normalSpriteFrame
+      : container.normalSpriteFrame;
+  }
+
   public setUseBlur(useBlur: boolean): void {
     this._useBlur = useBlur;
     this.containers.forEach((container) => {
-      const sf = useBlur
-        ? container.blurSpriteFrame || container.normalSpriteFrame
-        : container.normalSpriteFrame;
-      if (container.sprite.spriteFrame !== sf) {
-        container.sprite.spriteFrame = sf;
-      }
+      this.applyBlurStateToContainer(container);
     });
   }
 
@@ -194,6 +198,23 @@ export class ReelContainer extends Component {
       }
     });
     this.containers = [];
+  }
+
+  public destroyAllContainers(): void {
+    this.containers.forEach((container) => {
+      if (container.node?.isValid) {
+        container.node.destroy();
+      }
+    });
+    this.containers = [];
+
+    // Destroy all pooled nodes
+    this._pool.forEach((node) => {
+      if (node?.isValid) {
+        node.destroy();
+      }
+    });
+    this._pool = [];
   }
 
   public getSortedContainers(): SymbolContainer[] {

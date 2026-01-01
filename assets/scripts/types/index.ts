@@ -33,3 +33,4 @@ export interface SymbolData {
 }
 
 export type { GameConfig } from "../data/config/game-config";
+export * from "./error-codes";
