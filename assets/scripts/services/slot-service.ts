@@ -32,19 +32,19 @@ export class SlotService {
           (GameConfig.NETWORK.MAX_LATENCY_MS -
             GameConfig.NETWORK.MIN_LATENCY_MS);
 
-      return new Promise((resolve) => {
-        setTimeout(() => resolve(result), latency);
-      });
+      await new Promise((resolve) => setTimeout(resolve, latency));
     }
 
     return result;
   }
 
   public async syncPlayerData(coins: number): Promise<boolean> {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve(true);
-      }, 300);
-    });
+    try {
+      // Simulate real server sync
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      return true;
+    } catch (error) {
+      return false;
+    }
   }
 }

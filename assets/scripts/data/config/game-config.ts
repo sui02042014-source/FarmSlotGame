@@ -13,6 +13,7 @@ export class GameConfig {
   static readonly SPIN_SPEED_MIN = 1700;
   static readonly SPIN_SPEED_MAX = 3000;
   static readonly BOUNCE_DURATION = 0.2;
+  static readonly DEFAULT_LINES = 20;
 
   static readonly MIN_BET = 0.5;
   static readonly MAX_BET = 100.0;

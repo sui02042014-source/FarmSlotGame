@@ -2,6 +2,7 @@ import { GameConfig } from "../data/config/game-config";
 import { PlayerDataStorage } from "../utils/storage/player-data-storage";
 import { EventManager } from "../core/events/event-manager";
 import { Logger } from "../utils/helpers/logger";
+import { SlotService } from "./slot-service";
 
 const logger = Logger.create("WalletService");
 
@@ -108,35 +109,21 @@ export class WalletService {
   }
 
   private async syncWithServer(retries = 3): Promise<void> {
-    if (this._isSyncing) {
-      return;
-    }
-
     this._isSyncing = true;
     let lastError: any = null;
 
     try {
+      const coinsToSync = this._coins;
+
       for (let attempt = 0; attempt < retries; attempt++) {
         try {
-          // Mock API call - replace with real API in production
-          await new Promise((resolve, reject) => {
-            setTimeout(() => {
-              if (Math.random() > 0.05) {
-                resolve(true);
-              } else {
-                reject(new Error("Network error"));
-              }
-            }, 300);
-          });
-
-          this._isSyncing = false;
+          await SlotService.getInstance().syncPlayerData(coinsToSync);
           return;
         } catch (error) {
           lastError = error;
           logger.warn(`Sync attempt ${attempt + 1}/${retries} failed:`, error);
 
           if (attempt < retries - 1) {
-            // Exponential backoff
             await new Promise((resolve) =>
               setTimeout(resolve, Math.pow(2, attempt) * 500)
             );
@@ -144,15 +131,11 @@ export class WalletService {
         }
       }
 
-      // All retries failed
       logger.error(
         "Failed to sync wallet with server after retries",
         lastError
       );
-      // In production, you might want to queue this for retry later
-      // or notify the user
     } finally {
-      // Ensure flag is reset even if there's an unexpected error
       this._isSyncing = false;
     }
   }

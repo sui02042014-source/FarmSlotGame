@@ -13,19 +13,18 @@ import {
 } from "cc";
 import { ModalManager } from "../../components/modals/modal-manager";
 import { SpinButtonController } from "../../components/spin-button/spin-button-controller";
-import { AudioManager } from "../audio/audio-manager";
+import { ToastManager } from "../../components/toast/toast-manager";
 import { GameConfig, GameState } from "../../data/config/game-config";
+import { WalletService } from "../../services/wallet-service";
 import { CoinFlyEffect } from "../../utils/effects/coin-fly-effect";
 import { CoinRainEffect } from "../../utils/effects/coin-rain-effect";
+import { Logger } from "../../utils/helpers/logger";
 import { NumberCounter } from "../../utils/helpers/number-counter";
 import { SpriteFrameCache } from "../../utils/helpers/sprite-frame-cache";
-import { Logger } from "../../utils/helpers/logger";
-import { PlayerDataStorage } from "../../utils/storage/player-data-storage";
 import { AssetBundleManager, BundleName } from "../assets/asset-bundle-manager";
-import { SlotMachine } from "../slot-machine/slot-machine";
-import { ToastManager } from "../../components/toast/toast-manager";
+import { AudioManager } from "../audio/audio-manager";
 import { EventManager } from "../events/event-manager";
-import { WalletService } from "../../services/wallet-service";
+import { SlotMachine } from "../slot-machine/slot-machine";
 
 const { ccclass, property } = _decorator;
 
@@ -77,40 +76,24 @@ export class GameManager extends Component {
   }
 
   protected async onLoad(): Promise<void> {
-    // Check if already initialized
-    if (GameManager.instance) {
+    if (GameManager.instance && GameManager.instance !== this) {
       logger.warn("GameManager already exists. Destroying duplicate.");
       this.node.destroy();
       return;
     }
 
-    // Check if already initializing
-    if (GameManager.isInitializing) {
-      logger.warn("GameManager is initializing. Destroying duplicate.");
-      this.node.destroy();
-      return;
-    }
-
-    GameManager.isInitializing = true;
     GameManager.instance = this;
-
     this.node.on(Node.EventType.TOUCH_START, this.resetIdleTime, this);
 
     try {
       await this.initGame();
-
-      // Register events after successful initialization
       EventManager.on(
         GameConfig.EVENTS.SPIN_COMPLETE,
         this.onSpinComplete,
         this
       );
-
-      GameManager.isInitializing = false;
     } catch (error) {
       logger.error("Failed to initialize game:", error);
-      GameManager.isInitializing = false;
-      // Cleanup and show error to user
       this.handleInitializationError();
     }
   }
@@ -508,15 +491,6 @@ export class GameManager extends Component {
     if (this.betLabel)
       this.betLabel.string = this.walletService.currentBet.toFixed(2);
     if (this.winLabel) this.winLabel.string = this.lastWin.toFixed(2);
-
-    EventManager.emit(
-      GameConfig.EVENTS.COINS_CHANGED,
-      this.walletService.coins
-    );
-    EventManager.emit(
-      GameConfig.EVENTS.BET_CHANGED,
-      this.walletService.currentBet
-    );
   }
 
   // ==========================================
@@ -568,8 +542,6 @@ export class GameManager extends Component {
       slot.setBlurAll(false);
     }
 
-    // Restore state or remain idle
-    // Note: We don't resume spinning state as reels were stopped
     this.stateBeforePause = null;
 
     if (this.isAutoPlay && this.isIdle()) {
@@ -610,7 +582,6 @@ export class GameManager extends Component {
       toastManager.show("Failed to initialize game. Please refresh.", 5.0);
     }
 
-    // Clean up partial initialization
     if (GameManager.instance === this) {
       GameManager.instance = null!;
     }

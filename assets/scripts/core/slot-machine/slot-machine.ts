@@ -68,7 +68,7 @@ export class SlotMachine extends Component {
     try {
       const result = await SlotService.getInstance().fetchSpinResult({
         bet,
-        lines: 20,
+        lines: GameConfig.DEFAULT_LINES,
       });
 
       const currentGameManager = GameManager.getInstance();
@@ -95,7 +95,7 @@ export class SlotMachine extends Component {
           controller.node.once(GameConfig.EVENTS.REEL_STOPPED, () => {
             this.handleReelStopped();
           });
-        }, col * 0.2);
+        }, col * GameConfig.REEL_STOP_DELAY);
       });
     } catch (error) {
       logger.error("Failed to fetch spin result:", error);
@@ -105,10 +105,11 @@ export class SlotMachine extends Component {
       if (currentGameManager && !currentGameManager.isGamePaused()) {
         this.stopAllReels();
 
-        currentGameManager.addCoins(bet);
         currentGameManager.setState(GameConfig.GAME_STATES.IDLE);
 
-        ToastManager.getInstance()?.show("Connection error. Bet refunded.");
+        ToastManager.getInstance()?.show(
+          "Connection error. Please check your balance."
+        );
       }
     }
   }
