@@ -11,6 +11,7 @@ import {
 } from "cc";
 import { SpriteFrameCache } from "../helpers/sprite-frame-cache";
 import { BundleName } from "../../core/assets/asset-bundle-manager";
+import { GameConfig } from "../../data/config/game-config";
 
 export type CoinFlyEffectOptions = {
   parent: Node;
@@ -96,7 +97,7 @@ export class CoinFlyEffect {
     if (!parent?.isValid || !fromNode?.isValid || !toNode?.isValid) return;
 
     const cache = SpriteFrameCache.getInstance();
-    const spritePath = "ui/win/coin_icon/spriteFrame";
+    const spritePath = GameConfig.EFFECTS.COIN_SPRITE_PATH;
 
     const sf = await cache.getSpriteFrameFromBundle(
       BundleName.GAME,

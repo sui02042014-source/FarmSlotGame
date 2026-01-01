@@ -58,6 +58,7 @@ export class GameConfig {
     COIN_SCATTER_RADIUS: 150,
     COIN_SIZE: 60,
     WIN_SHOW_DURATION: 2.0,
+    COIN_SPRITE_PATH: "ui/win/coin_icon/spriteFrame",
   };
 
   static readonly GAMEPLAY = {
