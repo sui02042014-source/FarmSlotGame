@@ -1,5 +1,10 @@
 export { GameManager } from "./game/game-manager";
 export { AudioManager } from "./audio/audio-manager";
-export * from "./assets";
-export * from "./scenes";
-export * from "./slot-machine";
+export { AssetBundleManager, BundleName } from "./assets/asset-bundle-manager";
+export { SceneManager } from "./scenes/scene-manager";
+export { SlotMachine } from "./slot-machine/slot-machine";
+export { ReelController } from "./slot-machine/reel-controller";
+export { ReelContainer } from "./slot-machine/reel-container";
+export type { SymbolContainer } from "./slot-machine/reel-container";
+export { ReelStateMachine } from "./slot-machine/reel-state-machine";
+export type { ReelState } from "./slot-machine/reel-state-machine";

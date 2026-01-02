@@ -2,7 +2,6 @@ import { _decorator, CCInteger, Color, Component, tween } from "cc";
 import { GameConfig } from "../../data/config/game-config";
 import { ISymbolData, SymbolData } from "../../data/models/symbol-data";
 import { SymbolHighlightEffect } from "../../utils/effects/symbol-highlight-effect";
-import { WinGlowHelper } from "../../utils/effects/win-glow-effect";
 import { ReelContainer, SymbolContainer } from "./reel-container";
 import { ReelStateMachine, ReelState } from "./reel-state-machine";
 import { GameManager } from "../game/game-manager";
@@ -199,12 +198,6 @@ export class ReelController extends Component {
         loop: true,
         brightness: REEL_CONSTANTS.HIGHLIGHT_BRIGHTNESS,
       });
-
-      WinGlowHelper.applyGlow(
-        container.sprite.node,
-        REEL_CONSTANTS.GLOW_INTENSITY,
-        REEL_CONSTANTS.GLOW_THRESHOLD
-      );
     }
   }
 
@@ -214,7 +207,6 @@ export class ReelController extends Component {
   public resetSymbolsScale(): void {
     this.reelContainer.getAllContainers().forEach((container) => {
       SymbolHighlightEffect.stop(container.node);
-      WinGlowHelper.removeGlow(container.sprite.node);
       container.node.setScale(1, 1, 1);
       container.sprite.color = WHITE_COLOR;
 

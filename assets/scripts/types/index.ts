@@ -1,11 +1,3 @@
-export type GameState =
-  | "idle"
-  | "spinning"
-  | "stopping"
-  | "win_show"
-  | "bonus_game"
-  | "free_spins";
-
 export interface PlayerData {
   coins: number;
   bet: number;
@@ -25,12 +17,6 @@ export interface SpinResult {
   winLines: WinLine[];
 }
 
-export interface SymbolData {
-  id: string;
-  spritePath: string;
-  weight: number;
-  paytable: Record<number, number>;
-}
-
-export type { GameConfig } from "../data/config/game-config";
+export type { GameConfig, GameState } from "../data/config/game-config";
+export type { SymbolData } from "../data/models/symbol-data";
 export * from "./error-codes";
