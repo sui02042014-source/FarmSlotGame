@@ -9,10 +9,10 @@ export class GameConfig {
   static readonly SYMBOL_SPACING = 50;
 
   static readonly SPIN_DURATION = 1.5;
-  static readonly REEL_STOP_DELAY = 0.2;
-  static readonly SPIN_SPEED_MIN = 1200;
-  static readonly SPIN_SPEED_MAX = 2500;
-  static readonly BOUNCE_DURATION = 0.3;
+  static readonly REEL_STOP_DELAY = 0.15;
+  static readonly SPIN_SPEED_MIN = 2500;
+  static readonly SPIN_SPEED_MAX = 5000;
+  static readonly BOUNCE_DURATION = 0.1;
   static readonly DEFAULT_LINES = 20;
 
   static readonly MIN_BET = 0.5;
@@ -110,11 +110,11 @@ export class GameConfig {
   } as const;
 
   static readonly REEL_PARAMS = {
-    ACCELERATION: 3500,
-    STOP_DURATION: 2.2,
+    ACCELERATION: 6000,
+    STOP_DURATION: 0.5,
     SYNC_THRESHOLD: 1.0,
     EXTRA_WRAP_MULTIPLIER: 1.0,
-    START_DELAY: 0.1,
+    START_DELAY: 0.08,
     MIN_SPIN_TIME: 1.0,
   } as const;
 }
