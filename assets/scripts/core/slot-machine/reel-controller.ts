@@ -113,7 +113,6 @@ export class ReelController extends Component {
       this.stateMachine.startSpin();
       this.currentSpeed = 0;
       this.enabled = true;
-      logger.debug("Reel spin started");
     }, delay);
   }
 
@@ -133,7 +132,7 @@ export class ReelController extends Component {
 
     this.stateMachine.startStopping();
     this.beginSmoothStop();
-    logger.debug("Reel stop initiated with targets:", this.targetSymbols);
+    // logger.debug("Reel stop initiated with targets:", this.targetSymbols);
   }
 
   public forceStop(): void {
