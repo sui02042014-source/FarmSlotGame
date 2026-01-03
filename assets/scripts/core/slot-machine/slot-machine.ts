@@ -121,6 +121,7 @@ export class SlotMachine extends Component {
   public stopAllReels(): void {
     this.currentSpinId++;
     this.unscheduleAllCallbacks();
+    this.stopAnticipationEffects();
     this.resetSpinState();
 
     this.reelControllers.forEach((controller) => {
@@ -391,7 +392,7 @@ export class SlotMachine extends Component {
 
     this.isAnticipationActive = false;
     this.scatterPositions = [];
-
+    this.resetAllReels();
     if (this.audioManager) {
       this.audioManager.stopSpinSound();
     }

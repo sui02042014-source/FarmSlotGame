@@ -47,7 +47,7 @@ export class SlotLogic {
       const reelSymbols = this.generateReelSymbols(symbolsPerReel);
       targetSymbols.push(reelSymbols);
     }
-
+    console.log(JSON.stringify(targetSymbols, null, 2));
     return targetSymbols;
   }
 

@@ -100,8 +100,8 @@ export class GameConfig {
     BIG_WIN: "BIG_WIN",
   } as const;
 
-  static readonly FREE_COINS_MULTIPLIER = 0.5; // 50% of default coins when insufficient
-  static readonly RANDOM_COINS_BONUS_MAX = 500; // Max bonus coins added on init
+  static readonly FREE_COINS_MULTIPLIER = 0.5;
+  static readonly RANDOM_COINS_BONUS_MAX = 500;
 
   static readonly SYMBOL_PROPERTIES = {
     [GameConfig.SYMBOL_TYPES.WILD]: { isWild: true, isSpecial: true },
