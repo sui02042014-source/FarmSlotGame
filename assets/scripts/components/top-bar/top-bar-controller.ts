@@ -16,6 +16,8 @@ const TOP_BAR_CONSTANTS = {
   TOAST_WAIT_MESSAGE: "Please wait for spin to complete!",
   PAUSE_LABEL_TEXT: "PAUSE",
   RESUME_LABEL_TEXT: "RESUME",
+  TURBO_ON_TEXT: "TURBO ON",
+  TURBO_OFF_TEXT: "TURBO OFF",
 } as const;
 
 @ccclass("TopBarController")
@@ -34,6 +36,12 @@ export class TopBarController extends Component {
 
   @property(Label)
   pauseLabel: Label = null!;
+
+  @property(Node)
+  turboButton: Node = null!;
+
+  @property(Label)
+  turboLabel: Label = null!;
 
   private lastClickTime: number = 0;
   private retryCount: number = 0;
@@ -56,6 +64,7 @@ export class TopBarController extends Component {
 
   protected start(): void {
     this.updatePauseButtonUI();
+    this.updateTurboButtonUI();
   }
 
   private setupEventListeners(): void {
@@ -63,6 +72,7 @@ export class TopBarController extends Component {
     this.registerButtonEvent(this.infoButton, this.onInfoButtonClick);
     this.registerButtonEvent(this.settingsButton, this.onSettingsButtonClick);
     this.registerButtonEvent(this.pauseButton, this.onPauseButtonClick);
+    this.registerButtonEvent(this.turboButton, this.onTurboButtonClick);
   }
 
   private registerButtonEvent(button: Node, handler: () => void): void {
@@ -80,6 +90,7 @@ export class TopBarController extends Component {
     this.unregisterButtonEvent(this.infoButton, this.onInfoButtonClick);
     this.unregisterButtonEvent(this.settingsButton, this.onSettingsButtonClick);
     this.unregisterButtonEvent(this.pauseButton, this.onPauseButtonClick);
+    this.unregisterButtonEvent(this.turboButton, this.onTurboButtonClick);
   }
 
   private unregisterButtonEvent(button: Node, handler: () => void): void {
@@ -181,5 +192,28 @@ export class TopBarController extends Component {
       ? TOP_BAR_CONSTANTS.RESUME_LABEL_TEXT
       : TOP_BAR_CONSTANTS.PAUSE_LABEL_TEXT;
     this.pauseLabel.updateRenderData(true);
+  }
+
+  // ==========================================
+  // Turbo Button
+  // ==========================================
+
+  private onTurboButtonClick(): void {
+    if (!this.canHandleClick()) return;
+    if (!this.gameManager) return;
+
+    this.gameManager.toggleTurboMode();
+    this.updateTurboButtonUI();
+  }
+
+  private updateTurboButtonUI(): void {
+    if (!this.turboLabel || !this.gameManager) return;
+
+    const isTurbo = this.gameManager.isTurbo();
+    this.turboLabel.string = isTurbo
+      ? TOP_BAR_CONSTANTS.TURBO_ON_TEXT
+      : TOP_BAR_CONSTANTS.TURBO_OFF_TEXT;
+
+    this.turboLabel.updateRenderData(true);
   }
 }

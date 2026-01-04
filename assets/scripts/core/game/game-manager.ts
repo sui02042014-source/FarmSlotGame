@@ -69,6 +69,7 @@ export class GameManager extends Component {
   private lastBetAmount: number = 0;
   private isAutoPlay: boolean = false;
   private isPaused: boolean = false;
+  private isTurboMode: boolean = false;
 
   // UI components
   private winCounter: NumberCounter = null!;
@@ -172,7 +173,10 @@ export class GameManager extends Component {
 
     if (this.winCounter) {
       this.winCounter.label = this.winLabel;
-      this.winCounter.duration = GameConfig.ANIM.NUMBER_COUNT_DURATION;
+      this.winCounter.duration = this.getTiming(
+        GameConfig.ANIM.NUMBER_COUNT_DURATION,
+        GameConfig.TURBO.NUMBER_COUNT_DURATION
+      );
       this.winCounter.decimalPlaces = 2;
     }
   }
@@ -420,13 +424,17 @@ export class GameManager extends Component {
     this.scheduleOnce(() => {
       this.setState(GameConfig.GAME_STATES.IDLE);
       this.continueAutoPlay();
-    }, GameConfig.EFFECTS.WIN_SHOW_DURATION);
+    }, this.getTiming(GameConfig.EFFECTS.WIN_SHOW_DURATION, GameConfig.TURBO.WIN_SHOW_DURATION));
   }
 
   private animateWinCounter(amount: number): void {
     if (this.winCounter) {
       this.winCounter.setValue(0);
-      this.winCounter.countTo(amount, GameConfig.ANIM.NUMBER_COUNT_DURATION);
+      const duration = this.getTiming(
+        GameConfig.ANIM.NUMBER_COUNT_DURATION,
+        GameConfig.TURBO.NUMBER_COUNT_DURATION
+      );
+      this.winCounter.countTo(amount, duration);
     }
   }
 
@@ -472,6 +480,11 @@ export class GameManager extends Component {
       return;
     }
 
+    const flyDuration = this.getTiming(
+      GameConfig.ANIM.COIN_FLY_DURATION,
+      GameConfig.TURBO.COIN_FLY_DURATION
+    );
+
     CoinFlyEffect.play({
       parent: canvas!,
       fromNode: this.winLabelNode,
@@ -479,6 +492,7 @@ export class GameManager extends Component {
       coinCount: GameConfig.EFFECTS.COIN_FLY_COUNT,
       scatterRadius: GameConfig.EFFECTS.COIN_SCATTER_RADIUS,
       coinSize: GameConfig.EFFECTS.COIN_SIZE,
+      flyDuration,
       onAllArrive: () => this.animateCoinIcon(),
     });
   }
@@ -518,10 +532,11 @@ export class GameManager extends Component {
 
   private continueAutoPlay(): void {
     if (this.isAutoPlay && !this.isPaused) {
-      this.scheduleOnce(
-        this.onAutoPlaySpin,
-        GameConfig.GAMEPLAY.AUTO_PLAY_DELAY
+      const delay = this.getTiming(
+        GameConfig.GAMEPLAY.AUTO_PLAY_DELAY,
+        GameConfig.TURBO.AUTO_PLAY_DELAY
       );
+      this.scheduleOnce(this.onAutoPlaySpin, delay);
     }
   }
 
@@ -607,6 +622,22 @@ export class GameManager extends Component {
 
   public getPlayerCoins(): number {
     return this.walletService.coins;
+  }
+
+  // ==========================================
+  // Turbo Mode
+  // ==========================================
+
+  public toggleTurboMode(): void {
+    this.isTurboMode = !this.isTurboMode;
+  }
+
+  public isTurbo(): boolean {
+    return this.isTurboMode;
+  }
+
+  public getTiming(normalValue: number, turboValue: number): number {
+    return this.isTurboMode ? turboValue : normalValue;
   }
 
   // ==========================================

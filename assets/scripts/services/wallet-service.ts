@@ -157,7 +157,6 @@ export class WalletService {
     this.onDataChanged();
     this.queueSync();
 
-    logger.info(`Bet placed: ${amount} coins (Transaction: ${transaction.id})`);
     return true;
   }
 

@@ -504,10 +504,13 @@ export class SlotMachine extends Component {
 
   private calculateStopDelay(col: number): number {
     const reelStartDelay = this.calculateStartDelay(col);
-    return (
-      reelStartDelay +
-      GameConfig.REEL_PARAMS.MIN_SPIN_TIME +
-      col * GameConfig.REEL_STOP_DELAY
-    );
+    const isTurbo = this.gameManager?.isTurbo() || false;
+    const minSpinTime = isTurbo
+      ? GameConfig.TURBO.SPIN_DURATION
+      : GameConfig.REEL_PARAMS.MIN_SPIN_TIME;
+    const reelStopDelay = isTurbo
+      ? GameConfig.TURBO.REEL_STOP_DELAY
+      : GameConfig.REEL_STOP_DELAY;
+    return reelStartDelay + minSpinTime + col * reelStopDelay;
   }
 }

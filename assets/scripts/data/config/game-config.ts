@@ -73,6 +73,18 @@ export class GameConfig {
     ACTIVE_FPS: 60,
   };
 
+  static readonly TURBO = {
+    SPIN_DURATION: 0.5,
+    REEL_STOP_DELAY: 0.05,
+    WIN_SHOW_DURATION: 0.5,
+    COIN_FLY_DURATION: 0.3,
+    AUTO_PLAY_DELAY: 1.0,
+    NUMBER_COUNT_DURATION: 0.5,
+    SYMBOL_WIN_DURATION: 0.2,
+    WIN_POPUP_DELAY: 0.3,
+    SKIP_COIN_RAIN: true,
+  };
+
   static readonly NETWORK = {
     ENABLE_FAKE_LATENCY: false, // Set to true for testing
     MIN_LATENCY_MS: 500,

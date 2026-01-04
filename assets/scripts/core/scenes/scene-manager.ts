@@ -77,7 +77,6 @@ export class SceneManager {
       await this.preloadGameScene(loadingUI);
 
       loadingSuccess = true;
-      logger.info("All assets loaded successfully");
     } catch (error) {
       logger.error("Failed to bootstrap app:", error);
       this.handleLoadingError(loadingUI, error);
