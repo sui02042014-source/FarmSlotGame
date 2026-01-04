@@ -134,8 +134,8 @@ export class ModalManager extends Component {
     this.showModal(ModalNames.WIN, { winAmount, betAmount }, onClose);
   }
 
-  public showPaytableModal(onClose?: () => void): void {
-    this.showModal(ModalNames.PAYTABLE, {}, onClose);
+  public showPaytableModal(currentBet: number, onClose?: () => void): void {
+    this.showModal(ModalNames.PAYTABLE, { currentBet }, onClose);
   }
 
   public showSettingsModal(onClose?: () => void): void {

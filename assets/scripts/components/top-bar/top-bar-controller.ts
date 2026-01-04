@@ -106,11 +106,12 @@ export class TopBarController extends Component {
   }
 
   private onInfoButtonClick(): void {
-    if (!this.modalManager) {
+    if (!this.modalManager || !this.gameManager) {
       return;
     }
 
-    this.modalManager.showPaytableModal();
+    const currentBet = this.gameManager.getCurrentBet();
+    this.modalManager.showPaytableModal(currentBet);
   }
 
   private onSettingsButtonClick(): void {
