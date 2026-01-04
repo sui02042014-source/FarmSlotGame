@@ -112,7 +112,6 @@ export class SceneManager {
   private setupLoadingScreen(loadingUI: LoadingScreen): void {
     loadingUI.startLoading();
     loadingUI.setOnComplete(async () => {
-      logger.info("Loading complete - transitioning to game scene");
       await this.loadGameScene();
     });
   }
@@ -132,7 +131,6 @@ export class SceneManager {
       ]);
       currentProgress += SCENE_CONSTANTS.LOADING_STEPS.BUNDLES;
       loadingUI?.updateProgress(currentProgress);
-      logger.info("Asset bundles loaded successfully");
     } catch (error) {
       logger.error("Failed to load asset bundles:", error);
       throw new Error("Failed to load required asset bundles");
@@ -142,7 +140,6 @@ export class SceneManager {
       await this.loadSymbolFrames();
       currentProgress += SCENE_CONSTANTS.LOADING_STEPS.SYMBOL_FRAMES;
       loadingUI?.updateProgress(currentProgress);
-      logger.info("Symbol frames loaded successfully");
     } catch (error) {
       logger.error("Failed to load symbol frames:", error);
       throw new Error("Failed to load symbol frames");

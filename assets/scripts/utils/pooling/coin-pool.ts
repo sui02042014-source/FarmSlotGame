@@ -4,9 +4,9 @@ import { Logger } from "../helpers/logger";
 const logger = Logger.create("CoinPool");
 
 const COIN_POOL_CONSTANTS = {
-  INITIAL_POOL_SIZE: 50,
-  MAX_POOL_SIZE: 100,
-  WARNING_THRESHOLD: 80, // Warn if pool usage exceeds 80%
+  INITIAL_POOL_SIZE: 150,
+  MAX_POOL_SIZE: 250,
+  WARNING_THRESHOLD: 180,
 } as const;
 
 export class CoinPool {

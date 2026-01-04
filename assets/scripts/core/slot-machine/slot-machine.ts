@@ -1,4 +1,4 @@
-import { _decorator, Component, Node } from "cc";
+import { _decorator, Component, Node, UITransform, Vec3 } from "cc";
 import { ToastManager } from "../../components/toast/toast-manager";
 import { GameConfig } from "../../data/config/game-config";
 import { SlotService } from "../../services/slot-service";
@@ -8,6 +8,7 @@ import { ReelController } from "./reel-controller";
 import { EventManager } from "../events/event-manager";
 import { AudioManager } from "../audio/audio-manager";
 import { Logger } from "../../utils/helpers/logger";
+import { WinLineDrawer } from "../../utils/effects/win-line-drawer";
 
 const { ccclass, property } = _decorator;
 const logger = Logger.create("SlotMachine");
@@ -44,6 +45,9 @@ export class SlotMachine extends Component {
   private toastManager: ToastManager | null = null;
   private slotService: SlotService | null = null;
 
+  // Win line drawer
+  private winLineDrawer: WinLineDrawer | null = null;
+
   // ==========================================
   // Lifecycle
   // ==========================================
@@ -52,6 +56,7 @@ export class SlotMachine extends Component {
     if (!this.isInitialized) {
       this.cacheManagerInstances();
       this.setupReelControllers();
+      this.initializeWinLineDrawer();
     }
   }
 
@@ -154,6 +159,10 @@ export class SlotMachine extends Component {
         reel.resetSymbolsScale();
       }
     });
+
+    if (this.winLineDrawer) {
+      this.winLineDrawer.clearAllLines();
+    }
   }
 
   public setBlurAll(enable: boolean): void {
@@ -178,6 +187,12 @@ export class SlotMachine extends Component {
         });
       }
     });
+
+    if (this.winLineDrawer) {
+      this.winLineDrawer.drawWinLines(winLines, (col, row) =>
+        this.getSymbolWorldPosition(col, row)
+      );
+    }
   }
 
   // ==========================================
@@ -195,6 +210,10 @@ export class SlotMachine extends Component {
     this.reelControllers = this.reels
       .map((reel) => reel.getComponent(ReelController))
       .filter((c): c is ReelController => !!c);
+  }
+
+  private initializeWinLineDrawer(): void {
+    this.winLineDrawer = new WinLineDrawer(this.node);
   }
 
   // ==========================================
@@ -428,6 +447,11 @@ export class SlotMachine extends Component {
     this.resetSpinState();
     this.scatterPositions = [];
     this.lastSpinResult = null;
+
+    if (this.winLineDrawer) {
+      this.winLineDrawer.destroy();
+      this.winLineDrawer = null;
+    }
   }
 
   // ==========================================
@@ -446,6 +470,28 @@ export class SlotMachine extends Component {
       row < GameConfig.SYMBOL_PER_REEL &&
       this.isControllerValid(this.reelControllers[col])
     );
+  }
+
+  private getSymbolWorldPosition(col: number, row: number): Vec3 | null {
+    if (!this.isValidPosition(col, row)) {
+      return null;
+    }
+
+    const controller = this.reelControllers[col];
+    const container = controller.getContainerAtRow(row);
+
+    if (!container || !container.node) {
+      return null;
+    }
+
+    const worldPos = container.node.worldPosition;
+    const transform = this.node.getComponent(UITransform);
+
+    if (!transform) {
+      return worldPos.clone();
+    }
+
+    return transform.convertToNodeSpaceAR(worldPos);
   }
 
   // ==========================================
