@@ -1,9 +1,12 @@
-import { director, SpriteFrame } from "cc";
+import { director, Node, Prefab, Sprite, SpriteFrame, UITransform } from "cc";
 import { LoadingScreen } from "../../components/loading-screen/loading-screen";
 import { AssetBundleManager, BundleName } from "../assets/asset-bundle-manager";
 import { SpriteFrameCache } from "../../utils/helpers/sprite-frame-cache";
 import { SymbolPreloader } from "../../utils/helpers/symbol-preloader";
 import { Logger } from "../../utils/helpers/logger";
+import { SymbolPool } from "../../utils/pooling/symbol-pool";
+import { SymbolData } from "../../data/models/symbol-data";
+import { GameConfig } from "../../data/config/game-config";
 
 const logger = Logger.create("SceneManager");
 
@@ -70,7 +73,9 @@ export class SceneManager {
 
     try {
       await this.loadAllBundles(loadingUI);
+      await this.initializeSymbolPool();
       await this.preloadGameScene(loadingUI);
+
       loadingSuccess = true;
       logger.info("All assets loaded successfully");
     } catch (error) {
@@ -119,8 +124,6 @@ export class SceneManager {
 
     let currentProgress = 0;
 
-    // Step 1: Load all bundles in parallel (0 → 40%)
-    logger.info("Loading asset bundles...");
     try {
       await Promise.all([
         this.bundleManager.loadBundle(BundleName.GAME),
@@ -135,7 +138,6 @@ export class SceneManager {
       throw new Error("Failed to load required asset bundles");
     }
 
-    // Step 2: Load and cache symbol frames (40% → 60%)
     try {
       await this.loadSymbolFrames();
       currentProgress += SCENE_CONSTANTS.LOADING_STEPS.SYMBOL_FRAMES;
@@ -146,12 +148,10 @@ export class SceneManager {
       throw new Error("Failed to load symbol frames");
     }
 
-    // Step 3: Preload all symbols (60% → 90%)
     try {
       await SymbolPreloader.preloadAll();
       currentProgress += SCENE_CONSTANTS.LOADING_STEPS.PRELOAD_SYMBOLS;
       loadingUI?.updateProgress(currentProgress);
-      logger.info("Symbols preloaded successfully");
     } catch (error) {
       logger.error("Failed to preload symbols:", error);
       throw new Error("Failed to preload symbols");
@@ -177,7 +177,25 @@ export class SceneManager {
     symbolFrames.forEach((frame) => {
       cache.setStaticCache(BundleName.SYMBOLS, frame.name, frame);
     });
-    logger.info(`Cached ${symbolFrames.length} symbol frames`);
+  }
+
+  private async initializeSymbolPool(): Promise<void> {
+    const symbolData = SymbolData.getAllSymbols();
+    const prefabMap = new Map<string, Prefab>();
+
+    for (const symbol of symbolData) {
+      const template = new Node(`Symbol_${symbol.id}`);
+      template
+        .addComponent(UITransform)
+        .setContentSize(GameConfig.SYMBOL_SIZE, GameConfig.SYMBOL_SIZE);
+      const sprite = template.addComponent(Sprite);
+      sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+      sprite.trim = false;
+
+      prefabMap.set(symbol.id, template as any);
+    }
+
+    SymbolPool.getInstance().initialize(prefabMap, 10);
   }
 
   private async preloadGameScene(
@@ -185,8 +203,6 @@ export class SceneManager {
   ): Promise<void> {
     if (!this.bundleManager) return;
 
-    // Step 4: Preload game scene (90% → 100%)
-    logger.info("Preloading game scene...");
     const gameBundle = this.bundleManager.getBundle(BundleName.GAME);
     const scenePath = this.getScenePath(SceneName.GAME);
 
@@ -197,7 +213,6 @@ export class SceneManager {
           reject(err);
         } else {
           loadingUI?.updateProgress(1.0);
-          logger.info("Game scene preloaded - Loading complete!");
           resolve();
         }
       });

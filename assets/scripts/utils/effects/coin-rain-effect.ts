@@ -1,17 +1,7 @@
-import {
-  Color,
-  math,
-  Node,
-  Size,
-  Sprite,
-  tween,
-  Tween,
-  UITransform,
-  Vec3,
-  view,
-} from "cc";
-import { SpriteFrameCache } from "../helpers/sprite-frame-cache";
+import { Color, math, Node, Sprite, tween, UITransform, Vec3, view } from "cc";
 import { BundleName } from "../../core/assets/asset-bundle-manager";
+import { SpriteFrameCache } from "../helpers/sprite-frame-cache";
+import { CoinPool } from "../pooling/coin-pool";
 
 export type CoinRainEffectOptions = {
   parent: Node;
@@ -22,57 +12,7 @@ export type CoinRainEffectOptions = {
   asBackground?: boolean;
 };
 
-class CoinPool {
-  private pool: Node[] = [];
-  private active: Set<Node> = new Set();
-  private readonly maxPoolSize: number = 300;
-
-  public get(parent: Node, coinSize: number): Node {
-    let coin: Node;
-    if (this.pool.length > 0) {
-      coin = this.pool.pop()!;
-    } else {
-      coin = new Node("Coin_Rain_FX");
-      coin
-        .addComponent(UITransform)
-        .setContentSize(new Size(coinSize, coinSize));
-      const sprite = coin.addComponent(Sprite);
-      sprite.sizeMode = Sprite.SizeMode.CUSTOM;
-      sprite.trim = true;
-    }
-
-    coin.layer = parent.layer;
-    coin.setParent(parent);
-    coin.active = true;
-
-    this.active.add(coin);
-    return coin;
-  }
-
-  public release(coin: Node): void {
-    if (!coin?.isValid) return;
-    Tween.stopAllByTarget(coin);
-    coin.active = false;
-    coin.removeFromParent();
-    this.active.delete(coin);
-
-    if (this.pool.length < this.maxPoolSize) {
-      this.pool.push(coin);
-    } else {
-      coin.destroy();
-    }
-  }
-
-  public clear(): void {
-    this.active.forEach((c) => c.isValid && c.destroy());
-    this.pool.forEach((c) => c.isValid && c.destroy());
-    this.active.clear();
-    this.pool = [];
-  }
-}
-
 export class CoinRainEffect {
-  private static coinPool: CoinPool = new CoinPool();
   private static isRaining: boolean = false;
   private static rainTimer: any = null;
 
@@ -91,6 +31,13 @@ export class CoinRainEffect {
 
     if (!parent?.isValid) return;
 
+    const coinPool = CoinPool.getInstance();
+
+    const poolStats = coinPool.getStats();
+    if (poolStats.totalCreated === 0) {
+      coinPool.quickInitialize(coinSize);
+    }
+
     const cache = SpriteFrameCache.getInstance();
     const spritePath = "ui/win/coin_icon/spriteFrame";
     const sf = await cache.getSpriteFrameFromBundle(
@@ -102,7 +49,6 @@ export class CoinRainEffect {
     const parentUITrans = parent.getComponent(UITransform)!;
     const visibleSize = view.getVisibleSize();
 
-    // Calculate top Y position in parent space
     const topY = visibleSize.height / 2 + 100;
     const bottomY = -visibleSize.height / 2 - 200;
     const minX = -visibleSize.width / 2;
@@ -114,9 +60,12 @@ export class CoinRainEffect {
         return;
       }
 
-      const coin = this.coinPool.get(parent, coinSize);
+      const coin = coinPool.get();
+      if (!coin) return;
+
+      coin.setParent(parent);
       if (asBackground) {
-        coin.setSiblingIndex(1); // Above background, below content
+        coin.setSiblingIndex(1);
       }
 
       const sprite = coin.getComponent(Sprite)!;
@@ -145,12 +94,11 @@ export class CoinRainEffect {
           tween(coin).by(duration, { angle: rotationSpeed * duration })
         )
         .call(() => {
-          this.coinPool.release(coin);
+          coinPool.put(coin);
         })
         .start();
     };
 
-    // Use schedule-like behavior
     const loop = () => {
       if (!this.isRaining) return;
       spawnCoin();
@@ -170,6 +118,6 @@ export class CoinRainEffect {
 
   public static clear(): void {
     this.stop();
-    this.coinPool.clear();
+    CoinPool.getInstance().clear();
   }
 }

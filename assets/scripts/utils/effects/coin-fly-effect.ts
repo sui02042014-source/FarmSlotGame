@@ -11,6 +11,7 @@ import {
 } from "cc";
 import { SpriteFrameCache } from "../helpers/sprite-frame-cache";
 import { BundleName } from "../../core/assets/asset-bundle-manager";
+import { CoinPool } from "../pooling/coin-pool";
 
 export type CoinFlyEffectOptions = {
   parent: Node;
@@ -26,58 +27,7 @@ export type CoinFlyEffectOptions = {
   onAllArrive?: () => void;
 };
 
-class CoinPool {
-  private pool: Node[] = [];
-  private active: Set<Node> = new Set();
-  private readonly maxPoolSize: number = 50;
-
-  public get(parent: Node, coinSize: number): Node {
-    let coin: Node;
-    if (this.pool.length > 0) {
-      coin = this.pool.pop()!;
-    } else {
-      coin = new Node("Coin_FX");
-      coin
-        .addComponent(UITransform)
-        .setContentSize(new Size(coinSize, coinSize));
-      const sprite = coin.addComponent(Sprite);
-      sprite.sizeMode = Sprite.SizeMode.CUSTOM;
-      sprite.trim = true;
-    }
-
-    coin.layer = parent.layer;
-    coin.setParent(parent);
-    coin.active = true;
-
-    this.active.add(coin);
-    return coin;
-  }
-
-  public release(coin: Node): void {
-    if (!coin?.isValid) return;
-    Tween.stopAllByTarget(coin);
-    coin.active = false;
-    coin.removeFromParent();
-    this.active.delete(coin);
-
-    if (this.pool.length < this.maxPoolSize) {
-      this.pool.push(coin);
-    } else {
-      coin.destroy();
-    }
-  }
-
-  public clear(): void {
-    this.active.forEach((c) => c.isValid && c.destroy());
-    this.pool.forEach((c) => c.isValid && c.destroy());
-    this.active.clear();
-    this.pool = [];
-  }
-}
-
 export class CoinFlyEffect {
-  private static coinPool: CoinPool = new CoinPool();
-
   public static async play(opts: CoinFlyEffectOptions): Promise<void> {
     const {
       parent,
@@ -94,6 +44,15 @@ export class CoinFlyEffect {
     } = opts;
 
     if (!parent?.isValid || !fromNode?.isValid || !toNode?.isValid) return;
+
+    // Get shared coin pool instance
+    const coinPool = CoinPool.getInstance();
+
+    // Initialize if not done yet
+    const poolStats = coinPool.getStats();
+    if (poolStats.totalCreated === 0) {
+      coinPool.quickInitialize(coinSize);
+    }
 
     const cache = SpriteFrameCache.getInstance();
     const spritePath = "ui/win/coin_icon/spriteFrame";
@@ -120,7 +79,10 @@ export class CoinFlyEffect {
     const promises: Promise<void>[] = [];
 
     for (let i = 0; i < coinCount; i++) {
-      const coin = this.coinPool.get(parent, coinSize);
+      const coin = coinPool.get();
+      if (!coin) continue;
+
+      coin.setParent(parent);
       const sprite = coin.getComponent(Sprite)!;
       sprite.spriteFrame = sf;
       sprite.color = Color.WHITE;
@@ -158,7 +120,7 @@ export class CoinFlyEffect {
             { easing: "quartIn" }
           )
           .call(() => {
-            this.coinPool.release(coin);
+            coinPool.put(coin);
             resolve();
           })
           .start();
@@ -171,6 +133,6 @@ export class CoinFlyEffect {
   }
 
   public static clearPool(): void {
-    this.coinPool.clear();
+    CoinPool.getInstance().clear();
   }
 }

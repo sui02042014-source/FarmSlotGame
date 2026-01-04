@@ -5,7 +5,6 @@ import {
 } from "../../core/assets/asset-bundle-manager";
 import { SceneManager } from "../../core/scenes/scene-manager";
 import { Logger } from "../../utils/helpers/logger";
-
 const { ccclass, property } = _decorator;
 
 const logger = Logger.create("LoadingScreen");

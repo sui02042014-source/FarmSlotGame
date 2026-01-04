@@ -130,8 +130,6 @@ export class GameManager extends Component {
     await this.initializeSlotMachine();
     this.setupUI();
     this.setState(GameConfig.GAME_STATES.IDLE);
-
-    logger.info("Game initialized - Ready to play!");
   }
 
   private async initializeServices(): Promise<void> {

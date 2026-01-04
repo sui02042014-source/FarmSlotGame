@@ -12,7 +12,7 @@ import { GameConfig } from "../../data/config/game-config";
 import { SymbolData } from "../../data/models/symbol-data";
 import { SpriteFrameCache } from "../../utils/helpers/sprite-frame-cache";
 import { Logger } from "../../utils/helpers/logger";
-
+import { SymbolPool } from "../../utils/pooling/symbol-pool";
 const { ccclass } = _decorator;
 const logger = Logger.create("ReelContainer");
 
@@ -32,7 +32,6 @@ export interface SymbolContainer {
 @ccclass("ReelContainer")
 export class ReelContainer extends Component {
   private containers: SymbolContainer[] = [];
-  private _pool: Node[] = [];
   private _useBlur: boolean = false;
 
   private spriteFrameCache!: SpriteFrameCache;
@@ -65,30 +64,21 @@ export class ReelContainer extends Component {
   /**
    * Return a node to the pool for reuse
    */
-  private returnToPool(node: Node | null): void {
+  private returnToPool(node: Node | null, symbolId: string): void {
     if (node?.isValid) {
       node.active = false;
-      this._pool.push(node);
+      SymbolPool.getInstance().put(symbolId, node);
     }
   }
 
   /**
    * Get a node from pool or create new one
    */
+
   private getFromPool(symbolId: string): Node {
-    let node: Node | undefined;
+    const symbolPool = SymbolPool.getInstance();
+    let node = symbolPool.get(symbolId);
 
-    // Try to get valid node from pool
-    while (this._pool.length > 0) {
-      const pooledNode = this._pool.pop()!;
-      if (pooledNode?.isValid) {
-        node = pooledNode;
-        node.name = `Symbol_${symbolId}`;
-        break;
-      }
-    }
-
-    // Create new node if no valid node in pool
     if (!node) {
       node = new Node(`Symbol_${symbolId}`);
       node.layer = this.node.layer;
@@ -171,7 +161,7 @@ export class ReelContainer extends Component {
 
       if (!normalSF) {
         logger.warn(`Failed to load sprite frame for symbol: ${symbolId}`);
-        this.returnToPool(node);
+        this.returnToPool(node, symbolId);
         return null;
       }
 
@@ -201,7 +191,7 @@ export class ReelContainer extends Component {
       return container;
     } catch (error) {
       logger.error(`Error creating symbol container for ${symbolId}:`, error);
-      this.returnToPool(node);
+      this.returnToPool(node, symbolId);
       return null;
     }
   }
@@ -284,9 +274,7 @@ export class ReelContainer extends Component {
   public clearContainers(): void {
     this.containers.forEach((container) => {
       if (container?.node?.isValid) {
-        container.node.active = false;
-        container.node.removeFromParent();
-        this._pool.push(container.node);
+        SymbolPool.getInstance().put(container.symbolId, container.node);
       }
     });
     this.containers.length = 0;
@@ -295,16 +283,9 @@ export class ReelContainer extends Component {
   public destroyAllContainers(): void {
     this.containers.forEach((container) => {
       if (container?.node?.isValid) {
-        container.node.destroy();
+        SymbolPool.getInstance().put(container.symbolId, container.node);
       }
     });
     this.containers.length = 0;
-
-    this._pool.forEach((node) => {
-      if (node?.isValid) {
-        node.destroy();
-      }
-    });
-    this._pool.length = 0;
   }
 }
