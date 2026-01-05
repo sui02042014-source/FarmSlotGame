@@ -648,12 +648,24 @@ export class GameManager extends Component {
     this.isPaused = true;
     this.unscheduleAllCallbacks();
 
+    const wasSpinning = this.currentState === GameConfig.GAME_STATES.SPINNING;
+
+    if (this.audioManager) {
+      if (wasSpinning) {
+        this.audioManager.stopSpinSound();
+        this.audioManager.pauseAll();
+      } else {
+        this.audioManager.pauseAll();
+      }
+    }
+
     if (this.slotMachineComponent) {
       this.slotMachineComponent.stopAllReels();
       this.slotMachineComponent.setBlurAll(true);
     }
 
-    if (this.currentState === GameConfig.GAME_STATES.SPINNING) {
+    if (wasSpinning) {
+      this.refundLastBet();
       this.currentState = GameConfig.GAME_STATES.IDLE;
       this.updateSpinButtonsInteractable();
     }
@@ -662,12 +674,18 @@ export class GameManager extends Component {
   public resumeGame(): void {
     this.isPaused = false;
 
+    // Only resume BGM, not spin sound (spin sound will start when actually spinning)
+    if (this.audioManager) {
+      this.audioManager.resumeAll();
+    }
+
     if (this.slotMachineComponent) {
       this.slotMachineComponent.setBlurAll(false);
     }
 
+    // If auto-play is active and game is idle, start spinning immediately
     if (this.isAutoPlay && this.isIdle()) {
-      this.continueAutoPlay();
+      this.startSpin();
     }
   }
 

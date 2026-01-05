@@ -235,6 +235,20 @@ export class AudioManager extends Component {
   }
 
   // ==========================================
+  // Public API - Pause/Resume All Audio
+  // ==========================================
+
+  public pauseAll(): void {
+    this.pauseBGM();
+    this.pauseLoopingSfx();
+  }
+
+  public resumeAll(): void {
+    this.resumeBGM();
+    this.resumeLoopingSfx();
+  }
+
+  // ==========================================
   // Public API - Getters
   // ==========================================
 
@@ -304,6 +318,29 @@ export class AudioManager extends Component {
       this.canPlayMusic()
     ) {
       this._bgmSource.play();
+    }
+  }
+
+  private pauseLoopingSfx(): void {
+    if (!this._loopingSfxSource) return;
+    if (
+      this.isAudioSourceValid(this._loopingSfxSource) &&
+      this._loopingSfxSource.playing
+    ) {
+      this._loopingSfxSource.pause();
+    }
+  }
+
+  private resumeLoopingSfx(): void {
+    if (!this._loopingSfxSource) return;
+    if (
+      this.isAudioSourceValid(this._loopingSfxSource) &&
+      this._loopingSfxSource.clip &&
+      !this._loopingSfxSource.playing &&
+      this._isLoopingSfxPlaying &&
+      this.canPlaySound()
+    ) {
+      this._loopingSfxSource.play();
     }
   }
 
